@@ -1,0 +1,452 @@
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
+import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+
+import { CachedImage } from "@/components/CachedImage";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { BouncePressable } from "@/components/BouncePressable";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { MetaChip } from "@/components/MetaChip";
+import { ScreenBackground } from "@/components/ScreenBackground";
+import { SectionHeader } from "@/components/SectionHeader";
+import { Skeleton } from "@/components/Skeleton";
+import { StarRating } from "@/components/StarRating";
+import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
+import { useIsOffline } from "@/core/network/useIsOffline";
+import { useI18n } from "@/core/i18n/I18nContext";
+import { Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
+import type { ThemeColors } from "@/core/theme/palettes";
+import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
+import { formatBytes } from "@/core/utils/formatBytes";
+import type { MovieDetails } from "@/domain/vod/types";
+import { useDownloadState } from "@/domain/downloads/useDownloadState";
+import { getVodDetails } from "@/providers/xtream/vodAdapter";
+import { getActiveSession } from "@/state/activeSessionStore";
+import { useLibraryToggle } from "@/state/useLibraryToggle";
+
+export default function MovieDetailsScreen() {
+  // Repaints this screen — and everything it renders — when the theme changes.
+  useThemeRerender();
+  const { t } = useI18n();
+  /* Navigation-bar clearance — see live/player/[channelId].tsx. */
+  const insets = useSafeAreaInsets();
+  const { movieId } = useLocalSearchParams<{ movieId: string }>();
+  const session = getActiveSession();
+  const { height } = useWindowDimensions();
+  const heroHeight = Math.round(height * 0.46);
+
+  const [details, setDetails] = useState<MovieDetails | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  const [posterFailed, setPosterFailed] = useState(false);
+  const [pendingDownloadRemoval, setPendingDownloadRemoval] = useState(false);
+
+  const isOffline = useIsOffline();
+  const noInternetMessage = isOffline && !details ? t("common", "noInternet") : null;
+
+  useEffect(() => {
+    if (!session || !movieId || isOffline) return;
+    let cancelled = false;
+    getVodDetails(session.config, movieId).then(
+      (result) => {
+        if (!cancelled) {
+          setDetails(result);
+          setErrorMessage(null);
+        }
+      },
+      (error) => {
+        if (!cancelled) setErrorMessage(toUserFacingMessage(error, t("common", "providerUnreachable")));
+      }
+    );
+    return () => {
+      cancelled = true;
+    };
+    // Only ever needs to run once per movieId (plus an explicit retry), and again if connectivity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [movieId, reloadToken, isOffline]);
+
+  const libraryItem = details
+    ? {
+        contentType: "movie" as const,
+        providerItemId: details.providerItemId,
+        title: details.name,
+        imageUrl: details.posterUrl,
+        categoryId: details.categoryId,
+        containerExtension: details.containerExtension,
+      }
+    : null;
+  const favorite = useLibraryToggle("favorite", libraryItem);
+  const watchLater = useLibraryToggle("watch_later", libraryItem);
+
+  const download = useDownloadState(
+    details && session
+      ? {
+          contentType: "movie",
+          providerItemId: details.providerItemId,
+          providerId: session.provider.id,
+          title: details.name,
+          subtitle: null,
+          imageUrl: details.posterUrl,
+          containerExtension: details.containerExtension,
+          seriesId: null,
+          seasonNumber: null,
+          episodeNumber: null,
+        }
+      : null
+  );
+
+  useEffect(() => {
+    if (!session) router.replace("/providers");
+  }, [session]);
+
+  if (!session) {
+    return null;
+  }
+
+  function play() {
+    router.push({ pathname: "/movies/player/[movieId]", params: { movieId } });
+  }
+
+  const downloadLabel =
+    download.record?.status === "completed"
+      ? `✓ ${t("movieDetails", "downloaded")}`
+      : download.record
+        ? `⬇ ${t("movieDetails", "downloaded")}…`
+        : `⬇ ${t("movieDetails", "download")}`;
+
+  return (
+    <ScreenBackground>
+      <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
+        <BouncePressable style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>‹</Text>
+        </BouncePressable>
+
+        {(noInternetMessage || errorMessage) && (
+          <View style={styles.centered}>
+            <Text style={styles.errorText}>{noInternetMessage ?? errorMessage}</Text>
+            <BouncePressable style={styles.retryButton} onPress={() => setReloadToken((n) => n + 1)}>
+              <Text style={styles.retryButtonText}>{t("common", "retry")}</Text>
+            </BouncePressable>
+          </View>
+        )}
+
+        {!details && !errorMessage && !noInternetMessage && (
+          <ScrollView contentContainerStyle={styles.skeletonWrap} showsVerticalScrollIndicator={false}>
+            <Skeleton width="100%" height={heroHeight} borderRadius={0} />
+            <View style={styles.skeletonBody}>
+              <Skeleton width="65%" height={26} borderRadius={7} />
+              <Skeleton width="40%" height={14} borderRadius={5} />
+              <Skeleton width="100%" height={48} borderRadius={Radii.md} />
+              <Skeleton width="100%" height={13} borderRadius={4} />
+              <Skeleton width="90%" height={13} borderRadius={4} />
+              <Skeleton width="70%" height={13} borderRadius={4} />
+            </View>
+          </ScrollView>
+        )}
+
+        {/* Bottom clearance for the navigation bar — this screen omits the
+            bottom safe-area edge so its artwork can bleed to the edge. */}
+        {details && (
+          <ScrollView
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + Spacing.xl }]}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={[styles.heroWrap, { height: heroHeight }]}>
+              {details.posterUrl && !posterFailed ? (
+                <CachedImage
+                  uri={details.posterUrl}
+                  style={StyleSheet.absoluteFill}
+                  resizeMode="cover"
+                  onError={() => setPosterFailed(true)}
+                />
+              ) : (
+                <View style={styles.heroFallback}>
+                  <Text style={styles.heroFallbackText}>{details.name}</Text>
+                </View>
+              )}
+              {/*
+                  No scrim over the artwork.
+
+                  Three flat rectangles used to sit here, stacked at
+                  bottom: 120 / 60 / 0, standing in for a gradient the app
+                  has no dependency for. Flat layers have hard edges, so
+                  what they actually drew over the poster was two black
+                  horizontal lines across the picture — visible in a
+                  framebuffer scan on 2026-09-16 as luminance steps at the
+                  exact rows where the rectangles met, and reported as
+                  "الخطوط موجودة على صورة البوستر".
+
+                  The viewer's instruction is that there are to be no black
+                  gradients anywhere (see the note in the live player). The
+                  artwork simply ends where the page begins; a clean edge
+                  reads better than a stepped fade and costs nothing.
+              */}
+            </View>
+
+            <View style={styles.body}>
+              <Animated.Text entering={FadeInDown.duration(420).delay(60)} style={styles.title}>
+                {details.name}
+              </Animated.Text>
+
+              {details.rating !== null && (
+                <Animated.View entering={FadeInDown.duration(420).delay(110)} style={styles.ratingRow}>
+                  <StarRating rating={details.rating} />
+                </Animated.View>
+              )}
+
+              {details.durationLabel && (
+                <Animated.View entering={FadeInDown.duration(420).delay(160)} style={styles.chipRow}>
+                  <MetaChip glyph="◷" label={details.durationLabel} />
+                </Animated.View>
+              )}
+
+              <Animated.View entering={FadeInDown.duration(420).delay(220)} style={styles.primaryActionRow}>
+                <BouncePressable style={styles.playButton} onPress={play}>
+                  <Text style={styles.playButtonText}>▶  {t("movieDetails", "play")}</Text>
+                </BouncePressable>
+              </Animated.View>
+
+              <Animated.View entering={FadeInDown.duration(420).delay(280)} style={styles.secondaryActionsRow}>
+                <BouncePressable style={styles.secondaryButton} onPress={favorite.toggle}>
+                  <Text style={[styles.secondaryButtonText, favorite.isSaved && styles.secondaryButtonTextActive]}>
+                    {favorite.isSaved ? `★ ${t("movieDetails", "favorited")}` : `☆ ${t("movieDetails", "favorite")}`}
+                  </Text>
+                </BouncePressable>
+                <BouncePressable style={styles.secondaryButton} onPress={watchLater.toggle}>
+                  <Text style={[styles.secondaryButtonText, watchLater.isSaved && styles.secondaryButtonTextActive]}>
+                    {watchLater.isSaved
+                      ? `✓ ${t("movieDetails", "inWatchLater")}`
+                      : `+ ${t("movieDetails", "addWatchLater")}`}
+                  </Text>
+                </BouncePressable>
+                {download.eligible && (
+                  <BouncePressable
+                    style={styles.secondaryButton}
+                    onPress={download.trigger}
+                    disabled={download.record !== null}
+                  >
+                    <Text style={[styles.secondaryButtonText, download.record && styles.secondaryButtonTextActive]}>
+                      {downloadLabel}
+                    </Text>
+                  </BouncePressable>
+                )}
+              </Animated.View>
+
+              {download.record && download.record.status !== "completed" && (
+                <Animated.View entering={FadeIn.duration(300)} style={styles.downloadProgressCard}>
+                  <View style={styles.downloadProgressTrack}>
+                    <View
+                      style={[
+                        styles.downloadProgressFill,
+                        {
+                          width: `${
+                            download.progress?.bytesTotal
+                              ? Math.min(
+                                  100,
+                                  (download.progress.bytesDownloaded / download.progress.bytesTotal) * 100
+                                )
+                              : 0
+                          }%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.downloadControlRow}>
+                    <Text style={styles.downloadProgressText}>
+                      {formatBytes(download.progress?.bytesDownloaded ?? download.record.bytesDownloaded)}
+                      {download.progress?.bytesTotal ?? download.record.bytesTotal
+                        ? ` / ${formatBytes(download.progress?.bytesTotal ?? download.record.bytesTotal ?? 0)}`
+                        : ""}
+                    </Text>
+                    <View style={styles.downloadControlButtons}>
+                      {download.record.status === "downloading" && (
+                        <BouncePressable style={styles.downloadControl} onPress={download.pause}>
+                          <Text style={styles.downloadControlText}>{t("downloads", "pause")}</Text>
+                        </BouncePressable>
+                      )}
+                      {download.record.status === "paused" && (
+                        <BouncePressable style={styles.downloadControl} onPress={download.resume}>
+                          <Text style={styles.downloadControlText}>{t("downloads", "resume")}</Text>
+                        </BouncePressable>
+                      )}
+                      <BouncePressable style={styles.downloadControl} onPress={download.cancel}>
+                        <Text style={styles.downloadControlTextDanger}>{t("downloads", "cancel")}</Text>
+                      </BouncePressable>
+                    </View>
+                  </View>
+                </Animated.View>
+              )}
+
+              {download.record?.status === "completed" && (
+                <Animated.View entering={FadeIn.duration(300)} style={styles.downloadProgressCard}>
+                  <View style={styles.downloadControlRow}>
+                    <Text style={styles.downloadProgressText}>
+                      {formatBytes(download.record.bytesDownloaded)}
+                    </Text>
+                    <BouncePressable style={styles.downloadControl} onPress={() => setPendingDownloadRemoval(true)}>
+                      <Text style={styles.downloadControlTextDanger}>{t("downloads", "delete")}</Text>
+                    </BouncePressable>
+                  </View>
+                </Animated.View>
+              )}
+
+              {details.plot && (
+                <Animated.View entering={FadeIn.duration(400).delay(340)} style={styles.section}>
+                  <SectionHeader title={t("movieDetails", "plot")} />
+                  <Text style={styles.sectionText}>{details.plot}</Text>
+                </Animated.View>
+              )}
+
+              {(details.cast || details.director) && (
+                <Animated.View entering={FadeIn.duration(400).delay(400)} style={styles.section}>
+                  <SectionHeader title={t("movieDetails", "cast")} />
+                  <View style={styles.infoCard}>
+                    {details.director && <InfoRow label={t("movieDetails", "director")} value={details.director} />}
+                    {details.cast && <InfoRow label={t("movieDetails", "cast")} value={details.cast} />}
+                  </View>
+                </Animated.View>
+              )}
+            </View>
+          </ScrollView>
+        )}
+      </SafeAreaView>
+
+      <ConfirmDialog
+        visible={pendingDownloadRemoval}
+        title={t("downloads", "deleteConfirmTitle")}
+        message={t("downloads", "deleteConfirmBody", { title: details?.name ?? "" })}
+        confirmLabel={t("downloads", "delete")}
+        danger
+        onConfirm={() => {
+          setPendingDownloadRemoval(false);
+          download.remove();
+        }}
+        onCancel={() => setPendingDownloadRemoval(false)}
+      />
+    </ScreenBackground>
+  );
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  );
+}
+
+const styles = themedStyles((C: ThemeColors) =>
+  StyleSheet.create({
+  safeArea: { flex: 1 },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: Spacing.md, padding: Spacing.xl },
+  errorText: { color: C.error, fontSize: 14, fontFamily: FontFamily.medium, textAlign: "center" },
+  retryButton: {
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    backgroundColor: C.surface,
+    borderRadius: Radii.md,
+  },
+  retryButtonText: { color: C.text, fontFamily: FontFamily.bold },
+
+  backButton: {
+    position: "absolute",
+    top: Spacing.xl,
+    start: Spacing.lg,
+    zIndex: 10,
+    width: 38,
+    height: 38,
+    borderRadius: Radii.pill,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  /* On a black bubble over the artwork, so white in both themes — `C.text`
+     here rendered a near-black arrow on a near-black circle in light mode. */
+  backButtonText: { color: "#FFFFFF", fontSize: 22, fontFamily: FontFamily.bold, marginTop: -3 },
+
+  skeletonWrap: { paddingBottom: Spacing.xxl },
+  skeletonBody: { padding: Spacing.lg, gap: Spacing.md },
+
+  scrollContent: { paddingBottom: Spacing.xxl },
+  heroWrap: { width: "100%", backgroundColor: C.surface, position: "relative" },
+  heroFallback: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center", padding: Spacing.xl },
+  heroFallbackText: { color: C.textSecondary, fontSize: 18, fontFamily: FontFamily.bold, textAlign: "center" },
+
+  body: { paddingHorizontal: Spacing.lg, marginTop: -Spacing.sm },
+  title: { color: C.text, fontSize: 24, fontFamily: FontFamily.extraBold, lineHeight: 31 },
+  ratingRow: { marginTop: Spacing.sm },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.md },
+
+  primaryActionRow: { marginTop: Spacing.lg },
+  playButton: {
+    backgroundColor: Brand.primary,
+    borderRadius: Radii.md,
+    paddingVertical: Spacing.md,
+    alignItems: "center",
+  },
+  playButtonText: { color: "#fff", fontSize: 15, fontFamily: FontFamily.bold },
+
+  secondaryActionsRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm, marginTop: Spacing.sm },
+  secondaryButton: {
+    flexGrow: 1,
+    flexBasis: "30%",
+    backgroundColor: C.surface,
+    borderColor: C.border,
+    borderWidth: 1,
+    borderRadius: Radii.md,
+    paddingVertical: Spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  secondaryButtonText: { color: C.textSecondary, fontSize: 12, fontFamily: FontFamily.semiBold },
+  secondaryButtonTextActive: { color: Brand.primaryLight },
+
+  downloadProgressCard: {
+    marginTop: Spacing.sm,
+    gap: Spacing.xs,
+    backgroundColor: C.surface,
+    borderColor: C.border,
+    borderWidth: 1,
+    borderRadius: Radii.md,
+    padding: Spacing.md,
+  },
+  downloadProgressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: C.fillMedium,
+    overflow: "hidden",
+  },
+  downloadProgressFill: { height: "100%", backgroundColor: Brand.primary },
+  downloadProgressText: { flex: 1, color: C.textMuted, fontSize: 11, fontFamily: FontFamily.regular },
+  downloadControlRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  downloadControlButtons: { flexDirection: "row", alignItems: "center", gap: Spacing.xs },
+  downloadControl: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderRadius: Radii.pill,
+    backgroundColor: C.fillSubtle,
+  },
+  downloadControlText: { color: C.textSecondary, fontSize: 11, fontFamily: FontFamily.semiBold },
+  downloadControlTextDanger: { color: Brand.primaryLight, fontSize: 11, fontFamily: FontFamily.semiBold },
+
+  section: { marginTop: Spacing.lg },
+  sectionText: { color: C.textSecondary, fontSize: 13, fontFamily: FontFamily.regular, lineHeight: 20 },
+
+  infoCard: {
+    backgroundColor: C.surface,
+    borderColor: C.border,
+    borderWidth: 1,
+    borderRadius: Radii.lg,
+    padding: Spacing.md,
+    gap: Spacing.sm,
+  },
+  infoRow: { gap: 2 },
+  infoLabel: { color: C.textMuted, fontSize: 11, fontFamily: FontFamily.regular },
+  infoValue: { color: C.text, fontSize: 13, fontFamily: FontFamily.medium, lineHeight: 19 },
+  })
+);

@@ -1,0 +1,69 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+example
+
+# generated native folders
+/ios
+/android
+
+# native module build output — gradle regenerates all of it, and it was
+# 31 MB of the 75 MB this repository would otherwise have carried,
+# including four copies of the same libffmpegJNI.so.
+modules/*/android/build/
+
+# A release keystore must never land in here, nor anything holding its
+# password.
+#
+# Nothing under android/ can reach this repository anyway — /android is
+# excluded above, and a negation cannot re-include a file whose parent
+# directory is excluded, so the debug keystore in there is untracked with
+# or without these lines. These patterns are for anywhere else in the
+# tree: a keystore copied to the project root to run a build, a
+# properties file written beside it.
+#
+# Signing itself reads ALBASERA_UPLOAD_STORE_FILE and friends as gradle
+# project properties supplied from outside the project (see the release
+# signingConfig), which is why android/gradle.properties holds no
+# credentials at all.
+*.keystore
+keystore.properties
+signing.properties
+
+# CMake/ninja scratch for the native module — same story as build/ above.
+modules/*/android/.cxx/

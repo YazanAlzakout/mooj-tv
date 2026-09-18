@@ -1,0 +1,982 @@
+# Decisions log
+
+## This project vs. the old app (`albasera-replit`)
+
+This is a from-scratch codebase in its own folder/repo. `albasera-replit` (sibling folder) is
+consulted **read-only** as reference for known features, bugs, API behavior, and lessons learned
+— never copied for architecture or code. Two facts were carried forward as verified compatibility
+knowledge, not architecture:
+
+1. **expo-video SharedObject lifecycle rule.** The old project's `.agents/memory/expo-video-shared-objects.md`
+   documents a real crash class: mixing state-driven source replacement with imperative retries on
+   the same player leaves callbacks pointing at a released native object
+   ("Cannot use shared object that was already released"). This project's rule (see
+   docs/PLAYBACK.md) — exactly one owner of source changes, always `replaceAsync` on the persisted
+   player — is a direct response to that, independently re-derived against the actual
+   Milestone 1 hard rule rather than copied as-is.
+2. **No local Android SDK in this environment.** `.agents/memory/native-android-build-verification.md`
+   records that this workspace has Java/Gradle but no `ANDROID_HOME`, so local Gradle stops at SDK
+   discovery. Confirmed still true here. Verification boundary for every native-facing milestone:
+   `expo prebuild` (config plugins, manifest, gradle.properties) runs and is checked locally;
+   actual APK/AAB compilation needs EAS Build or a machine with the Android SDK installed.
+
+`.npmrc`'s `legacy-peer-deps=true` mirrors the old project's own fix for the same npm ERESOLVE
+issue — verified independently against a fresh `npm install` here (see docs/DEPENDENCIES.md), not
+copied blind.
+
+## Package id — replaces the existing listing (decided 2026-08-31)
+
+This app will eventually replace the live Google Play listing, keeping `com.albasera.player` and
+its existing signing identity at release time (master prompt §36).
+
+**Resolved 2026-09-04.** The dev placeholder `com.albasera.player2.dev` is gone;
+`app.config.js` now ships the live id `com.albasera.player`. This release replaces the existing
+Play listing rather than going out as a new one, and a package id is the app's identity on Play —
+it cannot be changed after publication, so it has to match.
+
+Two consequences of that decision:
+
+- **The signing identity must match too.** An update signed with a different key is rejected by
+  Play outright, and there is no recovery except a new listing. Either the original keystore or,
+  if the listing is enrolled in Play App Signing, an upload key Google already accepts.
+- **`versionCode` is now explicit in `app.config.js`.** The published app left it to EAS
+  (`appVersionSource: "remote"` with `autoIncrement`), so the real number lives on EAS's servers,
+  not in either repository — the `1` the old repo generates locally means nothing. This project
+  builds natively, so nothing increments it any more; it is read from Play Console and bumped by
+  hand. Phone and TV take adjacent numbers (`VERSION_CODE_BASE` and `+1`) because they are two
+  artifacts under one package id, and Play refuses two artifacts sharing a versionCode.
+
+Note that a side-by-side install with the old app is no longer possible — same package id means
+an install replaces it. The old app remains available as source at its own path for reference.
+
+What does *not* collide on update: the published app stores everything in AsyncStorage and
+SecureStore under `xtream_credentials`, and has no SQLite database at all, while this app uses
+SQLite plus per-provider SecureStore keys (`provider-credentials-<id>`). Nothing is read back
+under a name the other side wrote, so an updating user gets a clean install rather than a
+half-migrated one — at the cost of re-entering their provider once.
+
+## No VLC
+
+Per explicit instruction and the master prompt's own rule: Media3/expo-video is the only Android
+playback engine. No libVLC dependency exists in this project.
+
+## FFmpeg MP2 decoder extension, ported from `albasera-replit` (resolved 2026-09-01)
+
+The MP2 audio codec question (deferred above) got answered earlier than planned: real-device
+Milestone 1 testing showed picture with no sound on the test provider. Investigated with a
+custom MPEG-TS/PMT parser (no `ffprobe` in this dev environment) — confirmed the channel is
+H.265 video + MPEG-1 Layer II (MP2) audio (see docs/CODEC_MATRIX.md). Stock Media3 has no MP2
+decoder on Android, so video renders and audio silently doesn't.
+
+`albasera-replit` had already solved exactly this (`modules/decoder-ffmpeg-mp2`,
+`plugins/withDecoderFfmpegMp2.js`, `patches/expo-video+3.0.16.patch` — see its own commits
+"Vendor built FFmpeg MP2 decoder libraries" and "Remove VLC entirely — Media3 + FFmpeg MP2
+decoder is the only Android engine"), including prebuilt native libs, so this was **ported as a
+proven working asset** per this project's own rule of engagement, not re-derived from scratch:
+
+- `modules/decoder-ffmpeg-mp2/` copied as-is (the vendored androidx/media `decoder_ffmpeg`
+  module, Apache 2.0 wrapper + prebuilt FFmpeg static libs for `arm64-v8a`/`armeabi-v7a`; see
+  docs/THIRD_PARTY_LICENSES.md). Its `build.gradle` bumped from Media3 `1.8.0` to `1.9.0` to
+  match this project's `expo-video` version — the old project's pin was for its own older
+  `expo-video@3.0.16`.
+- `plugins/withDecoderFfmpegMp2.js` copied as-is and registered in `app.config.js` — it just
+  points generated Gradle at the module's stable repo path, doesn't copy files.
+- The **conceptual** fix from `patches/expo-video+3.0.16.patch` was re-applied by hand (not the
+  literal patch file — expo-video's versioning scheme changed between the old project's SDK and
+  this one's SDK 57, so line numbers don't line up) against the current `expo-video@57.0.3`
+  source, then regenerated as `patches/expo-video+57.0.3.patch` via `patch-package`:
+  `implementation project(':decoder-ffmpeg-mp2')` in expo-video's `android/build.gradle`, and
+  `.setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)` on
+  `VideoPlayer.kt`'s `DefaultRenderersFactory` — `ON`, not `PREFER`, so hardware MediaCodec stays
+  primary for every format it already handles (video included) and the FFmpeg renderer is only a
+  fallback. The old patch's third file (an `isSupported` field added to the JS-visible
+  `AudioTrack` type) was **not** ported — a diagnostic nicety, not required for the fix, left for
+  later if wanted.
+- `package.json` gained `"postinstall": "patch-package"` so the patch reapplies after any future
+  `npm install` (matches the old project's own convention for this exact problem).
+
+**Not yet verified on a physical device** — this needs a native rebuild (this environment can't
+run Gradle itself; see the "No local Android SDK" / Windows Gradle-daemon notes above) and a
+real-device retest of the same channel that was silent before.
+
+## react-native-tvos pinned via dist-tag, not an exact version
+
+`"react-native": "npm:react-native-tvos@0.86-stable"` rather than a pinned exact version. This
+matches Expo's own documented "Building for TV" guidance and lets the dependency pick up new
+tvOS patch releases for SDK 57's react-native line automatically. See docs/DEPENDENCIES.md for
+why the resolved version (0.86.2-0) is one patch behind Expo's bundled stock react-native
+(0.86.3), and why that's expected rather than a bug.
+
+## FFmpeg MP2 module dependency declared on `:app`, not just inside expo-video (resolved 2026-09-01)
+
+The first two on-device rebuilds after porting `modules/decoder-ffmpeg-mp2` (see above) still had
+silent audio — verified directly, not assumed: extracted both the first "successful" build's APK
+and a genuinely from-scratch clean rebuild (`rmdir android` + fresh `expo run:android`, zero
+project-local Gradle cache), and `lib/arm64-v8a/libffmpegJNI.so` was absent from both, with no
+`.cxx` build directory ever created for the module and zero mentions of "ffmpeg" or
+"decoder-ffmpeg-mp2" anywhere in either build's full log.
+
+Root cause, found by inspecting `@expo/cli`'s own gradle-invocation source
+(`node_modules/@expo/cli/build/src/start/platforms/android/gradle.js`): `expo run:android`
+hardcodes the Gradle `--configure-on-demand` flag on every invocation. Configuration-on-demand
+configures a project only if it can statically detect that the requested build target depends on
+it — and it failed to detect the dependency edge declared *inside `expo-video`'s own
+`build.gradle`* (added via `patches/expo-video+*.patch`, since expo-video itself is pulled in
+through Expo's autolinking settings plugin, not a plain static `include`). This matches Gradle's
+own documented caveat that configuration-on-demand can miss dependencies that aren't declared
+directly on statically-included projects.
+
+Fix: `plugins/withDecoderFfmpegMp2.js` now *also* injects
+`implementation project(':decoder-ffmpeg-mp2')` directly into `android/app/build.gradle`'s own
+`dependencies {}` block (via `withAppBuildGradle`), not only into expo-video's. `:app` is always
+the requested build target, so configure-on-demand always configures it fully and reliably picks
+up the dependency from there. This works regardless of which module declares it because Media3's
+extension-renderer discovery (`DefaultRenderersFactory` + `EXTENSION_RENDERER_MODE_ON`) resolves
+`FfmpegAudioRenderer` via reflection over whatever ends up on `:app`'s final runtime classpath —
+it doesn't care which Gradle module contributed it. The expo-video patch's own dependency line
+was left in place (harmless, belt-and-suspenders).
+
+This got the `.so` bundled into the APK (verified) and the module's Java classes into the dex
+(verified) — but a real-device retest still had silent audio, with **zero** trace of
+`libffmpegJNI.so` ever being loaded (`/proc/<pid>/maps` had no entry for it) and no
+`FfmpegLibrary`/`DefaultRenderersFactory` log activity at all. See the next entry — there was a
+second, more fundamental problem underneath this one.
+
+## The real root cause: expo-video ships a precompiled AAR, so the patch was never read (resolved 2026-09-01)
+
+Same investigation, one layer deeper — and this time not re-derived from scratch. The user
+pointed out that `albasera-replit` had already hit and solved this *exact* problem, so its git
+history was read directly instead of re-diagnosing blind (`git log --oneline --all | grep -i
+ffmpeg`, then `git show` on the matching commits). It had:
+
+- `ef6bc5e Found the real cause of the Gradle mystery: expo-video ships a precompiled AAR`
+- `8f8a642 Fix androidx.annotation version conflict now that expo-video builds from source`
+- `d146e90 Fix FFmpeg decoder name: build "mp3" not "mp2" for MP2 audio support`
+- `edbc79c Restrict decoder-ffmpeg-mp2's native build to arm64-v8a + armeabi-v7a`
+
+`ef6bc5e`'s finding: `expo-modules-autolinking` only points Gradle at
+`node_modules/<pkg>/android` as a real source subproject when the module has no `publication`
+entry. expo-video *does* have one (a prebuilt AAR published under `host.exp.exponent`) — so by
+default Gradle links against that prebuilt AAR and **never evaluates
+`node_modules/expo-video/android/build.gradle` at all**, patched or not. This is exactly why the
+`:app`-level dependency fix above got the `.so` bundled (that's a separate, always-from-source
+module) while `VideoPlayer.kt`'s patched `setExtensionRendererMode` call still never ran — the
+class Media3 actually loaded was the AAR's original *unpatched* compiled version.
+
+Fix: `expo.autolinking.buildFromSource: ["expo-video"]` in `package.json`, the documented escape
+hatch `SettingsManager.configurePublication()` checks to force `shouldUsePublication = false`.
+Verified directly, not assumed: `npx expo-modules-autolinking resolve --platform android --json`
+shows `"configuration": {"buildFromSource": ["expo-video"]}` before it's applied to anything else.
+
+The other three commits above were pre-emptively checked against this project rather than
+re-discovered the hard way:
+- androidx.annotation pinned without an explicit version in
+  `modules/decoder-ffmpeg-mp2/android/build.gradle` — already correct (ported from the fixed
+  state, not the broken one).
+- ABI filters already scoped to `armeabi-v7a`/`arm64-v8a` — already correct, same reason.
+- FFmpeg decoder name — verified directly by extracting printable strings from the vendored
+  `libavcodec.a` itself (no `strings` binary in this environment, so read as a buffer in Node and
+  regex-matched instead): the embedded configure invocation shows `--enable-decoder=mp3`, and the
+  `ff_mp3_decoder` symbol is present. The vendored binary already reflects the fix.
+
+**Verified on-device 2026-09-01.** Clean rebuild (`rmdir android` + fresh `expo run:android`),
+fresh install, real playback of `264311` (`KU: NRT 3 HD`, the channel confirmed MP2-only in
+docs/CODEC_MATRIX.md). Logcat showed exactly the two lines that matter, in order:
+
+```
+I DefaultRenderersFactory: Loaded FfmpegAudioRenderer.
+D nativeloader: Load .../lib/arm64-v8a/libffmpegJNI.so using class loader ... ok
+```
+
+And confirmed by ear on the physical device: audio audible, in sync with video. Milestone 1's
+silent-audio problem is closed.
+
+## Live-stream container: `.ts` only, not `.m3u8` (revised 2026-09-01)
+
+Reverses the earlier "prefer `.m3u8`" decision above — with evidence, not a second guess. While
+debugging the silent-audio issue, `.m3u8` playback on the real test provider logged recurring
+`PesReader: Unexpected start code prefix` warnings from Media3's own MPEG-TS extractor,
+recurring at almost exactly each ~10s HLS segment boundary — a demuxing problem, confirmed to
+happen *before* any decoder/renderer selection, unrelated to the MP2/AAR issues above. Switching
+`resolveContainerExtension` to always return `"ts"` and reloading showed no such warnings on the
+same channels. `allowed_output_formats` is kept as a function parameter (prefixed `_`, unused)
+rather than removed, in case a future provider makes `.m3u8` the only option and this needs
+revisiting per-server instead of globally.
+
+## Live-stream container: prefer `.m3u8`, fall back to `.ts` (resolved 2026-08-31)
+
+`xtreamAdapter.resolveContainerExtension` picks `.m3u8` when the authenticated session's
+`allowed_output_formats` includes it, otherwise `.ts`. Verified against the real test provider
+(`albasera-tv.net`) rather than assumed: `allowed_output_formats` returned
+`["m3u8", "ts", "rtmp"]`, and both `.../264311.ts` (200, `video/mp2t`) and `.../264311.m3u8`
+(200, `application/x-mpegurl`, a real HLS playlist body) resolved correctly through the
+`lb1.albasera-tv.net` load balancer. This satisfies the master prompt's "prefer HLS where
+available" guidance with evidence instead of a guess.
+
+## Provider persistence scope (Milestone 5/6, 2026-09-01)
+
+Replaces the Milestone 1 throwaway `spikeSessionStore` (in-memory only, lost on app close) with
+real persistence: a `providers` SQLite table (`src/db`) for provider metadata, SecureStore for
+credentials (`src/core/storage/secureCredentials.ts`, never stored alongside metadata), and
+`activeSessionStore` as the in-memory runtime cache of the currently-active provider's resolved
+config + channel list. Deliberately scoped narrow for this round, matching what the master prompt
+actually needs right now rather than building the full provider-management surface early:
+
+- **Xtream Codes only.** Remote/local M3U provider support is deferred — `Provider.kind` is
+  typed `"xtream"` only for now; widening it is a type change plus a new adapter, not a rewrite.
+- **No legal/terms acceptance gate yet.** Deferred to whichever milestone the master prompt
+  actually specifies it for; not blocking provider storage.
+- **Add / switch / delete only — no edit.** Changing a saved provider's URL or credentials means
+  deleting and re-adding it this round. An edit flow is a small additive change later, not a
+  blocker now.
+- **Startup gate always resolves.** `src/app/index.tsx` either restores a session and lands on
+  `/home`, or falls through to `/providers` — silent-restore failure (revoked credentials,
+  provider offline) is caught and routed to the provider list rather than left stuck on a spinner,
+  so a saved-but-unreachable provider can never hard-lock the app.
+- **Exactly one active provider.** `providerRepository.setActiveProvider` deactivates every other
+  row inside the same transaction before activating the target — enforced in code, not by a
+  unique constraint, since SQLite has no partial-unique-index shorthand worth the complexity here.
+
+This milestone adds two new native modules (`expo-secure-store`, `expo-sqlite`) and needs a fresh
+native rebuild before on-device verification: silent session restore across app restarts,
+multi-provider add/switch, and delete-with-confirmation.
+
+**Verified on-device 2026-09-01.** Fresh native rebuild, fresh install (empty `providers` table).
+Confirmed on the real test provider (`albasera-tv.net:80`, 11,356 live channels):
+
+- Cold start with no saved provider → startup gate falls through to `/providers` empty state,
+  no hang.
+- Add Provider → real Xtream auth + full channel fetch → saved to SQLite + SecureStore →
+  landed on Home.
+- Full process kill (`am force-stop`) + relaunch → startup gate silently re-authenticated and
+  re-fetched all 11,356 channels with zero credential re-entry, landed directly on Home.
+- Providers list shows the correct `Active` badge and a live-updating relative
+  last-connected time.
+- Delete confirmation dialog interpolates the provider name correctly; Cancel leaves the row
+  untouched.
+- Add Provider with an unroutable test address (`192.0.2.1`, TEST-NET-1) correctly surfaces
+  the 10s `fetchJson` timeout as an inline error message without crashing or partially
+  persisting a broken provider row.
+
+## Live TV browsing scope (master prompt §19, 2026-09-01)
+
+Replaces the Milestone-1 `player-spike` diagnostics list as the real entry point for Live TV
+(Home's Live TV card now routes to `/live/index` instead of `/player-spike`, which stays on disk
+as a dev/verification tool for future milestones). New screens: `src/app/live/index.tsx`
+(categories), `src/app/live/[categoryId].tsx` (channel list), `src/app/live/player/[channelId].tsx`
+(playback). The player screen reuses the exact stable-player + `ChannelSwitchController` engine
+proven in Milestone 1 — no second implementation of source-replacement logic.
+
+Categories and channel counts are derived from the already-in-memory `activeSessionStore.channels`
+rather than a second network round-trip per category, per the performance rules in master prompt
+§12. Categories with zero matching channels are hidden rather than shown as dead-end rows.
+
+A new SQLite migration (`live_tv_state`, schema version 2) persists the last-opened category and
+last-played channel id, satisfying the "remember" requirement structurally — but no resume-to-here
+UI reads it back yet. That's deferred, along with:
+
+- **Grid view.** List view only this round; a view-mode toggle is a small additive change later.
+- **EPG title / next program.** No EPG data source exists yet (master prompt §20 is its own
+  milestone); showing placeholder/fake programme data would violate the project's verify-don't-guess
+  rule, so the channel row simply omits it for now.
+- **Favorite state / toggle.** No Favorites system exists yet.
+- **Hidden categories (per-user setting).** No Settings screen exists yet; every category with at
+  least one channel is shown.
+
+This mirrors the same narrow-and-honest scoping used for provider persistence — each deferred item
+gets its own milestone rather than being faked or half-built here.
+
+**Routing pitfall found and fixed.** The categories screen was originally `src/app/live/index.tsx`,
+a sibling of the dynamic `src/app/live/[categoryId].tsx`. On the real device, navigating to
+`/live/index` did not resolve to the index screen — it was consumed by `[categoryId]` with a
+literal `categoryId` of `"index"`, landing on an empty channel list. Fixed by moving the categories
+screen out to a flat `src/app/live-categories.tsx`, matching this app's existing flat top-level
+route convention and removing the ambiguity entirely (the `live/` folder now holds only dynamic
+routes). Worth remembering for any future folder that mixes an `index.tsx` with a `[param].tsx`
+sibling.
+
+**Verified on-device 2026-09-01.** Real test provider, no native rebuild needed (pure JS/TS
+change). Confirmed: categories screen shows real category names and correct per-category counts
+(e.g. "NILE SAT | منوعات" → 497); channel list shows real logos, names, LIVE badges, and search
+box; tapping a channel plays real video within the existing single-player-instance engine; Prev/Next
+zapping switches channels correctly; the known intermittent HTTP 403 (see below) surfaced as a
+clean on-screen error and recovered on the next channel selection without a crash or player
+reconstruction; back-navigation through categories → channel list → Home all work.
+
+## EPG (master prompt §20) — built defensively, unverified against real data (2026-09-01)
+
+Before writing any EPG code, checked all three standard Xtream EPG mechanisms against the real
+test provider (`albasera-tv.net`):
+
+- `get_live_streams` — every one of 11,356 channels has `epg_channel_id: null`.
+- `get_short_epg?stream_id=264311&limit=4` — `{"epg_listings":[]}`.
+- `xmltv.php` — returns valid XML, but only 42 `<channel>` entries (out of 11,356), every one with
+  `id=""`, and zero `<programme>` elements anywhere in the document.
+
+This provider has no usable EPG data through any of them. The old app (`albasera-replit`) never
+implemented EPG either (`git log --grep=epg` and a full source grep both came back empty), so
+there was no prior implementation or lesson to check against. Asked the user how to proceed;
+chosen path: build the short-EPG layer defensively per the widely-documented Xtream API
+convention, accept that it cannot be verified against a real populated response on this provider,
+and lean on the "No EPG data" state (itself a master-prompt requirement) as the expected outcome
+for now. XMLTV (the second, fuller layer) is not attempted — no evidence any available provider
+actually populates it, and parsing it blind would be pure guesswork.
+
+Implementation:
+- [`src/providers/xtream/epgAdapter.ts`](../src/providers/xtream/epgAdapter.ts) — `getShortEpg()`,
+  clearly commented as unverified. Timestamps are read from `start_timestamp`/`stop_timestamp`
+  (unix epoch seconds, per convention) rather than the human-readable `start`/`end` strings, so
+  provider/server timezone never has to be reasoned about — epoch is unambiguous by construction,
+  satisfying the "correct timezone handling" requirement without needing real data to test it.
+  Title/description are decoded via a hand-rolled base64 decoder
+  ([`src/core/utils/base64.ts`](../src/core/utils/base64.ts)) rather than `Buffer`/`atob` — Hermes
+  doesn't guarantee either global, and this project doesn't carry a `buffer` polyfill dependency.
+  Any listing with a missing/nonsensical time range is dropped rather than shown broken.
+- [`src/state/epgCache.ts`](../src/state/epgCache.ts) — per-channel cache with a 5-minute TTL (a
+  starting value, not tuned against real traffic) and in-flight de-duplication, so a channel row
+  and the player screen asking about the same channel never fire two requests. Exposes a shared
+  `useNowTick()` clock (`useSyncExternalStore`, ticking every 60s) so every now/next computation
+  and the player's progress bar read "the current time" without calling `Date.now()` during
+  render — this project's ESLint config (React Compiler's purity rule) rejects that outright.
+- Row-level "Now" title in the live channel list, and current-program title/time/progress bar in
+  the player — both wired through `useEpgNowNext`, both gracefully render nothing when there's no
+  data (which is what actually happens on our test provider, verified on-device: no layout jank,
+  no crash, no broken UI element, list rows and player identical to before this change).
+- EPG fetches are naturally scoped by relying on the channel list's existing `FlatList`
+  virtualization (`windowSize`/`getItemLayout`) rather than a separate viewability tracker — only
+  mounted rows call `useEpgNowNext`, so a 497-channel category never fires 497 requests at once.
+
+**Re-verify the first time this runs against a provider that actually returns EPG listings** —
+field names, the base64-encoding assumption, and the epoch-seconds assumption are all from public
+Xtream API documentation/community convention, not confirmed against a live payload.
+
+## Movies browsing (master prompt §21, 2026-09-01)
+
+Verified the real Xtream VOD API against the test provider before writing any code (same
+discipline as EPG, this time with real usable data):
+
+- `get_vod_categories` — real, populated (dozens of categories, e.g. "ARABIC VOD", "NETFLIX VOD").
+- `get_vod_streams` — 20,123 movies total across the catalog (~6MB, ~2s to fetch in one request),
+  each with a real TMDB poster (`stream_icon`), and a real `rating` on 527/1085 sampled movies
+  (the rest report `0`, i.e. genuinely unrated).
+- `get_vod_info?vod_id=X` — real `plot`/`cast`/`director`/`duration` on many movies, but **no
+  `genre` and no release date/year field on any of the ~6 movies sampled**. `MovieDetails`
+  therefore has no genre/year fields at all — adding them and leaving them permanently empty would
+  violate "do not fabricate metadata" in spirit even without inventing values.
+- `movie/{username}/{password}/{stream_id}.{container_extension}` — confirmed 200 OK.
+
+Scope for this pass, narrowed the same way as previous milestones:
+
+- **Lazy-fetched VOD catalog, not prefetched at login.** Unlike live channels (already fetched at
+  session-restore for the Home channel count), the VOD catalog is a second ~6MB payload — fetching
+  both eagerly on every app start would roughly double startup cost for a section the user may
+  never open. `src/state/vodStore.ts` fetches once on first visit to Movies and caches for the
+  session; `activeSessionStore.setActiveSession`/`clearActiveSession` clear it automatically so a
+  provider switch can never leak one provider's movies into another's.
+- **Poster grid, not list** — this is the first real "grid" surface in the app (`FlatList`
+  `numColumns={3}`), matching §21's explicit requirement (unlike Live TV, which stayed list-based
+  per its own section).
+- **Loading skeletons** are per-poster (a placeholder box shown until that image's own `onLoad`
+  fires), not a full-screen skeleton — matches how much of the list is actually still loading.
+- **VOD player uses native controls** (`nativeControls` on `VideoView`), not custom seek/scrub UI.
+  Full custom Player UX (resume position, next-up, subtitles/audio-track pickers) is master prompt
+  §24, its own milestone; building a one-off custom VOD control set now would be thrown away when
+  that milestone lands. The player still goes through the same `toPlaybackError` categorization
+  and shows a real error banner rather than a silent black screen.
+  - Also architecturally different from the live player on purpose: VOD is one-shot (construct
+    once, play once, screen unmounts when done), so `useVideoPlayer(source, ...)` is initialized
+    directly with the real source rather than the `null` + `replaceAsync` pattern the live player
+    uses. Verified in `expo-video`'s own source
+    (`node_modules/expo-video/src/VideoPlayer.tsx`) that `useVideoPlayer` memoizes the player
+    instance on the *stringified* source, so a stable URL across re-renders never triggers a
+    reconstruction — the Milestone 1 "never reconstruct the player" hard rule is specifically
+    about live channel switching, not about a VOD screen's one-time initial source, so this
+    doesn't violate it.
+- **Favorites / Watch Later omitted from the details screen entirely** rather than shown disabled
+  — neither system exists yet anywhere in the app (Home's own Quick Actions still say "Coming
+  soon" for both), so a button that does nothing would be worse than no button.
+- Home's Movies card is wired to `/movies-categories` and shows a real count once the catalog has
+  been fetched at least once this session (refreshed via `useFocusEffect` on every Home visit);
+  shows "—" (not "Coming soon" — the feature isn't pending, just not counted yet) before that.
+
+## Series browsing (master prompt §22, 2026-09-01)
+
+Verified the real Xtream Series API before writing code (same discipline as Movies/EPG) —
+notably richer than the VOD movie data on this same provider:
+
+- `get_series_categories` / `get_series` — real, populated: 6,168 series total (~7MB, ~2s), and
+  unlike movies, series list items **do** carry real `genre` and `releaseDate` on many entries
+  (4/7 sampled), so `SeriesSummary` includes year/genre where movies' equivalent doesn't.
+- `get_series_info?series_id=X` returns `{ seasons, info, episodes }` in **one call** — episodes
+  for every season come back together, which is what satisfies "do not load details for 500
+  episodes with hundreds of unnecessary network calls" structurally, not by extra engineering.
+- Two real quirks found and handled defensively rather than assumed away:
+  1. **`seasons[]` metadata can be empty while `episodes` still has real content** for that season
+     number (series_id 6403: `seasons: []`, `episodes: {"1": [...10 episodes...]}`). The season
+     list `src/providers/xtream/seriesAdapter.ts` builds is therefore always derived from the
+     union of `episodes`' own keys and any `seasons[]` entries, never from `seasons[]` alone —
+     `seasons[]` only supplies extra display metadata (name/overview/cover) when present.
+  2. **Season `cover`/`cover_big` is sometimes just the TMDB base path with no image id**
+     (`".../w600_and_h900_bestv2"`, no filename) — would 404 as an image. `validImageUrl()` drops
+     anything not matching a real image-filename pattern rather than rendering a broken image.
+- `series/{username}/{password}/{episode_id}.{container_extension}` — confirmed 200 OK (a
+  different URL prefix than movies' `movie/...`, verified separately, not assumed to match).
+
+Scope, narrowed the same way as Movies:
+
+- **Lazy-fetched catalog** (`src/state/seriesStore.ts`), not prefetched at login — same reasoning
+  as `vodStore.ts`. Both are cleared together by `activeSessionStore` on any session change.
+- **Episode player passes `containerExtension` via route params from the details screen** instead
+  of re-fetching `get_series_info` just to learn one field — Xtream has no "get one episode"
+  endpoint, only the whole series, so refetching would mean pulling every episode of every season
+  again just to play one. Same one-shot `useVideoPlayer(source, ...)` + native-controls pattern as
+  the movie player, for the same reasons (documented there).
+- **"Series Play" predictable rule, documented in code** (`firstPlayableEpisode()` in
+  `src/app/series/details/[seriesId].tsx`): always the first episode of the first season. Master
+  prompt §22 asks for "resume most relevant unfinished episode when appropriate, otherwise first
+  playable episode" — there is no watched/progress tracking anywhere in this app yet (Home's
+  Continue Watching is still an empty placeholder), so "resume" has no data to act on. This isn't
+  a shortcut around the resume rule; it's the *entire* rule collapsing to its only defined branch
+  until a watch-history feature exists.
+- **Season pills + virtualized episode list** — episodes for the selected season only are rendered
+  in a `FlatList` (virtualized), matching §22's explicit requirement; switching seasons swaps the
+  list's data, not a fresh network call (the whole catalog for the series is already in memory
+  from the single `get_series_info` fetch).
+- Genre/year ARE shown here (details screen + poster grid) since, unlike Movies on this same
+  provider, the real data actually has them — the difference between the two features is driven
+  by what each verification pass found, not an inconsistency to "fix".
+- Home's Series card follows the identical pattern as Movies: wired to `/series-categories`, shows
+  a real count once fetched this session, "—" before that.
+
+**Verified on-device 2026-09-01.** A real ~30-minute provider outage happened mid-verification —
+`player_api.php` started returning HTTP 404 on the login call. Confirmed independently via `curl`
+from the terminal (no device/app involved) before concluding it was provider-side, not a bug;
+watched it recover on its own back to a normal `200` with a real auth payload, then resumed. Once
+back: categories screen showed real names/counts ("All" = 6,168); poster grid showed real posters,
+ratings, and years matching the verified `get_series` data exactly; the details screen for "ليل"
+rendered the real backdrop, rating (10.0), year (2025), genre (دراما), plot, cast, a "Season 1"
+pill, and an episode list with real titles/durations; tapping the first episode played real video
+with native controls showing the correct `41:16` total duration — matching `get_series_info`
+exactly. No crashes at any step.
+
+## Global Search (master prompt §18, 2026-09-01)
+
+The master prompt is explicit here: *"For very large local datasets, use SQLite/indexed querying
+rather than filtering 20,000 JS objects on every keystroke."* At this project's real scale that's
+not a hypothetical — live channels (11,356) + movies (20,123) + series (6,168) is ~38k objects on
+our test provider, well past the point where a per-keystroke JS `.filter()` across all three (the
+pattern used everywhere else in this app, but always scoped to a single category, never the whole
+catalog) would visibly janky the UI thread. This is the first screen in the app that actually
+needs the SQLite path the master prompt calls out, so it's built differently from every other list
+here on purpose:
+
+- **New `search_index` table** (migration v3): `content_type`, `provider_item_id`, `name`,
+  `subtitle`, `image_url`, `category_id`, indexed on `name COLLATE NOCASE`. One row per live
+  channel/movie/series item.
+- **Index build is a one-time per-session cost, search itself is not.** `ensureSearchIndexReady()`
+  (`src/state/searchIndexStore.ts`) rebuilds the whole table once when the Search screen is first
+  opened (shown behind a loading state), and does nothing on subsequent opens this session.
+  `searchContent()` — the thing that actually runs per keystroke (debounced 250ms) — is a plain
+  `SELECT ... WHERE name LIKE '%'||?||'%' ... LIMIT 50` against that table, which runs in SQLite's
+  native code off the JS thread, not a Hermes array scan.
+- **Batched inserts, not one `executeAsync` per row.** ~38k individual awaited native calls was a
+  real, foreseeable performance risk (JSI bridge overhead compounds per call even when each query
+  itself is fast) — not a maybe. Rows are inserted in batches of 300 via one parameterized
+  multi-row `INSERT ... VALUES (?,?,?,?,?,?), (?,?,?,?,?,?), ...` per batch, cutting ~38k round
+  trips down to ~130.
+- **Search always covers all three content types, even before the user has visited Movies or
+  Series this session.** Movies/Series are lazy-loaded (same as `/movies-categories` and
+  `/series-categories` already do) the first time Search needs them, specifically so opening
+  Search and typing a movie title works even if Movies was never opened — the alternative (only
+  searching whatever happens to already be cached) would silently under-search in a way a user
+  has no way to notice.
+- **Index invalidation piggybacks on the existing session-change hook.** `resetSearchIndex()` is
+  called from `activeSessionStore.setActiveSession`/`clearActiveSession`, alongside the existing
+  `clearVodMovies`/`clearSeriesList` calls — same reasoning: never let one provider's content
+  survive into another's session. (`searchIndexStore.ts` deliberately does NOT import
+  `activeSessionStore` itself — channels are passed in as a parameter instead — to avoid a
+  circular import between the two modules.)
+- **Phone only for this pass — TV's "dedicated full-screen search with predictable focus" is
+  deferred.** No screen in this app has any TV-specific focus-engine code yet (the whole session's
+  on-device testing has been phone-only); building TV-specific search UX now, before any other TV
+  focus work exists to be consistent with, would be built in isolation and likely need rework once
+  real TV focus patterns are established elsewhere. `src/app/search.tsx` is a normal inline/phone
+  screen per §18's "Phone: inline or dedicated search screen" branch.
+- Tapping a live result plays it immediately (`categoryId: "all"` scope for prev/next zapping,
+  since search results aren't scoped to one category); movie/series results go to their details
+  screens — matching how each content type is already entered from its own browse flow.
+- Added the Home "search entry point" that master prompt §17 already asked for but this app never
+  had (a `Search` button in the header, next to `Disconnect`).
+
+**Verified on-device 2026-09-01.** First open (movies/series not yet visited this session): index
+build took ~10s total ("Preparing search…" shown throughout — lazy-loading both catalogs plus the
+batched-insert build), no crash. Searching "mbc" correctly returned only live results with real
+logos and LIVE badges, including the provider's own real duplicate channel entries (same name,
+different stream ids/categories) — shown as-is rather than deduplicated, since that's what the
+provider's data actually contains. Searching "layl" (Latin, no transliteration attempted) matched
+across all three content types in one query: two movies ("Hazihi Laylati 2019", "The Ultimate
+Playlist of Noise") and one series ("The Playlist", 2022) — confirming plain substring `LIKE`
+matching works correctly across mixed scripts/languages without needing every result to share a
+script with the query. Tapping the series result navigated correctly to its details screen,
+rendering real data (rating 6.0, 2022, Drama, full cast, director, Season 1, an episode with a
+real `00:50:18` duration). One UX note, not a bug: the first tap after typing (with the keyboard
+still open) dismissed the keyboard without also registering as a row press — standard Android
+behavior when tapping outside a focused field with something underneath; a second tap on the same
+spot worked normally.
+
+## Resume (master prompt §24.6) + Continue Watching (§17) + Series Play rule (§22), 2026-09-01
+
+Scoped this pass to exactly §24.6 (Resume) rather than all of §24 — the rest of Player UX (custom
+scrub bar, playback speed, next-episode prompt, audio/subtitle track pickers, orientation,
+screen-wake) is real, separate work that doesn't share a data model with Resume the way this three-
+part scope does. Chose Resume specifically because it's the one piece with concrete, checkable
+acceptance criteria in the master prompt AND because building it closes two things already flagged
+as deferred earlier in this project (Home's static "No watch history yet" placeholder from §17;
+the "always S1E1" Series Play rule from §22, explicitly documented at the time as "the rule
+collapsing to its only defined branch until a watch-history feature exists").
+
+Verified the real `expo-video` player API before writing anything (`node_modules/expo-video/build/
+VideoPlayer.types.d.ts` and `VideoPlayerEvents.types.d.ts`): `currentTime` is a settable property
+that seeks on write, `duration` is readonly, `timeUpdateEventInterval` controls how often
+`timeUpdate` fires (default 0 = off), and `playToEnd`/`playingChange`/`statusChange` are real
+events with the payload shapes used here — none of this was guessed.
+
+- **New `watch_progress` table** (migration v4): one row per movie or episode
+  (`content_type`+`provider_item_id` primary key), storing position/duration, `updated_at`, and
+  enough denormalized display data (title, subtitle, image, **and `container_extension`**) that
+  Home's Continue Watching and both player screens never need the movies/series catalog to be
+  loaded to resume something — which matters because the single most common path (open app →
+  land on Home via silent restore → tap Continue Watching) happens *before* Movies or Series has
+  ever been visited this session. Storing `container_extension` here specifically closes that gap;
+  without it, a fresh Continue Watching tap would 404 until the user separately opened Movies/Series.
+- **`src/playback/useWatchProgress.ts`** — one hook, used identically by both
+  `movies/player/[movieId].tsx` and `series/player/[episodeId].tsx`: resumes once (guarded by a
+  ref, only on the first `readyToPlay`) only when saved position is 5–95% of duration (`§24.6`'s
+  own thresholds), saves via the player's own `timeUpdateEventInterval` (set to 15s — throttling
+  happens at the native layer, not a JS `setInterval` hammering SQLite, which is exactly what
+  §24.6 says to avoid), and saves again on pause / app background/inactive / unmount so nothing
+  between 15s ticks is lost. Clears the row on `playToEnd` or once position crosses 95%, so a
+  finished item doesn't linger in Continue Watching.
+- **This project's stricter-than-default lint config treats `player.currentTime = x` and
+  `player.timeUpdateEventInterval = x` as forbidden mutations** (`react-hooks/immutability`) the
+  same way it would flag mutating a React prop. `player` is a native `SharedObject` wrapper, not
+  React state — writing those two properties is the actual, intended, only way to do either thing
+  (`seekBy` exists but is explicitly documented as imprecise, wrong for exact resume; there's no
+  method form of setting the update interval at all). Scoped `eslint-disable` comments cover
+  exactly those two lines, with the reasoning written inline, not blanket-disabled for the file.
+- **Series Play** (`resolveSeriesPlayEpisode` in `series/details/[seriesId].tsx`) now actually
+  implements the rule it could only describe before: query
+  `getMostRecentIncompleteEpisodeForSeries`, resume that episode if found, else the first episode
+  of the first season. Per-episode `playEpisode` rows still play the tapped episode directly,
+  unaffected by this rule (which only governs the series-level Play button).
+- **Home's Continue Watching** is a horizontal card list (poster/fallback, title, subtitle —
+  `S{n} E{n}` for episodes, a thin progress bar, relative "last watched" time), tap-to-resume, and
+  a "Clear" action with confirmation (`Alert.alert`, same pattern as provider deletion) — the
+  "clear watch history action with confirmation" §17 already asked for.
+- **Explicitly not built in that pass** (all of §24 beyond §24.6): next-episode prompt, playback
+  speed, audio/subtitle tracks, screen-wake, orientation. All five were picked up in the very next
+  batch below.
+
+## Second batch: Favorites/Watch Later, Settings, Legal, and the rest of §24, 2026-09-01
+
+The user explicitly asked to stop verifying on-device after every single change and instead build
+a batch of unrelated, independently-scoped pieces together, testing once at the end. Ten items,
+each still held to the same verify-before-build discipline as everything earlier in this log —
+skipping on-device testing between them didn't mean skipping API verification before writing code.
+
+**1–3: Favorites + Watch Later + live-channel favorite toggle.** One shared `library_items` table
+(migration v5: `list_type` 'favorite'|'watch_later', `content_type` 'live'|'movie'|'series',
+`provider_item_id`, denormalized display fields including `container_extension` for the same
+reason `watch_progress` needed it — direct-play from the library screen without the catalog
+loaded) rather than two near-identical tables. `src/state/useLibraryToggle.ts` is one hook used by
+the movie details screen, the series details screen, and each live channel row — closing the
+"Favorite state" gap on Live TV rows that master prompt §19 asked for and this project's own
+DECISIONS.md flagged as deferred back when Live TV was first built. `src/app/library/[listType].tsx`
+is one screen serving both `/library/favorite` and `/library/watch_later`, styled like Search's
+mixed-content-type rows (LIVE/MOVIE/SERIES badges) since either list can hold any content type.
+
+**4: Settings (§28).** Scoped to sections with something real to show: Account/Provider (live
+session info + manage/disconnect), Legal (link to the Terms screen), Diagnostics (link to the
+existing `player-spike.tsx` dev tool), About (real app version/package via `expo-constants`'
+`Constants.expoConfig`, not hardcoded). Appearance, Content, Playback, and Storage are *not* built
+as empty/fake sections — there's no theming system, content-filter settings, saved playback
+preferences, or storage-usage measurement anywhere in this app yet, and a settings section with
+nothing real to control is worse than no section.
+
+**5: Legal/acceptance gate (§29).** New `app_state` table (migration v6, single row, same shape as
+`live_tv_state`) storing `legal_accepted_at`. `src/app/index.tsx`'s startup gate now checks this
+*before* the provider check — unaccepted routes to `/legal?mode=gate` (Accept button, no back/skip)
+before anything else ever runs; accepted routes normally. The same screen is reachable from
+Settings without `mode=gate` as a read-only "already accepted" view. The terms text itself is
+explicitly marked in-code as placeholder copy, not reviewed legal language — real wording is a
+release blocker to track separately, not something to fabricate convincingly here.
+
+**6: Next Episode prompt (§24.7).** Verified real trigger data first: `player.duration` and the
+`timeUpdate` payload's `currentTime` are both real, already-used properties. When remaining time
+drops under 20s, fetches `get_series_info` once (Xtream has no lighter "just the next episode"
+endpoint) to resolve the actual next episode, then shows a card with a 10s countdown that
+auto-advances (`router.replace`, not `push`, so episode screens don't stack) unless dismissed.
+
+**7–8: Playback speed + audio/subtitle tracks (§24.2/§24.4/§24.5).** Two shared hooks
+(`usePlaybackSpeed`, `usePlaybackTracks`) plus one shared `TrackSelectorModal` component — the
+first shared UI *component* in this codebase (not just shared hooks/state), justified because the
+modal's JSX is substantial and used identically by both the movie and episode players, unlike the
+Favorite buttons (small enough to duplicate inline per this project's existing style). Verified
+`player.playbackRate`, `player.audioTrack`/`subtitleTrack`, and the `available*TracksChange` /
+`*TrackChange` events directly against `expo-video`'s type definitions before writing anything —
+`availableAudioTracks`/`availableSubtitleTracks` are read-only and only populate asynchronously
+once the source loads, so the hook listens for the change events rather than reading them once at
+mount (which would almost always see an empty array). §24.4's "don't apply an old track index to
+an unrelated channel" concern is about a single player instance being reused across live channel
+switches — doesn't apply to these two hooks since both callers are one-shot VOD players.
+
+**9–10: Screen-wake + orientation (§24.8/§24.9) — two new native dependencies.** Added
+`expo-keep-awake` (`useKeepAwake()` — screen stays on for as long as the owning player screen is
+mounted, automatic cleanup) and `expo-screen-orientation` (`lockAsync(OrientationLock.LANDSCAPE)`
+on mount / `unlockAsync()` on unmount) via `npx expo install`, both official Expo SDK packages.
+`src/playback/useFullscreenOrientation.ts` gates on `Platform.isTV` (a real react-native-tvos API)
+before locking orientation — §24.8 explicitly says phone-only, "do not fight tablet/TV
+orientation," and a TV app has no portrait state to enter or restore in the first place. Both
+hooks are wired into all three player screens (movie, episode, **and** live — §24.8/§24.9 aren't
+scoped to VOD only in the master prompt the way §24.2 is). Neither package needed an app.config.js
+plugin entry (checked both packages' own `package.json` — no `expo.plugin` field, confirming
+autolinking is sufficient) but **both are new native modules, so a fresh native rebuild is required
+before any of this can run on-device** — same as when `expo-sqlite`/`expo-secure-store` were first
+added.
+
+All ten items are `tsc`/lint clean. None have been run on-device yet — batched per the user's
+explicit request, to be verified together in one pass once the native rebuild is done.
+
+## Bug: `router.replace()` called synchronously in render body (found during on-device batch test, 2026-09-02)
+
+The consolidated on-device test pass for the batch above (Favorites/Watch Later/Settings/Legal/
+Next Episode/speed/tracks/wake/orientation) surfaced a real, previously-unnoticed crash: tapping
+into Live TV from Home threw `Cannot update a component (ForwardRef(NavigationContainerInner))
+while rendering a different component (LiveCategoriesScreen)`. Root cause: `live-categories.tsx`
+and 11 other screens guarded a missing provider session with
+
+```tsx
+if (!session) {
+  router.replace("/providers"); // or "/" for home.tsx
+  return null;
+}
+```
+
+placed directly in the component's render body. `router.replace()` dispatches a navigation state
+update, so calling it synchronously during render (rather than as a result of an event or effect)
+violates React's render-purity rules — React tolerated it inconsistently until this particular
+navigation path made it fatal.
+
+Fixed by moving the redirect into a dedicated `useEffect`, keeping the render-body `return null`
+purely to bail out of that render pass:
+
+```tsx
+useEffect(() => {
+  if (!session) router.replace("/providers");
+}, [session]);
+
+if (!session) {
+  return null;
+}
+```
+
+Applied to 11 files: `live-categories.tsx`, `movies-categories.tsx`, `series-categories.tsx`,
+`home.tsx` (target `/`, all others target `/providers`), `live/[categoryId].tsx`,
+`movies/player/[movieId].tsx`, `search.tsx`, `movies/details/[movieId].tsx`,
+`series/player/[episodeId].tsx`, `series/details/[seriesId].tsx`,
+`live/player/[channelId].tsx`. `player-spike.tsx` was checked and did **not** need the fix — its
+no-session state already renders an inline "Connect a provider first" screen with a manual Back
+button whose `onPress` calls `router.replace`, not an automatic render-body redirect.
+
+`tsc --noEmit` and `npx expo lint` both clean after the fix across all 11 files. This is a pure
+JS/TS change — no native rebuild required, just a JS reload on-device to pick it up.
+
+## Bug: `persist()` reading a released native player on unmount (found continuing the same on-device pass, 2026-09-02)
+
+While re-testing (Movies → play a movie → immediately back out — exactly the interaction the
+router-replace fix above needed re-verifying), a second, unrelated crash appeared: a Metro red-box
+`Render Error` — *"The 1st argument cannot be cast to type class
+expo.modules.video.player.VideoPlayer (received class java.lang.Integer) → Caused by: Cannot use
+shared object that was already released"* — pointing at `player.duration` inside `persist()` in
+`src/playback/useWatchProgress.ts`.
+
+Root cause: `useWatchProgress`'s `AppState` effect (`src/playback/useWatchProgress.ts:129`) calls
+`persist()` from its own cleanup function on unmount, to flush any progress made since the last
+throttled `timeUpdate` tick. But `player` comes from `useVideoPlayer` in the parent screen
+(`movies/player/[movieId].tsx` etc.), whose own cleanup releases the native `SharedObject` — and
+React gives no ordering guarantee between two independent effects' cleanups in the same component.
+When the parent's cleanup released the player before this hook's cleanup ran, `persist()` read
+`player.duration`/`player.currentTime` on an already-released native object, which throws instead
+of returning a value.
+
+Fixed by wrapping just those two property reads in `try/catch` and bailing out silently on
+failure — there is nothing to persist once the player is gone, and this is a genuine native-module
+boundary race (observed live on-device), not a hypothetical worth guarding against speculatively:
+
+```ts
+let duration: number;
+let position: number;
+try {
+  duration = player.duration;
+  position = player.currentTime;
+} catch {
+  return;
+}
+```
+
+Verified fixed on-device: reloaded the JS bundle, replayed the exact repro (Movies → ARABIC VOD →
+a movie → Play → Back immediately while still buffering) three times, no red-box, clean return to
+the details screen each time. `tsc --noEmit` and `npx expo lint` both clean.
+
+Also worth recording: mid-testing, Movies briefly failed with `HTTP 404` and then a `Could not
+parse JSON` error from `get_vod_streams` — initially misdiagnosed as a provider outage (even
+confirmed, wrongly, via `curl` against several `player_api.php` actions). The user correctly
+pushed back — the same account was working on another IPTV app at the time. Re-checking: the app's
+own request construction (`playerApiUrl()` in both `xtreamAdapter.ts` and `vodAdapter.ts`) is
+identical between the working `get_live_categories` call and the failing `get_vod_streams` call —
+no code difference. The `curl` "confirmation" was itself misleading: the server sits behind
+Cloudflare, and curl's default User-Agent got a 404 even on `get_live_categories`, which the app
+had just fetched successfully seconds earlier with real data. Likely explanation: repeated rapid
+`curl` requests from the dev machine (sharing the phone's network/public IP) tripped a transient
+Cloudflare rate-limit or bot check that briefly affected the phone's own requests too. Retrying
+from the app a few minutes later (no more curl noise) loaded Movies normally (20,123 titles).
+Lesson: `curl` from a dev machine is not a reliable way to confirm "provider is down" when the
+server is behind a WAF/CDN with its own bot heuristics — prefer retrying from the app itself, and
+don't treat a curl-only reproduction as independent confirmation of a server-side issue.
+
+## Mobile-scope completion pass (2026-09-02)
+
+User instruction: finish everything the master prompt lists for mobile (phone/tablet) — including
+full i18n/RTL — before resuming on-device testing. This is the largest single batch of the project
+so far. Summary of what was built, in the master prompt's own milestone order (§0.1 items 14–15),
+plus the gaps found while doing it.
+
+### i18n + RTL (§15)
+
+Real gap found: zero i18n existed before this pass — every screen was hardcoded English despite
+the master prompt's "Arabic-first" mandate. Built a small hand-rolled i18n system (no i18next —
+matches §2's "a small i18n solution" guidance and the project's dependency discipline):
+
+- `src/core/i18n/locales.ts` — the 6 required locales (`en`, `ar`, `fr`, `tr`, `ckb`, `ku`) with
+  per-locale RTL flags (`ar`/`ckb` RTL, matching §15 exactly — Kurmanji `ku` is LTR).
+- `src/core/i18n/translations/*.ts` — one file per locale, each typed as `TranslationShape`
+  (`typeof en`, with `en.ts` deliberately NOT `as const` so the type widens to `string` — a missing
+  or mistyped key in any non-English locale is a **compile error**, not a silent English fallback).
+- `src/core/i18n/I18nContext.tsx` — `I18nProvider`/`useI18n()`. Auto-detects device locale via
+  `expo-localization`'s `getLocales()` on first run (persisted to `app_state.language` after), or
+  restores the saved preference. `t(namespace, key, params?)` does `{param}`-style interpolation —
+  deliberately no ICU plural rules (Arabic's 6 plural forms etc.) — a real simplification, not an
+  oversight; every interpolated count string was written to read acceptably across all 6 languages
+  with simple substitution rather than pretending to support full CLDR pluralization.
+- RTL layout: relies on React Native's own default behavior (native `I18nManager.isRTL` already
+  follows the OS locale before any JS runs, so a fresh install on an Arabic-locale device renders
+  RTL from frame one with no app-side action needed). The app's own in-app language switch is the
+  one case that needs explicit handling: changing to/from an RTL language calls
+  `I18nManager.allowRTL()`/`forceRTL()` (which persists natively) and then prompts a restart
+  (`BackHandler.exitApp()`) — RN cannot re-mirror an already-mounted native tree without one.
+- Every existing screen was retrofitted in one pass each (not two): string extraction to `t()`
+  calls AND an RTL styling audit (converting `left`/`right` positioning to logical `start`/`end`
+  where the two sides aren't already symmetric) were done together per file. `player-spike.tsx`
+  (the dev-only diagnostics screen from the Milestone 1 player spike) was deliberately left in
+  English — it's a debug tool, not user-facing surface.
+- Arabic, French, and Turkish translations are professional-quality first-pass work. **Sorani
+  Kurdish (`ckb.ts`) and Kurmanji Kurdish (`ku.ts`) are best-effort machine/non-native translations
+  and are flagged here for native-speaker review before release** — same policy already applied to
+  the placeholder legal text; not fabricating confidence that doesn't exist.
+- Theme (dark/light) was explicitly **not** built as a second full pass — see the Settings section
+  below for why, and why that's spec-compliant rather than a cut corner.
+
+### Downloads / offline playback (§27) — entirely new subsystem
+
+Verified the real `expo-file-system` API before writing anything (SDK 57 ships the newer
+class-based `File`/`Directory`/`DownloadTask` API, not the older `FileSystem.downloadAsync` — read
+`node_modules/expo-file-system/build/*.d.ts` directly rather than assuming). Built:
+
+- Migration v9 (`download_tasks` table, including a `resume_state` column for persisted
+  `DownloadPauseState`) + `src/db/repositories/downloadRepository.ts`.
+- `src/domain/downloads/eligibility.ts` — only non-`.m3u8` direct-file VOD is downloadable, per
+  §27; live channels never get a download affordance in the UI at all (simplest, safest way to
+  satisfy "disallow live streams").
+- `src/domain/downloads/downloadManager.ts` — start/pause/resume/cancel/delete backed by
+  `File.createDownloadTask()`. Pause captures `task.savable()` (real `DownloadPauseState`) into
+  SQLite; resume rebuilds via `DownloadTask.fromSavable()` when that data exists. **Honest limit**:
+  resume data only exists after a *graceful* pause (explicit user action, or the new
+  `registerDownloadBackgroundHandling()` AppState listener that pauses active transfers when the
+  app backgrounds). A hard process kill mid-download loses the native resume token — on next boot,
+  `recoverDownloadsOnBoot()` (wired into `_layout.tsx`) flips any stuck `"downloading"` row to
+  `"paused"`, and resuming it restarts the transfer from scratch rather than pretending to resume
+  data that was never captured.
+- `src/domain/downloads/downloadProgressStore.ts` — a `useSyncExternalStore` in-memory pub/sub for
+  live per-tick progress (same pattern as `epgCache.ts`'s `useNowTick`), separate from the SQLite
+  row (written throttled, ≤1/sec/task) so the Downloads screen's progress bars are smooth without
+  hammering SQLite on every native progress event.
+- `src/app/downloads.tsx` — list screen with pause/resume/cancel/delete and status-appropriate
+  actions; `src/domain/downloads/useDownloadState.ts` — a Movie/Episode-details hook mirroring
+  `useLibraryToggle`'s pattern. Wired onto movie details (one button) and every episode row in
+  series details (download is per-episode, not per-series).
+- `movies/player/[movieId].tsx` and `series/player/[episodeId].tsx` both accept an optional
+  `localUri` route param and prefer it over building a network stream URL — this is how a completed
+  download plays back. **Scope boundary, documented rather than silently assumed**: reaching these
+  screens still requires an active provider session (the whole app's navigation is gated on
+  `activeSessionStore`), so this is "play a downloaded file without re-streaming it," not "use the
+  app in airplane mode from a cold start" — true fully-offline-after-restart playback would need
+  session restoration to tolerate no connectivity too, which is a separate, larger change.
+- Home's Downloads shortcut and Settings' Storage section both show a real count/size
+  (`getDownloadsSummary()`), not a placeholder.
+
+### Settings (§28) — full section build-out
+
+Previous pass deliberately built only Account/Provider + Legal + Diagnostics + About, on the
+stated grounds that Appearance/Content/Playback/Storage would be fake placeholders with nothing
+real to control. All of those now have something real:
+
+- **Appearance**: working language picker (wired to the i18n system above). Theme row shows "Dark"
+  only — deliberately did **not** build a full light-mode palette + theme-context refactor. Master
+  prompt §14 explicitly says *"Optional light mode may be included, but dark mode is the primary
+  media experience"* — light mode is spec-optional, and building it properly would mean converting
+  every screen's `StyleSheet.create()` (currently static module-scope objects reading the one dark
+  `Colors` constant) to a theme-aware hook — a second full mechanical pass across every screen, on
+  top of the i18n one. Given it's explicitly optional, that effort went to features that aren't.
+- **Content**: three section-visibility toggles (Live/Movies/Series — `app_state` columns, wired
+  into Home so a hidden section's browse card disappears) + a category-visibility screen per
+  content type (`settings/categories/[contentType].tsx`, a new `hidden_categories` table via
+  migration v8) wired into all three category-listing screens so a hidden category is actually
+  filtered out of the list, not just recorded and ignored. Master prompt §41 explicitly forbids
+  "expose settings the player cannot actually implement" — every toggle added here changes real
+  browsing behavior, verified by tracing the read path, not just the write path.
+- **Playback**: resume-enabled and autoplay-next-episode toggles are fully wired, not just stored —
+  `useWatchProgress` now checks `appState.resumeEnabled` before setting a pending resume position,
+  and the episode player's next-episode countdown effect checks `autoplayEnabled` before
+  auto-advancing (the card still appears and offers a manual "Play Now" when autoplay is off, it
+  just stops auto-advancing at 0). Preferred audio/subtitle language are free-text fields (arbitrary
+  provider track languages aren't limited to the 6 UI locales) — persisted, but **not yet consumed**
+  by `usePlaybackTracks`' track auto-selection; a real, smaller remaining gap, not silently implied
+  as done.
+- **Storage**: real downloaded-content count/size from `getDownloadsSummary()`, links to Downloads.
+- **Data**: added `clearLibraryList()` to `libraryRepository.ts` so "Clear favorites" / "Clear
+  watch later" are real bulk deletes, not just history (which already existed).
+
+### Onboarding + provider management (§16)
+
+- `src/app/onboarding.tsx` — 3-slide swipeable intro (Skip / Next / Get Started), gates before the
+  legal screen on first run (`app_state.onboarding_seen_at`), wired into `index.tsx`'s startup
+  routing ahead of the legal-acceptance check.
+- Legal acceptance is now **versioned** (`CURRENT_LEGAL_VERSION` in
+  `src/core/legal/legalVersion.ts`, `app_state.legal_accepted_version`) instead of a bare boolean —
+  bumping the constant re-prompts existing users, per §29.
+- Provider **edit** (previously only add/delete/switch existed): `add-provider.tsx` now accepts an
+  optional `providerId` param, pre-fills from `getProviderById()` + `getProviderCredentials()`
+  (the user's own already-entered password, shown back to them the same way the add flow does —
+  not a new exposure), and updates in place (`updateProvider()`, new repo function) instead of
+  inserting a duplicate row.
+- **M3U/M3U8 (§7)**: built a real, spec-compliant parser (`src/providers/m3u/m3uParser.ts`) —
+  handles CRLF/LF, missing/duplicate `#EXTM3U` headers, unknown `#EXTINF` attributes (preserved in
+  `extraAttributes` rather than dropped), a chunked `parseM3UChunked()` that yields to the event
+  loop every 2000 lines so a large playlist can't freeze the JS thread. **Deliberately not wired
+  into the add-provider UI or session/provider-kind type system in this pass.** `Provider.kind`,
+  `XtreamProviderConfig`, and `ActiveSession.config` are hard-typed to `"xtream"` and threaded
+  through 15+ call sites across nearly every screen built this session (`session.config` passed to
+  every Xtream adapter call). Turning that into a real `"xtream" | "m3u"` discriminated union safely
+  is a separate, larger architectural change — attempting it in the same pass as everything else
+  above risked destabilizing the working, tested Xtream flow for a feature the master prompt itself
+  calls "secondary" (§0: *"M3U/M3U8 URL playlists... are secondary provider types"*). The parser is
+  real and ready; the UI/session wiring is the next dedicated milestone for it, not a silent gap.
+
+### Retry/fallback policy (§25) + app lifecycle (§31)
+
+- Live player: bounded automatic retry (`MAX_LIVE_RETRIES = 2`, 1s delay) on a transient
+  `replaceAsync` rejection, added to `live/player/[channelId].tsx`'s `commitChannel`. A fresh
+  channel selection always resets the counter; a retry of that same failed attempt doesn't — so
+  it's bounded per-selection, never infinite. Every retry and every commit re-checks the switch
+  controller's `isStale()` generation token first, so a newer user selection always wins and
+  cancels the old retry path, exactly as §25 requires.
+- VOD players (movie + episode): one quiet retry (`player.replaceAsync(source)` again) on the
+  first playback error before showing the error card, per §25's "one quiet transient retry can be
+  acceptable" for VOD.
+- **Real bug found and fixed while adding the above**: the live player's retry uses a `setTimeout`
+  that could fire after the screen unmounts (navigate away mid-retry-wait), calling
+  `player.replaceAsync()` on an already-released native player — the same class of "shared object
+  already released" crash fixed earlier this session in `useWatchProgress`. Fixed with an
+  `unmountedRef` guard + clearing the pending timeout on unmount. Applied the same defensive guard
+  to the VOD retry paths too (smaller race window there since there's no `setTimeout` delay, but
+  the same category of bug is possible between the retry's `replaceAsync` call and its promise
+  settling).
+- Network reconnect (§31 "temporary network loss / Wi-Fi → cellular changes"): added `expo-network`
+  and `src/core/network/useNetworkReconnect.ts` (wraps the package's real `useNetworkState()` hook
+  to fire once specifically on a lost→restored transition). Wired into the live player only — when
+  connectivity returns, it re-selects the current channel through the normal switch controller path
+  even if the bounded retries above had already been exhausted and given up. Not swept across every
+  screen (VOD players, category lists) — scoped to where a dropped connection is most acutely felt
+  and most spec-relevant (live streaming), not because the others don't matter.
+- Also fixed in passing: `library/[listType].tsx` had the exact same render-body `router.replace()`
+  anti-pattern documented and fixed everywhere else earlier this session — missed originally because
+  the earlier grep matched `if (!session)` specifically and this file guards on `!listType` instead.
+  Same fix (move into `useEffect`).
+
+### New native dependencies (native rebuild required before this can run on-device)
+
+`expo-localization`, `expo-file-system`, `expo-document-picker` (installed for the M3U local-file
+picker path, ready even though M3U isn't wired into the UI yet), `expo-network`. All four are
+official Expo SDK packages (`npx expo install`-resolved, matched to SDK 57). Only
+`expo-localization` needed an explicit `app.config.js` plugins entry (autolinking is sufficient for
+the other three — confirmed by checking each package for an `app.plugin.js` before deciding, not
+assumed). Same pattern as every previous native addition this session: `tsc`/lint clean, but
+untestable until a fresh `npx expo run:android`.
+
+### Status
+
+Every file touched in this pass is `tsc --noEmit` and `npx expo lint` clean, checked incrementally
+after each unit of work rather than once at the end. None of it has been run on-device yet — a
+native rebuild is required first (four new native modules), and the user's own instruction was to
+finish this whole pass before resuming testing.
+
+## Mobile-scope completion, part 2 (2026-09-02, same day)
+
+User: skip M3U/M3U8 integration (confirmed — matches the previous entry's own reasoning for
+deferring it), finish everything else remaining for mobile, then rebuild and test. Closed out the
+remaining gaps found by re-auditing every "mobile" master-prompt section against what actually
+exists:
+
+- **Real Xtream account/subscription info (§17/§28)** — previously only `allowed_output_formats`
+  was read from the login response; everything else in `user_info`/`server_info` was discarded.
+  Verified the exact real field names with one direct `curl` against the test provider's login
+  endpoint (`status`, `exp_date`, `is_trial`, `active_cons`, `max_connections` under `user_info`;
+  `server_protocol`, `timezone` under `server_info` — confirmed real, not assumed from generic
+  Xtream docs) before typing anything against them, matching this project's "never guess an API"
+  rule. `authenticate()` now returns a typed `XtreamAccountInfo`, threaded through
+  `ActiveSession.accountInfo` (both `restoreSession()` and `add-provider.tsx`'s connect/edit paths).
+  Displayed in Settings' Account/Provider card (status, expiry, active/max connections, output
+  formats, server timezone) and as a small status line under the provider name on Home. Dates use a
+  plain numeric formatter (`core/utils/formatDate.ts`), deliberately not `Intl.DateTimeFormat` —
+  Hermes's ICU data for this app's Kurdish locales isn't guaranteed on-device, and an unsupported
+  locale tag passed to `toLocaleDateString()` can throw. `user_info` also echoes back the plaintext
+  username/password; the raw object is never passed downstream, only the specific fields needed.
+- **Home "Featured" shelf (§17)** — was the one required (non-optional) Home element never built.
+  Draws only from Movies/Series catalogs already cached in memory this session
+  (`getVodMovies()`/`getSeriesList()`) — deliberately does not trigger its own fetch just to
+  populate a decorative shelf, so on a fresh session before Movies/Series have been opened once,
+  Featured is honestly empty rather than faked or eagerly fetched at Home's cost. Shuffled once per
+  screen focus (`useFocusEffect`), never in render.
+- **Preferred audio/subtitle language settings are now actually consumed** — previously stored by
+  Settings' Playback section but read by nothing (a real §41 violation: "expose settings the player
+  cannot actually implement"). `usePlaybackTracks` now accepts the two preferences and auto-selects
+  a matching track the first time each track list populates, then never overrides a manual choice
+  again for that screen instance.
+- **Watch History screen (§26)** — §26 separately calls for a bounded (50–100) History list, distinct
+  from Home's ~10-item Continue Watching preview shelf. Added `src/app/history.tsx` (capped at 100,
+  per-item remove + clear-all, reusing `watchProgressRepository`'s existing functions), reachable
+  from a new "See All" link on Home's Continue Watching header and from Settings' Data section.
+
+All of the above verified `tsc --noEmit` and `npx expo lint` clean, same as every prior increment.
+This closes out the concretely actionable mobile-scope gaps found by re-checking §16–§31 against
+the current code, short of: M3U (explicitly skipped, see previous entry), a full light theme
+(explicitly optional per §14, previous entry), a player "lock controls" affordance (§24.1 lists it
+as "where useful" — skipped because the movie/episode players use `expo-video`'s native controls,
+which already have their own tap-to-reveal/auto-hide protection against accidental touches; adding
+a custom lock button would mean abandoning native controls for a full custom control surface, a
+disproportionate change for an explicitly-optional item), and separate EULA/DMCA/Privacy documents
+(kept as one combined Terms screen since the text is still placeholder pending real legal review —
+splitting one honest placeholder into four fabricated-sounding separate documents would be worse,
+not better). Automated unit tests / CI quality gates (§33/§37) were not built in this pass — the
+user's own repeated instruction this session has been about the on-device manual verification pass
+specifically, not an automated test suite; treating that as a separate, not-yet-requested scope.

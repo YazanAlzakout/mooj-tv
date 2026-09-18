@@ -1,0 +1,747 @@
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  useWindowDimensions,
+} from "react-native";
+
+import { BouncePressable } from "@/components/BouncePressable";
+import { CategoryTabs } from "@/components/CategoryTabs";
+import { TV_RAIL_WIDTH } from "@/components/CategorySidebar";
+import { TvBrowseLayout } from "@/components/TvBrowseLayout";
+import { CachedImage } from "@/components/CachedImage";
+import { Focusable } from "@/components/Focusable";
+import { ScreenBackground, TV_OVERSCAN_X } from "@/components/ScreenBackground";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
+import { useI18n } from "@/core/i18n/I18nContext";
+import { LIST_WINDOW } from "@/core/layout/listWindow";
+import { imageHostIsDead, noteImageFailed } from "@/core/media/deadImageHosts";
+import { isTvBuild } from "@/core/platform/isTvBuild";
+import { AndroidTextFix, ArtworkTile, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
+import type { ThemeColors } from "@/core/theme/palettes";
+import { themedStyles, themeColors, useThemeRerender } from "@/core/theme/themedStyles";
+import { getHiddenCategoryIds } from "@/db/repositories/categoryVisibilityRepository";
+import { getLiveTvState, setLastCategoryId } from "@/db/repositories/liveTvStateRepository";
+import type { LiveChannel } from "@/domain/provider/types";
+import { useGridColumns } from "@/core/layout/useGridColumns";
+import { getActiveSession } from "@/state/activeSessionStore";
+import { loadLiveCategories } from "@/state/categoryQueries";
+import { refreshActiveSessionChannels } from "@/state/sessionRestore";
+import { getLibraryItems, toggleLibraryItem } from "@/db/repositories/libraryRepository";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
+const ALL_CATEGORY_ID = "all";
+
+/*
+ * Cell geometry, kept beside the styles that implement it — `getItemLayout`
+ * is only sound while the two agree.
+ */
+const GRID_PADDING = Spacing.md;
+const COLUMN_GAP = Spacing.sm;
+const CELL_PADDING = Spacing.xs;
+const ART_RATIO = 1 / 1.15;
+const NAME_GAP = Spacing.xs;
+const NAME_BOX_HEIGHT = 40;
+const ROW_GAP = Spacing.sm;
+
+/**
+ * The exact height of one grid row.
+ *
+ * This is the largest list in the app — the "All" tab is the provider's
+ * entire lineup — and it was the last one still measuring every cell as it
+ * scrolled past. Rows also varied by a line of text, which is the same
+ * content-size correction under the finger that made the movie grid shiver
+ * before it was given a fixed row height.
+ */
+function rowHeight(listWidth: number, columns: number): number {
+  const available = listWidth - GRID_PADDING * 2 - COLUMN_GAP * (columns - 1);
+  const cardWidth = available / columns - CELL_PADDING * 2;
+  return cardWidth * ART_RATIO + NAME_GAP + NAME_BOX_HEIGHT + ROW_GAP;
+}
+const SEARCH_DEBOUNCE_MS = 200;
+/** Portrait density; landscape is decided by `useGridColumns`. */
+const PORTRAIT_COLUMNS = 2;
+
+interface CategoryTab {
+  id: string;
+  name: string;
+}
+
+/**
+ * Lands directly on the channel grid (master prompt §19: "opening a channel
+ * should go to the player immediately" implies browsing shouldn't need an
+ * extra category-name screen first either), with the same horizontal
+ * category tab strip the Movies and Series screens use — one browsing
+ * pattern across all three sections rather than a different control per
+ * section.
+ *
+ * The first launch on a provider lands on the first real category, not
+ * "All": that tab still exists and still works, but a lineup of ~11k
+ * channels is a poor thing to render, scroll and search by default when a
+ * named category is what the viewer actually wants.
+ */
+export default function LiveCategoriesScreen() {
+  // Repaints this screen — and everything it renders — when the theme changes.
+  useThemeRerender();
+  const { t } = useI18n();
+  const session = getActiveSession();
+  const columns = useGridColumns(PORTRAIT_COLUMNS);
+  const { width: windowWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  /*
+   * The rail is subtracted on TV: the grid is not the window, and
+   * `getItemLayout` below promises a row height derived from this number.
+   * See TV_RAIL_WIDTH for what a wrong promise does to a scrolling list.
+   *
+   * Subtracted unconditionally on the TV build, including the rare case of
+   * a provider with one category where no rail renders. Erring this way
+   * under-states the row height, which costs a little extra rendering;
+   * erring the other way puts holes in the list.
+   */
+  /*
+    `TV_OVERSCAN_X` is part of this sum because `ScreenBackground` pads the
+    whole screen on the television and neither `useWindowDimensions` nor
+    `useSafeAreaInsets` reports that padding. Leaving it out overstated the
+    row height by the width of two 96dp margins spread across the columns.
+  */
+  const gridWidth =
+    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : 0);
+  const gridRowHeight = rowHeight(gridWidth, columns);
+
+  const [categories, setCategories] = useState<CategoryTab[] | null>(null);
+  const [activeCategoryId, setActiveCategoryId] = useState<string>(ALL_CATEGORY_ID);
+  /** Read once per screen; a toggle updates it locally rather than re-querying. */
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => new Set());
+  /**
+   * Latched once the grid has taken focus, so `hasTVPreferredFocus` is a
+   * one-shot request rather than something that re-fires and steals focus
+   * back from the tabs or the search field. See the note in this file's
+   * grid cell.
+   */
+  const tvFocusClaimedRef = useRef(false);
+  const [lastCategoryApplied, setLastCategoryApplied] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  /**
+   * The channel the D-pad is currently on, or null on a phone.
+   *
+   * This exists so the header's star can act on something. The per-cell
+   * star is compiled out of the television build on purpose — two extra
+   * views in every one of thousands of cells was measured as the thing
+   * making D-pad navigation stutter — and the consequence was that a
+   * channel could never be favourited on a television at all, leaving the
+   * Favourites screen permanently empty of channels. One control in the
+   * header, acting on whatever holds focus, gives the feature back for one
+   * view per screen instead of two per cell.
+   *
+   * Fed by `onTvFocus`, which every cell already called to claim the
+   * initial focus; it now carries the channel with it.
+   */
+  const [focusedChannel, setFocusedChannel] = useState<LiveChannel | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /*
+   * One query for the whole screen, refreshed on focus so a favourite
+   * starred elsewhere shows up here. The cards read from this Set; nothing
+   * per-cell touches the database.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      getLibraryItems("favorite").then((items) => {
+        if (cancelled) return;
+        setFavoriteIds(new Set(items.filter((i) => i.contentType === "live").map((i) => i.providerItemId)));
+      });
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
+
+  /**
+   * Updates the local Set immediately and writes in the background — the
+   * star has to respond to the tap, not to a database round-trip.
+   */
+  function toggleFavorite(channel: LiveChannel) {
+    const willSave = !favoriteIds.has(channel.providerItemId);
+    setFavoriteIds((current) => {
+      const next = new Set(current);
+      if (willSave) next.add(channel.providerItemId);
+      else next.delete(channel.providerItemId);
+      return next;
+    });
+    toggleLibraryItem({
+      listType: "favorite",
+      contentType: "live",
+      providerItemId: channel.providerItemId,
+      title: channel.name,
+      imageUrl: channel.logoUrl,
+      categoryId: channel.categoryId,
+      containerExtension: null,
+    }).catch(() => {
+      // Put the star back if the write failed.
+      setFavoriteIds((current) => {
+        const next = new Set(current);
+        if (willSave) next.delete(channel.providerItemId);
+        else next.add(channel.providerItemId);
+        return next;
+      });
+    });
+  }
+
+  /**
+   * `useFocusEffect` re-runs `load()` every time this screen regains focus
+   * — a transient failure on one of those refocus reloads (this provider's
+   * Cloudflare edge briefly 404ing, per docs/DECISIONS.md) must not replace
+   * an already-working list with a scary error banner. Only surface the
+   * error when there's nothing on screen yet to fall back on.
+   */
+  const hasDataRef = useRef(false);
+
+  const load = useCallback(async () => {
+    if (!session) return;
+    try {
+      const [raw, hidden] = await Promise.all([loadLiveCategories(session.provider.id, session.config), getHiddenCategoryIds("live")]);
+      const presentIds = new Set(session.channels.map((c) => c.categoryId));
+      const nonEmpty = raw.filter((c) => presentIds.has(c.id) && !hidden.has(c.id));
+      setCategories([{ id: ALL_CATEGORY_ID, name: t("liveCategories", "allCategory") }, ...nonEmpty]);
+      setErrorMessage(null);
+      hasDataRef.current = true;
+    } catch (error) {
+      // Only alarm the user when there's nothing on screen to fall back on.
+      if (!hasDataRef.current) setErrorMessage(toUserFacingMessage(error, t("common", "providerUnreachable")));
+    }
+  }, [session, t]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  /**
+   * Master prompt §19: "remember last live category" — applied once, the
+   * first time state loads. When nothing was remembered (a first-ever
+   * launch on this provider), the default lands on the first real category
+   * instead of "All Channels" — see the module doc comment above for why
+   * "All" is no longer the thing a viewer sees by default.
+   */
+  useEffect(() => {
+    if (lastCategoryApplied) return;
+    getLiveTvState().then((state) => {
+      setLastCategoryApplied(true);
+      if (state.lastCategoryId) {
+        setActiveCategoryId(state.lastCategoryId);
+      } else if (categories && categories.length > 1) {
+        setActiveCategoryId(categories[1].id);
+      }
+    });
+  }, [lastCategoryApplied, categories]);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setSearch(searchInput.trim().toLowerCase()), SEARCH_DEBOUNCE_MS);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [searchInput]);
+
+  function selectCategory(categoryId: string) {
+    setActiveCategoryId(categoryId);
+    setLastCategoryId(categoryId === ALL_CATEGORY_ID ? null : categoryId).catch(() => {});
+  }
+
+  /**
+   * A failed manual refresh must never destroy what's already on screen.
+   * The channel list stays exactly as it was and we show a short, plain
+   * notice instead of the raw `HTTP 404 from http://…` string — this
+   * provider's Cloudflare edge 404s intermittently on requests that
+   * succeed moments later (docs/DECISIONS.md), so the honest message is
+   * "couldn't refresh, try again", not a stack-trace-grade error.
+   */
+  async function handleRefresh() {
+    if (!session) return;
+    setRefreshing(true);
+    try {
+      await refreshActiveSessionChannels();
+      await load();
+      setErrorMessage(null);
+    } catch {
+      setErrorMessage(t("common", "refreshFailed"));
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  const categoryChannels = useMemo(() => {
+    if (!session) return [];
+    if (activeCategoryId === ALL_CATEGORY_ID) return session.channels;
+    return session.channels.filter((c) => c.categoryId === activeCategoryId);
+  }, [session, activeCategoryId]);
+
+  const filteredChannels = useMemo(() => {
+    if (!search) return categoryChannels;
+    return categoryChannels.filter((c) => c.name.toLowerCase().includes(search));
+  }, [categoryChannels, search]);
+
+  useEffect(() => {
+    if (!session) router.replace("/providers");
+  }, [session]);
+
+  if (!session) {
+    return null;
+  }
+
+  function openChannel(channel: LiveChannel) {
+    router.push({
+      pathname: "/live/player/[channelId]",
+      params: { channelId: channel.providerItemId, categoryId: activeCategoryId },
+    });
+  }
+
+  /**
+   * The screen's content, shared by both layouts: the TV build puts it
+   * beside the category rail, the phone build renders it directly. Held in
+   * a variable rather than duplicated so the two can never drift.
+   */
+  const screenBody = (
+    <>
+
+    {errorMessage && (
+      <View style={styles.errorBlock}>
+        <Text style={styles.error}>{errorMessage}</Text>
+        {/*
+          A first load that fails used to leave the spinner turning under
+          this line for ever: the list state stayed null, so the FlatList —
+          and with it pull-to-refresh — never rendered, and the only way
+          out was to leave the screen and come back.
+        */}
+        <BouncePressable style={styles.retryButton} onPress={() => load()}>
+          <Text style={styles.retryButtonText}>{t("common", "retry")}</Text>
+        </BouncePressable>
+      </View>
+    )}
+
+    {categories === null ? (
+      <View style={styles.centered}>
+        {/* No spinner once a load has already failed — the retry button above is the way forward. */}
+        {!errorMessage && <ActivityIndicator color={Brand.primary} />}
+      </View>
+    ) : filteredChannels.length === 0 ? (
+      <View style={styles.centered}>
+        <Text style={styles.emptyGlyph}>▤</Text>
+        <Text style={styles.emptyText}>{t("liveChannelList", "noChannelsAvailable")}</Text>
+      </View>
+    ) : (
+      <FlatList
+        data={filteredChannels}
+        keyExtractor={(item) => item.providerItemId}
+        key={columns}
+        numColumns={columns}
+        contentContainerStyle={styles.grid}
+        columnWrapperStyle={styles.gridRow}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          /*
+            Undefined on the television: a `RefreshControl` there is a
+            native `SwipeRefreshLayout` wrapping the grid that no remote
+            can ever trigger. The header button above is its replacement.
+          */
+          isTvBuild ? undefined : (
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Brand.primary} />
+          )
+        }
+        renderItem={({ item, index }) => (
+          <ChannelCard
+            channel={item}
+            columns={columns}
+            tvFocusFirst={index === 0 && !tvFocusClaimedRef.current}
+            onTvFocus={() => {
+              tvFocusClaimedRef.current = true;
+              if (isTvBuild) setFocusedChannel(item);
+            }}
+            favoriteIds={favoriteIds}
+            onToggleFavorite={() => toggleFavorite(item)}
+            onPress={() => openChannel(item)}
+          />
+        )}
+        getItemLayout={(_, index) => ({
+          length: gridRowHeight,
+          offset: gridRowHeight * index,
+          index,
+        })}
+        {...LIST_WINDOW}
+      />
+    )}
+    </>
+  );
+
+  return (
+    <ScreenBackground>
+      <SafeAreaView style={styles.safeArea}>
+      <ScreenHeader
+        title={t("liveCategories", "title")}
+        subtitle={`${filteredChannels.length.toLocaleString()} ${t("liveChannelList", "channelsCountSuffix")}`}
+        /*
+          Two controls that exist only on the television, in a slot that
+          existed and was used by nothing.
+
+          They replace two things a remote could not do at all. **Refresh**:
+          every path that reloads the catalogue was behind a
+          `RefreshControl`, which needs a pull — so a provider could add
+          channels and the only way to see them was to remove the provider
+          and add it again. **Favourite**: see `focusedChannel`.
+
+          Both are `isTvBuild`-gated, so the phone header is byte-for-byte
+          what it was: on a phone the pull gesture and the per-cell star are
+          the right controls and both still work.
+        */
+        right={
+          isTvBuild ? (
+            <View style={styles.tvHeaderActions}>
+              <Focusable
+                onPress={() => focusedChannel && toggleFavorite(focusedChannel)}
+                disabled={focusedChannel === null}
+                style={styles.tvHeaderButton}
+                round
+                hitSlop={10}
+              >
+                <Text
+                  style={[
+                    styles.tvHeaderGlyph,
+                    focusedChannel !== null &&
+                      favoriteIds.has(focusedChannel.providerItemId) &&
+                      styles.tvHeaderGlyphOn,
+                  ]}
+                >
+                  {focusedChannel !== null && favoriteIds.has(focusedChannel.providerItemId)
+                    ? "★"
+                    : "☆"}
+                </Text>
+              </Focusable>
+              <Focusable
+                onPress={handleRefresh}
+                disabled={refreshing}
+                style={styles.tvHeaderButton}
+                round
+                hitSlop={10}
+              >
+                <Text style={styles.tvHeaderGlyph}>{refreshing ? "⋯" : "⟳"}</Text>
+              </Focusable>
+            </View>
+          ) : undefined
+        }
+      />
+
+      {/*
+        Two shapes for the same content. On a phone the categories are a
+        horizontal strip above a search box; on a TV they are a rail beside
+        the grid, and the search box is gone entirely — an `EditText` sitting
+        on the main vertical path opens the on-screen keyboard the moment the
+        D-pad passes through it, and swallows every key until Back.
+      */}
+      {isTvBuild ? null : (
+        <>
+          {categories && categories.length > 1 && (
+            <CategoryTabs categories={categories} activeId={activeCategoryId} onSelect={selectCategory} />
+          )}
+
+          <TextInput
+            style={styles.search}
+            placeholder={t("liveChannelList", "searchPlaceholder")}
+            placeholderTextColor={themeColors().textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            value={searchInput}
+            onChangeText={setSearchInput}
+          />
+        </>
+      )}
+
+      <TvBrowseLayout categories={categories} activeId={activeCategoryId} onSelect={selectCategory}>
+        {screenBody}
+      </TvBrowseLayout>
+      </SafeAreaView>
+
+    </ScreenBackground>
+  );
+}
+
+/**
+ * Deliberately a plain `Pressable` (via `Focusable`) with no `entering`
+ * animation: this grid can carry the provider's entire lineup (~11k
+ * channels). FlatList mounts and unmounts cells continuously while
+ * scrolling, so a per-cell entrance animation re-fires on every recycle and
+ * a per-cell Reanimated shared value gets allocated and torn down
+ * constantly — together they made scrolling visibly stutter. Entrance
+ * animations belong on small, fixed-size groups (the browse cards on Home,
+ * a details header), never on virtualized cells.
+ *
+ * Also deliberately does NOT show now/next EPG — see the identical note
+ * this used to carry: asking per-cell fired hundreds of `player_api.php`
+ * requests during a scroll, which is what got this provider's whole line
+ * blocked for a while (docs/DECISIONS.md). EPG is still fetched exactly
+ * where it costs one request and is actually read: the player, for the
+ * channel currently playing.
+ */
+function ChannelCard({
+  channel,
+  columns,
+  tvFocusFirst,
+  onTvFocus,
+  favoriteIds,
+  onToggleFavorite,
+  onPress,
+}: {
+  channel: LiveChannel;
+  columns: number;
+  /** Exactly one cell per screen sets this — where a TV remote starts. */
+  tvFocusFirst: boolean;
+  /** Latches the screen's one-shot focus request — see `tvFocusClaimedRef`. */
+  onTvFocus: () => void;
+  favoriteIds: Set<string>;
+  onToggleFavorite: () => void;
+  onPress: () => void;
+}) {
+  const { t } = useI18n();
+  /*
+   * Starts already-failed when this logo's host has proved dead earlier in
+   * the session, so the cell draws its letter immediately instead of
+   * opening a request that is known to time out. A lazy initialiser reading
+   * a module-level Map is a pure read — the same shape `knownLocalUri` uses
+   * in CachedImage — and it is only consulted when the cell mounts, which
+   * is the only moment the decision matters.
+   */
+  const [logoFailed, setLogoFailed] = useState(() => imageHostIsDead(channel.logoUrl));
+  /*
+   * The saved state is handed down, not looked up here. Every card used to
+   * run its own `isInLibrary` query on mount, and virtualised cells mount
+   * continuously while scrolling — a fling through the "All" tab fired
+   * thousands of SQLite round-trips on the thread that draws the screen.
+   * The screen now reads the favourite ids once and passes a boolean.
+   */
+  const isFavorite = favoriteIds.has(channel.providerItemId);
+
+  return (
+    <View style={[styles.cardCell, { flex: 1 / columns, maxWidth: `${100 / columns}%` }]}>
+      <Focusable onPress={onPress} style={styles.card} hasTVPreferredFocus={tvFocusFirst} onFocus={onTvFocus}>
+        <View style={styles.cardArt}>
+          {channel.logoUrl && !logoFailed ? (
+            <CachedImage
+              uri={channel.logoUrl}
+              style={styles.cardLogo}
+              resizeMode="contain"
+              onError={() => {
+                noteImageFailed(channel.logoUrl);
+                setLogoFailed(true);
+              }}
+            />
+          ) : (
+            <Text style={styles.cardFallbackText}>{channel.name.charAt(0).toUpperCase()}</Text>
+          )}
+
+          {/*
+            Absent on a television, not merely non-interactive.
+
+            It cannot be reached by a remote at all: Android's
+            `FocusFinder.isCandidate` refuses any view inside the focused
+            view's own rectangle, so from a focused card no direction
+            reaches the star it contains. It was made `focusable={false}`
+            earlier today to stop it interrupting travel *between* cells —
+            but a control that can never be used is still two native views
+            per card, built and destroyed with every category change.
+
+            Cards are the app's most repeated view tree and rebuilding them
+            is what `Slow UI thread` was counting (193 of 206 janky frames
+            on the test television). Cutting the parts a remote cannot use
+            is the cheapest real saving available, and it costs a TV viewer
+            nothing they had. Favouriting a channel from a remote is done
+            in the player. Touch is unaffected: the phone still has it.
+          */}
+          {!isTvBuild && (
+            <Pressable onPress={onToggleFavorite} hitSlop={8} focusable={false} style={styles.favoriteButton}>
+              <Text style={[styles.favoriteButtonText, isFavorite && styles.favoriteButtonTextActive]}>
+                {isFavorite ? "★" : "☆"}
+              </Text>
+            </Pressable>
+          )}
+
+          {/*
+            Phone only, on the same reasoning as the star above: two more
+            native views per card, on a screen where every single item is a
+            live channel and the header already says so. It labels nothing
+            it distinguishes. On a phone it stays — the grid there is
+            reached from a tab bar where the context is less obvious, and a
+            phone is not the device counting view-tree rebuilds.
+          */}
+          {!isTvBuild && (
+            <View style={styles.liveBadge}>
+              <Text style={styles.liveBadgeText}>{t("liveChannelList", "liveBadge")}</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.cardNameBox}>
+          <Text style={styles.cardName} numberOfLines={2}>
+            {channel.name}
+          </Text>
+        </View>
+      </Focusable>
+    </View>
+  );
+}
+
+const styles = themedStyles((C: ThemeColors) =>
+  StyleSheet.create({
+  safeArea: { flex: 1 },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: Spacing.sm },
+  emptyGlyph: { color: C.fillMedium, fontSize: 40 },
+  emptyText: { color: C.textMuted, fontSize: 14, fontFamily: FontFamily.regular },
+
+  /**
+   * `minHeight` rather than a fixed `height` — same reasoning as the
+   * category tab pills: a long mixed Arabic/Latin category name shown here
+   * (this button displays the current selection) can measure a taller
+   * single line than a plain-Arabic one, and a fixed height can only clip
+   * that, never accommodate it.
+   */
+
+  search: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.sm,
+    backgroundColor: C.surface,
+    borderColor: C.border,
+    borderWidth: 1,
+    borderRadius: Radii.md,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    color: C.text,
+    fontSize: 14,
+    fontFamily: FontFamily.regular,
+  },
+
+  errorBlock: { alignItems: "center", gap: Spacing.sm, marginTop: Spacing.md },
+  retryButton: {
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: Spacing.xl,
+    borderRadius: Radii.md,
+    backgroundColor: Brand.primary,
+  },
+  retryButtonText: {
+    color: C.onAccent,
+    fontSize: 14,
+    lineHeight: 22,
+    fontFamily: FontFamily.bold,
+    ...AndroidTextFix,
+  },
+  error: {
+    color: C.error,
+    fontSize: 13,
+    fontFamily: FontFamily.regular,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+
+  grid: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl },
+  gridRow: { gap: Spacing.sm, marginBottom: Spacing.sm },
+
+  cardCell: { paddingHorizontal: Spacing.xs },
+  card: { flex: 1 },
+  /**
+   * Taller than it is wide-ish (was 1.5, a wide letterbox) and with far
+   * less dead space around the logo: channel logos are small square-ish
+   * marks, so a wide frame with a 68%-sized logo left most of the card
+   * empty. 1.15 plus a 88% logo keeps the frame's proportions but gives
+   * the artwork most of it.
+   */
+  /*
+    **Television only.** A fixed dark tile instead of `C.surface` — see
+    `ArtworkTile` in the theme tokens for why one surface in the app
+    ignores the palette: provider logos are white, and on the light theme a
+    themed surface made every one of them disappear into the page.
+
+    The phone keeps `C.surface`/`C.border`, which is what it shipped with
+    in 2.1. The token was applied to both builds when it was written, and
+    that was a change to a finished screen nobody had asked for — on the
+    light theme it turned the whole channel grid from near-white tiles to
+    near-black ones. Reverted 2026-09-18 on the instruction that the phone
+    is closed: "اريد ارجاع الكود الذي يخص الموبايل الى ذلك الوقت".
+
+    Whether the phone wants the same fix is a separate question and a
+    one-line change. The white-logo problem is real on a phone in light
+    mode too; it simply is not today's work.
+  */
+  /* Television only — see the header's `right` slot. */
+  tvHeaderActions: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  tvHeaderButton: {
+    width: 44,
+    height: 44,
+    borderRadius: Radii.pill,
+    backgroundColor: C.fillSubtle,
+    borderColor: C.border,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tvHeaderGlyph: { color: C.text, fontSize: 20, fontFamily: FontFamily.bold },
+  tvHeaderGlyphOn: { color: Brand.primary },
+
+  cardArt: {
+    aspectRatio: 1.15,
+    borderRadius: Radii.lg,
+    backgroundColor: isTvBuild ? ArtworkTile.background : C.surface,
+    borderColor: isTvBuild ? ArtworkTile.border : C.border,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    overflow: "hidden",
+  },
+  cardLogo: { width: "88%", height: "88%" },
+  cardFallbackText: { color: C.textSecondary, fontSize: 32, fontFamily: FontFamily.extraBold },
+  /** Fixed two lines, so every row is exactly `rowHeight()` tall. */
+  cardNameBox: { height: NAME_BOX_HEIGHT, marginTop: NAME_GAP, overflow: "hidden" },
+  cardName: {
+    color: C.text,
+    fontSize: 13,
+    lineHeight: 20,
+    fontFamily: FontFamily.medium,
+    ...AndroidTextFix,
+  },
+  favoriteButton: {
+    position: "absolute",
+    top: Spacing.xs,
+    start: Spacing.xs,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  favoriteButtonText: { color: "rgba(255,255,255,0.8)", fontSize: 14 },
+  favoriteButtonTextActive: { color: "#FFD700" },
+  liveBadge: {
+    position: "absolute",
+    top: Spacing.xs,
+    end: Spacing.xs,
+    backgroundColor: Brand.primaryMuted,
+    borderRadius: Radii.pill,
+    paddingHorizontal: Spacing.xs,
+    paddingVertical: 2,
+  },
+  liveBadgeText: { color: Brand.primaryLight, fontSize: 9, fontFamily: FontFamily.bold },
+
+  })
+);
