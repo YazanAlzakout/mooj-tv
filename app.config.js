@@ -1,12 +1,45 @@
 const isTV = process.env.EXPO_TV === "1";
 
+/**
+ * **A build that installs beside the published app instead of replacing it.**
+ *
+ * Google Play re-signs every upload with its own app-signing key, while a
+ * build made here is signed with the upload key. Android treats a different
+ * signature as a different app and refuses to update across it — so a
+ * sideloaded test build on a phone that has the store copy fails with
+ * `INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match`, silently
+ * leaving the old app in place. Measured on the owner's own phone,
+ * 2026-10-05, while trying to test a fix.
+ *
+ * The only ways out are to uninstall the store copy — which erases the saved
+ * provider, the library and the watch history with it — or to let the test
+ * build be a different app. This is the second. Set `ALBASERA_DEV_ID=1` and
+ * the build takes its own id, its own launcher label and its own URL scheme,
+ * so both copies live on one phone and the real one is never touched.
+ *
+ * **It must never reach Play.** A build carrying this id is not the app:
+ * it has no listing, no reviews and no users. `npm run prebuild` without the
+ * variable puts everything back — and because the id also decides the Kotlin
+ * package on disk (see the note on the build command below), that is not
+ * optional bookkeeping, it is how the production build is produced at all.
+ *
+ * Two things do not follow the id, and both are accepted rather than fixed:
+ * the dev-client scheme `exp+albasera-player-v2` comes from `slug`, which is
+ * tied to the EAS project, so "open in development build" may offer a choice
+ * when both copies are installed; and the 1.x provider import
+ * (`legacyProviderImport.ts`) reads the *old published app's* SecureStore,
+ * which only exists under the production id — that one migration path can
+ * only be tested on a build carrying it.
+ */
+const isDevId = process.env.ALBASERA_DEV_ID === "1";
+
 /*
  * The live app id. Resolved 2026-09-04: this release replaces the app
  * already published on Google Play rather than going out as a new listing,
  * and the package id is the app's identity on Play — it cannot be changed
  * after publication, so it has to match the existing one exactly.
  */
-const ANDROID_PACKAGE = "com.albasera.player";
+const ANDROID_PACKAGE = isDevId ? "com.albasera.player.dev" : "com.albasera.player";
 
 /*
  * Must be strictly greater than every versionCode ever uploaded to Play,
@@ -54,7 +87,14 @@ module.exports = {
      * home screen is the one that should stay there — a renamed icon reads
      * as a different app, not as an update.
      */
-    name: isTV ? "AlBasera Player TV" : "AlBasera Player",
+    /* A sideload copy says so on the home screen, or the tester cannot tell the two apart. */
+    name: isDevId
+      ? isTV
+        ? "AlBasera TV (dev)"
+        : "AlBasera (dev)"
+      : isTV
+        ? "AlBasera Player TV"
+        : "AlBasera Player",
     slug: "albasera-player-v2",
     /*
      * The version the store shows, and it must move with every upload.
@@ -73,7 +113,13 @@ module.exports = {
     version: "2.1",
     orientation: isTV ? "landscape" : "default",
     icon: "./assets/images/icon.png",
-    scheme: "albaseraplayer2",
+    /*
+     * Branched with the id: two installed copies claiming one scheme make
+     * Android stop resolving `albaseraplayer2://` to either of them — it
+     * offers a chooser, or picks whichever it likes, so a deep link tested
+     * on the sideload build opens the store copy half the time.
+     */
+    scheme: isDevId ? "albaseraplayer2dev" : "albaseraplayer2",
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
 
