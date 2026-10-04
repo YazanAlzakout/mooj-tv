@@ -66,7 +66,8 @@ export function SplitChannelView({
   onExpand: () => void;
 }) {
   const { t } = useI18n();
-  const currentChannel = channels.find((c) => c.providerItemId === currentChannelId) ?? null;
+  const currentIndex = channels.findIndex((c) => c.providerItemId === currentChannelId);
+  const currentChannel = currentIndex < 0 ? null : channels[currentIndex];
 
   return (
     <View style={styles.root}>
@@ -143,7 +144,49 @@ export function SplitChannelView({
         </View>
       ) : (
         <FlatList
+          /*
+            **The list opens on the channel that is playing, not at the top.**
+
+            Three complaints, one cause. This view is rendered only while the
+            phone is upright (`showSplit` in the player screen is
+            `splitPreference && !isLandscape`), so **turning the phone
+            unmounts this whole subtree** — the scroll offset lives in the
+            native ScrollView and goes with it, and turning back built a fresh
+            list at row zero. A viewer who had scrolled into a category came
+            back to the top of it ("يرجع المؤشر الى البداية", reported by a
+            viewer 2026-10-05). The same list also never anchored on first
+            open: starting a channel 800 rows down showed the lineup from the
+            beginning with the highlighted row far below the fold.
+
+            Anchoring beats remembering an offset. A saved offset means
+            `onScroll` on every frame and a number that is meaningless the
+            moment the category changes under it; the channel being watched is
+            a place that still exists after a rotation, after a category
+            change, and on first open — and it is the place the viewer wants.
+
+            `getItemLayout` below is what makes `initialScrollIndex` exact:
+            every row is the same height, so the list can place row 800
+            without measuring the 799 above it. An index of -1 — the playing
+            channel is not in this category — becomes `undefined` and the
+            list starts at the top, which is right.
+          */
           data={channels}
+          initialScrollIndex={currentIndex < 0 ? undefined : currentIndex}
+          /*
+            **A category change is a different list, so it is mounted as one.**
+
+            Choosing a category in the strip above hands this list a new
+            `channels` array, and a FlatList keeps its scroll offset across
+            that: leaving "All" at row 800 for a category with thirty channels
+            left it scrolled past its own end, clamped to the last rows, which
+            reads as a broken scroll ("يوجد مشكلة في السكرول ... بعد التنقل
+            بالتصنيفات"). Keying on the category remounts the list, which
+            re-applies `initialScrollIndex` above — so the new category opens
+            on the playing channel when it holds it, and at the top when it
+            does not. Twelve rows are built; it is cheaper than the scroll it
+            replaces.
+          */
+          key={activeCategoryId}
           keyExtractor={(item) => item.providerItemId}
           style={styles.listArea}
           contentContainerStyle={styles.list}
