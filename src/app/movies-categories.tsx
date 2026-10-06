@@ -23,10 +23,10 @@ import { TvBrowseLayout } from "@/components/TvBrowseLayout";
 import { ScreenBackground, TV_OVERSCAN_X } from "@/components/ScreenBackground";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
-import { CategorySwipe } from "@/components/CategorySwipe";
+import { CategoryPager } from "@/components/CategoryPager";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { useCategoryDrag } from "@/core/layout/useCategoryDrag";
-import { useCategoryScroll } from "@/core/layout/useCategoryScroll";
+import { useCategoryPages } from "@/core/layout/useCategoryPages";
 import { LIST_WINDOW } from "@/core/layout/listWindow";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
@@ -152,11 +152,12 @@ export default function MoviesCategoriesScreen() {
     remembered position rather than a wrong one, and the list opens at
     the top.
   */
-  const { listRef, scrollProps } = useCategoryScroll<MovieSummary>(
-    activeCategoryId,
-    undefined,
-    `${columns}|${search}`
-  );
+  /*
+    One position per category, kept for the screen rather than for a list:
+    three lists are mounted at once now, and a page keeps its place even
+    after the window has moved past it and unmounted it.
+  */
+  const pages = useCategoryPages<MovieSummary>(`${columns}|${search}`);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasDataRef = useRef(false);
 
@@ -213,16 +214,26 @@ export default function MoviesCategoriesScreen() {
     setRefreshing(false);
   }
 
-  const categoryMovies = useMemo(() => {
-    if (!movies) return [];
-    if (activeCategoryId === ALL_CATEGORY_ID) return movies;
-    return movies.filter((m) => m.categoryId === activeCategoryId);
-  }, [movies, activeCategoryId]);
+  /**
+   * The titles of one category, for any category — not only the current one.
+   *
+   * `CategoryPager` keeps the page either side of this one mounted, so the
+   * filtering can no longer be a value derived from `activeCategoryId`: it
+   * has to answer for whichever three categories are on screen at once.
+   */
+  const itemsFor = useCallback(
+    (categoryId: string) => {
+      if (!movies) return [];
+      const inCategory =
+        categoryId === ALL_CATEGORY_ID ? movies : movies.filter((m) => m.categoryId === categoryId);
+      if (!search) return inCategory;
+      return inCategory.filter((m) => m.name.toLowerCase().includes(search));
+    },
+    [movies, search]
+  );
 
-  const filteredMovies = useMemo(() => {
-    if (!search) return categoryMovies;
-    return categoryMovies.filter((m) => m.name.toLowerCase().includes(search));
-  }, [categoryMovies, search]);
+  /** Only for the count in the header, which is about the category being looked at. */
+  const filteredMovies = useMemo(() => itemsFor(activeCategoryId), [itemsFor, activeCategoryId]);
 
   useEffect(() => {
     if (!session) router.replace("/providers");
@@ -309,19 +320,6 @@ export default function MoviesCategoriesScreen() {
       )}
 
       <TvBrowseLayout categories={categories} activeId={activeCategoryId} onSelect={setActiveCategoryId}>
-        {/*
-          Sideways drag changes category, over the whole content area so
-          an empty one can be swiped out of as easily as a full one. It
-          is off on the television, which has no touchscreen and steps
-          through the rail with a remote instead.
-        */}
-        <CategorySwipe
-          ids={categoryIds}
-          activeId={activeCategoryId}
-          onSelect={setActiveCategoryId}
-          enabled={!isTvBuild}
-          progress={categoryDrag}
-        >
     {errorMessage && (
       <View style={styles.errorBlock}>
         <Text style={styles.error}>{errorMessage}</Text>
@@ -343,10 +341,24 @@ export default function MoviesCategoriesScreen() {
         {!errorMessage && <ActivityIndicator color={Brand.primary} />}
       </View>
     ) : (
+      /*
+        The category either side of this one is mounted and just off the
+        edge, so a sideways drag reveals it coming in rather than swapping
+        the content once the finger lifts. On the television it collapses to
+        the single list it has always been — see `single`.
+      */
+      <CategoryPager
+        ids={categoryIds}
+        activeId={activeCategoryId}
+        onSelect={setActiveCategoryId}
+        enabled={!isTvBuild}
+        single={isTvBuild}
+        progress={categoryDrag}
+        renderPage={(pageCategoryId) => (
       <FlatList
-        ref={listRef}
-        {...scrollProps}
-        data={filteredMovies}
+        ref={pages(pageCategoryId).listRef}
+        {...pages(pageCategoryId).scroll}
+        data={itemsFor(pageCategoryId)}
         keyExtractor={(item) => item.providerItemId}
         key={columns}
         numColumns={columns}
@@ -372,8 +384,9 @@ export default function MoviesCategoriesScreen() {
         })}
         {...LIST_WINDOW}
       />
+        )}
+      />
     )}
-        </CategorySwipe>
       </TvBrowseLayout>
       </SafeAreaView>
     </ScreenBackground>

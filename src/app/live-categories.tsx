@@ -21,10 +21,10 @@ import { Focusable } from "@/components/Focusable";
 import { ScreenBackground, TV_OVERSCAN_X } from "@/components/ScreenBackground";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
-import { CategorySwipe } from "@/components/CategorySwipe";
+import { CategoryPager } from "@/components/CategoryPager";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { useCategoryDrag } from "@/core/layout/useCategoryDrag";
-import { useCategoryScroll } from "@/core/layout/useCategoryScroll";
+import { useCategoryPages } from "@/core/layout/useCategoryPages";
 import { LIST_WINDOW } from "@/core/layout/listWindow";
 import { imageHostIsDead, noteImageFailed } from "@/core/media/deadImageHosts";
 import { isTvBuild } from "@/core/platform/isTvBuild";
@@ -168,11 +168,12 @@ export default function LiveCategoriesScreen() {
     remembered position rather than a wrong one, and the list opens at
     the top.
   */
-  const { listRef, scrollProps } = useCategoryScroll<LiveChannel>(
-    activeCategoryId,
-    undefined,
-    `${columns}|${search}`
-  );
+  /*
+    One position per category, kept for the screen rather than for a list:
+    three lists are mounted at once now, and a page keeps its place even
+    after the window has moved past it and unmounted it.
+  */
+  const pages = useCategoryPages<LiveChannel>(`${columns}|${search}`);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /*
@@ -308,16 +309,28 @@ export default function LiveCategoriesScreen() {
     }
   }
 
-  const categoryChannels = useMemo(() => {
-    if (!session) return [];
-    if (activeCategoryId === ALL_CATEGORY_ID) return session.channels;
-    return session.channels.filter((c) => c.categoryId === activeCategoryId);
-  }, [session, activeCategoryId]);
+  /**
+   * The channels of one category, for any category — not only the current one.
+   *
+   * `CategoryPager` keeps the page either side of this one mounted, so the
+   * filtering can no longer be a value derived from `activeCategoryId`: it
+   * has to answer for whichever three categories are on screen at once.
+   */
+  const itemsFor = useCallback(
+    (categoryId: string) => {
+      if (!session) return [];
+      const inCategory =
+        categoryId === ALL_CATEGORY_ID
+          ? session.channels
+          : session.channels.filter((c) => c.categoryId === categoryId);
+      if (!search) return inCategory;
+      return inCategory.filter((c) => c.name.toLowerCase().includes(search));
+    },
+    [session, search]
+  );
 
-  const filteredChannels = useMemo(() => {
-    if (!search) return categoryChannels;
-    return categoryChannels.filter((c) => c.name.toLowerCase().includes(search));
-  }, [categoryChannels, search]);
+  /** Only for the count in the header, which is about the category being looked at. */
+  const filteredChannels = useMemo(() => itemsFor(activeCategoryId), [itemsFor, activeCategoryId]);
 
   useEffect(() => {
     if (!session) router.replace("/providers");
@@ -362,16 +375,41 @@ export default function LiveCategoriesScreen() {
         {/* No spinner once a load has already failed — the retry button above is the way forward. */}
         {!errorMessage && <ActivityIndicator color={Brand.primary} />}
       </View>
-    ) : filteredChannels.length === 0 ? (
-      <View style={styles.centered}>
-        <Text style={styles.emptyGlyph}>▤</Text>
-        <Text style={styles.emptyText}>{t("liveChannelList", "noChannelsAvailable")}</Text>
-      </View>
     ) : (
+      /*
+        The category either side of this one is mounted and just off the
+        edge, so a sideways drag reveals it coming in rather than swapping
+        the content once the finger lifts. On the television it collapses
+        to the single list it has always been — see `single`.
+      */
+      <CategoryPager
+        ids={categoryIds}
+        activeId={activeCategoryId}
+        onSelect={selectCategory}
+        enabled={!isTvBuild}
+        single={isTvBuild}
+        progress={categoryDrag}
+        renderPage={(pageCategoryId) => {
+          /*
+            Each page answers for itself. The empty state used to be a
+            screen-level branch, which cannot work once three categories
+            are on screen at once: one of them having nothing in it is not
+            a reason to blank the other two.
+          */
+          const pageChannels = itemsFor(pageCategoryId);
+          if (pageChannels.length === 0) {
+            return (
+              <View style={styles.centered}>
+                <Text style={styles.emptyGlyph}>▤</Text>
+                <Text style={styles.emptyText}>{t("liveChannelList", "noChannelsAvailable")}</Text>
+              </View>
+            );
+          }
+          return (
       <FlatList
-        ref={listRef}
-        {...scrollProps}
-        data={filteredChannels}
+        ref={pages(pageCategoryId).listRef}
+        {...pages(pageCategoryId).scroll}
+        data={pageChannels}
         keyExtractor={(item) => item.providerItemId}
         key={columns}
         numColumns={columns}
@@ -408,6 +446,9 @@ export default function LiveCategoriesScreen() {
           index,
         })}
         {...LIST_WINDOW}
+      />
+          );
+        }}
       />
     )}
     </>
@@ -501,21 +542,7 @@ export default function LiveCategoriesScreen() {
       )}
 
       <TvBrowseLayout categories={categories} activeId={activeCategoryId} onSelect={selectCategory}>
-        {/*
-          Sideways drag changes category, over the whole content area so
-          an empty one can be swiped out of as easily as a full one. It
-          is off on the television, which has no touchscreen and steps
-          through the rail with a remote instead.
-        */}
-        <CategorySwipe
-          ids={categoryIds}
-          activeId={activeCategoryId}
-          onSelect={selectCategory}
-          enabled={!isTvBuild}
-          progress={categoryDrag}
-        >
         {screenBody}
-        </CategorySwipe>
       </TvBrowseLayout>
       </SafeAreaView>
 
