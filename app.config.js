@@ -60,12 +60,19 @@ const ANDROID_PACKAGE = isDevId ? "com.albasera.player.dev" : "com.albasera.play
  * previous pair. 10/11 are on Play (10 in production, 11 on the Android TV
  * open-testing track). 12/13 were built and sideloaded for testing but
  * never uploaded, so those numbers are still free on Play. 14/15 was built
- * and sideloaded on the test television; this pair is 16/17, so `dumpsys
- * package` can always say which build a device is actually running —
- * checking that number caught a build that had silently never produced an
- * APK at all.
+ * and sideloaded on the test television; 20/21 was the last pair before the
+ * television moved to its own repository and its own 200+ range, and this
+ * one is 22/23 — so `dumpsys package` can always say which build a device
+ * is actually running, which is how a build that had silently never
+ * produced an APK at all was caught.
+ *
+ * 22 rather than 21 on purpose: the repository disagrees with itself about
+ * whether 20 was uploaded or only sideloaded (the comment above says 10/11
+ * are the only codes on Play; the 2026-09-18 baseline commit says 20 went up
+ * as 2.1). 22 is free under either account, so the upload cannot be refused
+ * over a number nobody can now confirm.
  */
-const VERSION_CODE_BASE = 20;
+const VERSION_CODE_BASE = 22;
 
 /*
  * Phone and TV are one app on Play — same listing, same package id, with
@@ -107,10 +114,10 @@ module.exports = {
      * version.
      *
      * Not to be confused with `versionCode` below, which is the number Play
-     * actually orders releases by. That one is 16 for the phone and 17 for
-     * the television, both comfortably above the published 10.
+     * actually orders releases by. That one is 22 for the phone, above every
+     * code this repository has any record of using.
      */
-    version: "2.1",
+    version: "2.2",
     orientation: isTV ? "landscape" : "default",
     icon: "./assets/images/icon.png",
     /*
