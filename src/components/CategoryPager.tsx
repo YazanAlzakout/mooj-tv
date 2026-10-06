@@ -82,7 +82,13 @@ const EDGE_RESISTANCE = 3;
  * stops without overshooting — the calmer settle the viewer asked for after
  * the first spring bounced a little on the way in.
  */
-const SETTLE = { damping: 30, stiffness: 220, mass: 0.8 } as const;
+const SETTLE = {
+  damping: 26,
+  stiffness: 300,
+  mass: 0.55,
+  restDisplacementThreshold: 0.5,
+  restSpeedThreshold: 2,
+} as const;
 
 /** How far a page off to the side sits back, at a full screen away. */
 const PAGE_RECEDE = 0.06;

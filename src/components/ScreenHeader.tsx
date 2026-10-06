@@ -28,7 +28,7 @@ export function ScreenHeader({
   right?: ReactNode;
   onBack?: () => void;
 }) {
-  const { t, isRTL } = useI18n();
+  const { t } = useI18n();
 
   return (
     <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
@@ -46,7 +46,7 @@ export function ScreenHeader({
           pointing left. Kurdish Sorani is almost never a device locale, so
           for those users it was wrong every time.
         */}
-        <Text style={styles.backButtonText}>{isRTL ? "›" : "‹"}</Text>
+        <Text style={styles.backButtonText}>{"‹"}</Text>
       </BouncePressable>
 
       <View style={styles.titleWrap}>

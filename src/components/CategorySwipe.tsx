@@ -154,7 +154,13 @@ const RETURN_SPRING = { damping: 20, stiffness: 240, mass: 0.6 } as const;
  * as mechanical however smooth it is, while a spring ends when the motion is
  * spent. Nothing here bounces; it settles, which is a different thing.
  */
-const ARRIVE_SPRING = { damping: 30, stiffness: 220, mass: 0.8 } as const;
+const ARRIVE_SPRING = {
+  damping: 26,
+  stiffness: 300,
+  mass: 0.55,
+  restDisplacementThreshold: 0.5,
+  restSpeedThreshold: 2,
+} as const;
 
 /**
  * Resistance at the ends of the strip.

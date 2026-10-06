@@ -1,6 +1,6 @@
 import { getLocales } from "expo-localization";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Alert, BackHandler, I18nManager } from "react-native";
+import { I18nManager } from "react-native";
 
 import { getAppState, setLanguage as persistLanguage } from "@/db/repositories/appStateRepository";
 
@@ -11,6 +11,42 @@ import en, { type TranslationShape } from "./translations/en";
 import fr from "./translations/fr";
 import ku from "./translations/ku";
 import tr from "./translations/tr";
+
+/**
+ * **One layout direction, in every language** (2026-10-07).
+ *
+ * Arabic and Kurdish Sorani are right-to-left languages, and this app used to
+ * mirror its whole layout for them through `I18nManager.forceRTL`. Every
+ * direction defect in the category navigation traced back to that, and not by
+ * coincidence — mirroring creates three clocks that have to agree and cannot:
+ *
+ *   - the **locale**, which flips the instant a language is chosen;
+ *   - the **layout**, which Android only flips when the activity is recreated,
+ *     so it lags the locale until the next launch;
+ *   - **measured geometry** — scroll offsets and `onLayout` positions — which
+ *     is physical and counts up from the left whichever way the content runs.
+ *
+ * A gesture has to agree with all three at once. Between choosing Arabic and
+ * restarting, a drag selected the category on the far side of the one it
+ * pointed at; after restarting, the chip strip ran one way while its own
+ * scroll offsets ran the other, so it reached a boundary and jammed.
+ *
+ * The owner asked for one fixed direction in every language, Kurdish included,
+ * rather than another round of patches. So the layout is pinned here, before
+ * any component renders, and nothing in the app branches on it again.
+ *
+ * **This is the layout only.** Arabic and Kurdish text still renders
+ * right-to-left: that is the direction of the text run itself, decided by the
+ * characters, and `I18nManager` has no say in it. What no longer flips is
+ * rows, padding, and which edge things align to.
+ *
+ * Android remembers the last value natively, so a device that has already
+ * flipped needs one more launch to come back. That is the same constraint the
+ * old restart prompt existed for, and it now costs one launch once rather than
+ * one on every language change.
+ */
+I18nManager.allowRTL(false);
+I18nManager.forceRTL(false);
 
 const TRANSLATIONS: Record<LocaleCode, TranslationShape> = { en, ar, fr, tr, ckb, ku };
 
@@ -77,37 +113,36 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const isRTL = localeMeta(locale).isRTL;
 
   async function setLocale(code: LocaleCode) {
-    const willBeRTL = localeMeta(code).isRTL;
     await persistLanguage(code);
     setLocaleState(code);
 
-    if (isRTL !== willBeRTL) {
-      I18nManager.allowRTL(willBeRTL);
-      I18nManager.forceRTL(willBeRTL);
-      /*
-       * Two buttons, and the app only closes if the user picks the one that
-       * says so. Before this it was a single "Restart now" button that quit
-       * immediately — from a viewer's side, changing a setting made the app
-       * vanish, which reads as a crash rather than as a restart.
-       *
-       * "Later" is honest rather than broken: the new language is already
-       * applied and persisted; only the right-to-left *layout* waits for the
-       * next launch, which is a native constraint (`I18nManager.forceRTL`
-       * takes effect when the activity is recreated), not a choice.
-       */
-      const strings = TRANSLATIONS[code];
-      Alert.alert(strings.settings.restartRequiredTitle, strings.settings.restartRequiredBody, [
-        { text: strings.common.later, style: "cancel" },
-        { text: strings.settings.restartNow, onPress: () => BackHandler.exitApp() },
-      ]);
-    }
+    /*
+      **No restart, because nothing about the layout changes any more.**
+
+      This used to call `I18nManager.forceRTL` and then ask for a restart,
+      because Android only applies a layout direction when the activity is
+      recreated. Every direction bug in the category navigation came out of
+      that one line: between choosing Arabic and restarting, the locale said
+      right-to-left while the layout was still left-to-right, so a gesture
+      and the strip it drove disagreed about which way "next" was. After the
+      restart they agreed again — and disagreed with measured scroll offsets
+      instead, which are physical and count up whichever way the chips run.
+
+      The owner asked for one direction in every language, Kurdish included
+      (2026-10-07). So the layout no longer moves at all: the pinning at the
+      top of this file is permanent, a language change is now only a change
+      of words, and there is nothing left to restart for.
+
+      Arabic and Kurdish text still renders right-to-left — that is the text
+      run's own direction and has nothing to do with `I18nManager`. What no
+      longer flips is the *layout*: rows, padding and alignment.
+    */
   }
 
   const value = useMemo<I18nContextValue>(() => {
     const t: TFunction = (namespace, key, params) => translate(locale, namespace, key, params);
     const strings = TRANSLATIONS[locale] ?? en;
     return { locale, isRTL, setLocale, t, strings };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- setLocale is stable (no external deps captured).
   }, [locale, isRTL]);
 
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
