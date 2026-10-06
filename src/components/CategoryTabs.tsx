@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from "react";
 import { FlatList, StyleSheet, Text } from "react-native";
 
 import { NO_CLIP } from "@/core/layout/listWindow";
@@ -43,11 +44,59 @@ export function CategoryTabs({
   alwaysDark?: boolean;
   onSelect: (id: string) => void;
 }) {
+  const listRef = useRef<FlatList<CategoryTabItem> | null>(null);
+  /** The index a refused scroll has already been retried for, so it cannot loop. */
+  const retried = useRef<number | null>(null);
+  const activeIndex = categories.findIndex((category) => category.id === activeId);
+
+  const bring = useCallback((index: number) => {
+    listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+  }, []);
+
+  /*
+    **The chosen chip is always in view.**
+
+    Until the sideways drag existed, the only way to change category was
+    to tap a chip — necessarily one already on screen — so the strip never
+    had to move and nothing here scrolled it. A drag can choose a chip
+    that is off the end, and then the only sign anything had happened was
+    the content changing under the finger, with the strip above still
+    showing the old category filled in. Centring the chosen chip is what
+    joins the gesture to the strip.
+
+    `viewPosition: 0.5` and the list's own cell measurements do the
+    arithmetic, deliberately rather than this file: the chips are
+    content-width and Arabic forces a right-to-left layout, so geometry
+    of my own would be two more things to keep in step with the styles
+    instead of none.
+  */
+  useEffect(() => {
+    if (activeIndex < 0) return;
+    retried.current = null;
+    bring(activeIndex);
+  }, [activeIndex, bring]);
+
   return (
     <FlatList
         {...NO_CLIP}
+      ref={listRef}
       horizontal
       showsHorizontalScrollIndicator={false}
+      onScrollToIndexFailed={(info) => {
+        /*
+          A chip far enough along not to be mounted has no measured frame,
+          so the list refuses rather than guess. Go to where it is
+          estimated to be, which mounts it, then ask once more — once
+          only, or a chip that never measures would retry for ever.
+        */
+        listRef.current?.scrollToOffset({
+          offset: info.averageItemLength * info.index,
+          animated: true,
+        });
+        if (retried.current === info.index) return;
+        retried.current = info.index;
+        setTimeout(() => bring(info.index), 80);
+      }}
       data={categories}
       keyExtractor={(item) => item.id}
       style={styles.strip}

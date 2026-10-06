@@ -2,7 +2,7 @@ import type { VideoContentFit, VideoPlayer } from "expo-video";
 import { VideoView } from "expo-video";
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { useMemo, type RefObject } from "react";
+import { useMemo } from "react";
 
 import { brandLogoOnDark } from "@/components/BrandLogo";
 import { CategorySwipe } from "@/components/CategorySwipe";
@@ -94,8 +94,12 @@ export function SplitChannelView({
    * upright, so turning it unmounts the list and anything it remembered
    * goes with it. The screen above survives the rotation, so the memory
    * does — which is the whole point of it.
+   *
+   * It is a callback rather than a ref object on purpose: the hook has to
+   * be told when this list is replaced, which is exactly what a rotation
+   * does to it, and only the ref callback carries that news.
    */
-  listRef: RefObject<FlatList<LiveChannel> | null>;
+  listRef: (instance: FlatList<LiveChannel> | null) => void;
   scrollProps: CategoryScrollProps;
 }) {
   const { t, isRTL } = useI18n();
