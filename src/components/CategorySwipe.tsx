@@ -46,11 +46,22 @@ import Animated, {
  *
  * ## The transition, and the bug that shaped it
  *
- * Out in the direction of travel, accelerating and fading; the data changes
- * while nothing is on screen; in from the opposite side, slower and
- * decelerating into place. Leaving quickly and arriving slowly is what
- * separates a transition from a slide — a symmetrical one reads as
+ * Out in the direction of travel, accelerating, fading and **falling back**;
+ * the data changes while nothing is on screen; in from the opposite side and
+ * from the same depth, on a **spring**. Leaving quickly and arriving slowly
+ * is what separates a transition from a slide — a symmetrical one reads as
  * mechanical however long it lasts.
+ *
+ * Depth and spring were added after the first version was called smooth but
+ * dated (2026-10-07), and that was a fair reading. It moved two properties,
+ * position and opacity, on one family of duration curves. Nothing in it
+ * suggested that the content had anywhere to go *except* sideways, and a
+ * duration curve ends at a moment chosen in advance — which is what reads as
+ * mechanical even when every frame is on time. Receding gives the swap a
+ * third dimension to happen in, and a spring ends when the motion is spent
+ * rather than when a timer says so. The same pair under the finger, a
+ * hundredth and a half of recede against a drag, is what turns the content
+ * from a view being slid into a card being pushed.
  *
  * **One list exists at any moment.** A true sliding pager would hold two
  * lists of up to twenty thousand rows alive at once, on the screens this
@@ -94,16 +105,30 @@ const FLICK_MIN_DISTANCE = 40;
 /** How far the content may follow the finger. Beyond this it stops moving. */
 const MAX_FOLLOW = 96;
 /** The most it dims while the finger is down, reached at full follow. */
-const DRAG_DIM = 0.1;
+const DRAG_DIM = 0.06;
+/**
+ * How far the content recedes under a finger, reached at full follow.
+ *
+ * A hair over one part in a hundred, which sounds like nothing and is the
+ * whole difference between pushing a page and pushing a *card*. Any more and
+ * it stops being a surface being moved and starts being an effect.
+ */
+const DRAG_RECEDE = 0.015;
 
 /** How far it carries on in the direction of travel once it is let go. */
 const EXIT_DISTANCE = 44;
 /** Where the new content starts. Wider than the exit, so arriving has further to settle. */
 const ENTER_DISTANCE = 64;
+/**
+ * The depth the old content falls back to, and the one the new content comes
+ * forward from. Reached while nothing is on screen, so it is never seen as a
+ * size — only as the sense that the content stepped back and returned.
+ */
+const EXIT_SCALE = 0.94;
 
-const OUT_MS = 110;
-const IN_MS = 220;
-/** Only the fade: the return itself is a spring and sets its own pace. */
+const OUT_MS = 130;
+/** The fade only. The movement is a spring now and sets its own pace. */
+const IN_MS = 180;
 const RETURN_MS = 180;
 
 /** Accelerating away, decelerating into place — the Material shared-axis pairing. */
@@ -119,6 +144,17 @@ const ARRIVING = Easing.out(Easing.cubic);
  * correction, not a toy.
  */
 const RETURN_SPRING = { damping: 20, stiffness: 240, mass: 0.6 } as const;
+
+/**
+ * The spring the new content settles on.
+ *
+ * Damped to about 0.9 of critical: enough that it arrives and stops without
+ * argument, short of enough to stop dead. That last tenth is the whole point
+ * — a duration curve ends at a moment decided in advance, which is what reads
+ * as mechanical however smooth it is, while a spring ends when the motion is
+ * spent. Nothing here bounces; it settles, which is a different thing.
+ */
+const ARRIVE_SPRING = { damping: 24, stiffness: 220, mass: 0.8 } as const;
 
 /**
  * Resistance at the ends of the strip.
@@ -186,6 +222,8 @@ export function CategorySwipe({
 }) {
   const translateX = useSharedValue(0);
   const opacity = useSharedValue(1);
+  /** The depth. One at rest, below one while the content is being moved or replaced. */
+  const scale = useSharedValue(1);
   /** Where the next content arrives from. Written on the way out, read on arrival. */
   const entryFrom = useSharedValue(0);
   /** Set from the moment a change is committed until the new content has arrived. */
@@ -220,6 +258,7 @@ export function CategorySwipe({
     changing.value = false;
     drag.value = withSpring(0, RETURN_SPRING);
     translateX.value = withSpring(0, RETURN_SPRING);
+    scale.value = withSpring(1, RETURN_SPRING);
     opacity.value = withTiming(1, { duration: RETURN_MS, easing: ARRIVING });
   };
 
@@ -268,8 +307,14 @@ export function CategorySwipe({
       const blocked = target < 0 || target >= countValue.value;
       const travel = Math.max(-MAX_FOLLOW, Math.min(MAX_FOLLOW, event.translationX));
       translateX.value = blocked ? travel / EDGE_RESISTANCE : travel;
-      /* Dims in proportion to the drag, by a tenth at most. */
-      opacity.value = 1 - (Math.abs(translateX.value) / MAX_FOLLOW) * DRAG_DIM;
+      /*
+        Dims and recedes in proportion to the drag. The two together are what
+        make it read as a card held under the finger rather than a view being
+        slid: either one alone reads as a fade or as a zoom.
+      */
+      const pushed = Math.abs(translateX.value) / MAX_FOLLOW;
+      opacity.value = 1 - pushed * DRAG_DIM;
+      scale.value = 1 - pushed * DRAG_RECEDE;
       /*
         What the chip strip follows. Measured against the commit distance
         rather than against MAX_FOLLOW, so the chips arrive at the next one
@@ -306,6 +351,7 @@ export function CategorySwipe({
       if (!success || blocked || (distance < COMMIT_DISTANCE && !flicked)) {
         drag.value = withSpring(0, RETURN_SPRING);
         translateX.value = withSpring(0, RETURN_SPRING);
+        scale.value = withSpring(1, RETURN_SPRING);
         opacity.value = withTiming(1, { duration: RETURN_MS, easing: ARRIVING });
         return;
       }
@@ -321,6 +367,8 @@ export function CategorySwipe({
       const leaving = event.translationX < 0 ? -EXIT_DISTANCE : EXIT_DISTANCE;
       entryFrom.value = leaving < 0 ? ENTER_DISTANCE : -ENTER_DISTANCE;
       opacity.value = withTiming(0, { duration: OUT_MS, easing: LEAVING });
+      /* Falls back as it goes, so what leaves is receding rather than merely sliding. */
+      scale.value = withTiming(EXIT_SCALE, { duration: OUT_MS, easing: LEAVING });
       translateX.value = withTiming(leaving, { duration: OUT_MS, easing: LEAVING }, (finished) => {
         "worklet";
         if (!finished) return;
@@ -357,8 +405,17 @@ export function CategorySwipe({
       same pixel, so the strip does not move; it only stops being mid-drag.
     */
     drag.value = 0;
+    /*
+      Placed at depth and off to the side, then let go on a spring: it comes
+      forward and settles rather than arriving on a schedule. The fade is the
+      one thing still on a duration, and deliberately a shorter one than the
+      spring — the content should be readable while it is still settling, not
+      only once it has stopped.
+    */
     translateX.value = entryFrom.value;
-    translateX.value = withTiming(0, { duration: IN_MS, easing: ARRIVING });
+    scale.value = EXIT_SCALE;
+    translateX.value = withSpring(0, ARRIVE_SPRING);
+    scale.value = withSpring(1, ARRIVE_SPRING);
     opacity.value = withTiming(1, { duration: IN_MS, easing: ARRIVING });
     /*
       The shared values are deliberately absent from the list. Each is one
@@ -371,7 +428,7 @@ export function CategorySwipe({
   }, [activeId]);
 
   const animated = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
+    transform: [{ translateX: translateX.value }, { scale: scale.value }],
     opacity: opacity.value,
   }));
 
