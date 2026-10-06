@@ -78,6 +78,18 @@ export interface CategoryTabItem {
 
 const AnimatedFlatList = Animated.createAnimatedComponent(FlatList<CategoryTabItem>);
 
+/**
+ * How many times a refused scroll is retried, and how long apart.
+ *
+ * A `FlatList` renders in batches, so a chip far along the strip becomes
+ * measurable a few batches after the screen appears rather than at once.
+ * Six attempts a fifth of a second apart give it a little over a second,
+ * which covers a strip of any length the provider offers — and they stop,
+ * so a chip that never measures cannot retry for ever.
+ */
+const MAX_SCROLL_ATTEMPTS = 6;
+const SCROLL_RETRY_MS = 200;
+
 /** Reports a cell's measured box. Null on the television, where nothing drags. */
 const CellMeasure = createContext<((index: number, x: number, width: number) => void) | null>(null);
 
@@ -147,8 +159,8 @@ export function CategoryTabs({
   progress?: SharedValue<number>;
 }) {
   const listRef = useAnimatedRef<FlatList<CategoryTabItem>>();
-  /** The index a refused scroll has already been retried for, so it cannot loop. */
-  const retried = useRef<number | null>(null);
+  /** Which chip the list has refused to scroll to, and how often. See the handler. */
+  const retried = useRef({ index: -1, count: 0 });
   const activeIndex = categories.findIndex((category) => category.id === activeId);
 
   /*
@@ -205,7 +217,7 @@ export function CategoryTabs({
   useEffect(() => {
     if (activeIndex < 0) return;
     if (drag.value !== 0) return;
-    retried.current = null;
+    retried.current = { index: -1, count: 0 };
     bring(activeIndex);
     /*
       `bring` and the shared values are stable for the life of the component,
@@ -269,18 +281,39 @@ export function CategoryTabs({
         CellRendererComponent={MeasuredCell}
         onScrollToIndexFailed={(info) => {
           /*
-            A chip far enough along not to be mounted has no measured frame,
-            so the list refuses rather than guess. Go to where it is
-            estimated to be, which mounts it, then ask once more — once
-            only, or a chip that never measures would retry for ever.
+            A chip too far along to have been mounted has no measured frame,
+            so the list refuses rather than guess.
+
+            The first refusal of a screen is special and the first version of
+            this got it wrong (review, 2026-10-07). It arrives before any cell
+            has reported its layout, so `averageItemLength` is nought, the
+            estimate below is nought times the index — that is, the start of
+            the strip — and nothing new is mounted by going there. Spending
+            the one retry on that attempt meant a chip past about the tenth
+            was never centred at all: the retry fired while only the first
+            batch had been measured, failed in turn, and the guard then
+            silenced every refusal after it. Opening Live TV on a remembered
+            category half way along the strip did exactly that.
+
+            So: ignore an estimate of nought, and allow a handful of attempts
+            rather than one. Measurement arrives in batches, and a few
+            unhurried tries cover a strip of any length — while still ending,
+            which is what the counter is for.
           */
-          listRef.current?.scrollToOffset({
-            offset: info.averageItemLength * info.index,
-            animated: true,
-          });
-          if (retried.current === info.index) return;
-          retried.current = info.index;
-          setTimeout(() => bring(info.index), 80);
+          const attempt = retried.current;
+          if (attempt.index !== info.index) {
+            attempt.index = info.index;
+            attempt.count = 0;
+          }
+          if (attempt.count >= MAX_SCROLL_ATTEMPTS) return;
+          attempt.count += 1;
+          if (info.averageItemLength > 0) {
+            listRef.current?.scrollToOffset({
+              offset: info.averageItemLength * info.index,
+              animated: true,
+            });
+          }
+          setTimeout(() => bring(info.index), SCROLL_RETRY_MS);
         }}
         data={categories}
         keyExtractor={(item) => item.id}

@@ -103,7 +103,7 @@ export function SplitChannelView({
   listRef: (instance: FlatList<LiveChannel> | null) => void;
   scrollProps: CategoryScrollProps;
 }) {
-  const { t, isRTL } = useI18n();
+  const { t } = useI18n();
   /* The strip's own order, so a sideways drag and the chips can never disagree. */
   const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
   /* Handed to both the strip and the drag surface, so the chips travel with the finger. */
@@ -187,7 +187,6 @@ export function SplitChannelView({
         ids={categoryIds}
         activeId={activeCategoryId}
         onSelect={onSelectCategory}
-        isRTL={isRTL}
         enabled={!isTvBuild}
         progress={categoryDrag}
       >

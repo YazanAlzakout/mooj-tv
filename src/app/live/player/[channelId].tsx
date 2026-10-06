@@ -378,6 +378,16 @@ export default function LivePlayerScreen() {
    * Only the split layout shows a category strip, so this is fetched lazily
    * once that layout is actually in use — and it comes from the on-device
    * catalog, so it costs no provider request.
+   *
+   * **Only categories that actually hold channels**, the same rule the browse
+   * screen applies to the same list. A provider category with nothing in the
+   * on-device catalogue used to be reachable here and nowhere else, and
+   * choosing it emptied `channels`, which trips the "no channels" return far
+   * below — *above* the split layout, so the video surface, the strip and the
+   * drag area all vanished together and left a Back button with the audio
+   * still playing. A tap could only reach such a chip if it happened to be on
+   * screen; a sideways drag steps through every one of them in turn, which is
+   * how it was found (review, 2026-10-07).
    */
   useEffect(() => {
     if (!showSplit || !session) return;
@@ -385,7 +395,9 @@ export default function LivePlayerScreen() {
     loadLiveCategories(session.provider.id, session.config).then(
       (rows) => {
         if (!cancelled) {
-          setCategories([{ id: "all", name: t("liveCategories", "allCategory") }, ...rows]);
+          const present = new Set(session.channels.map((channel) => channel.categoryId));
+          const stocked = rows.filter((row) => present.has(row.id));
+          setCategories([{ id: "all", name: t("liveCategories", "allCategory") }, ...stocked]);
         }
       },
       () => {

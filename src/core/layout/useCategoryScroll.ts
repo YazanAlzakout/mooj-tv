@@ -43,6 +43,32 @@ import type { FlatList, NativeScrollEvent, NativeSyntheticEvent } from "react-na
  *     run through `restoredFor`, so whichever gets there first does the
  *     work and the other does nothing.
  *
+ * ## A position belongs to a shape, not just to a category
+ *
+ * `shape` is anything that changes what a pixel offset *means* — the column
+ * count and the search term on the browse grids. It is part of the key, so a
+ * change of shape is not a wrong position, it is simply no position yet, and
+ * the list opens at the top.
+ *
+ * This was found the hard way (review, 2026-10-07) and it is sharper than it
+ * looks. Each grid passes `key={columns}` to its list, so **rotating the
+ * phone destroys and rebuilds it** — the very "list is replaced" signal
+ * `listRef` below exists to catch. Without `shape`, a portrait offset of
+ * 60,000 px was replayed into a landscape grid whose rows are a different
+ * height and carry twice the cells: some four hundred channels from where the
+ * viewer had been, or clamped to the end of the lineup when the landscape
+ * content is shorter. Worse, whatever they did next was written back under
+ * the same key, so the portrait position was destroyed too.
+ *
+ * Emptying a search did the same thing: the list unmounts when nothing
+ * matches, so typing one more character remounted it and restored the
+ * *unfiltered* offset into a handful of results.
+ *
+ * Converting an offset between shapes was the alternative and is not worth
+ * it. Row heights, column counts and item counts all change at once, so the
+ * conversion is approximate at best, and an approximate restore is harder to
+ * understand than a list that starts at the top.
+ *
  * ## What it costs
  *
  * One number per category in a ref, and callbacks that fire when a scroll
@@ -61,14 +87,19 @@ export interface CategoryScrollProps {
   onContentSizeChange: (width: number, height: number) => void;
 }
 
-export function useCategoryScroll<T>(categoryId: string, defaultOffset?: (id: string) => number) {
+export function useCategoryScroll<T>(
+  categoryId: string,
+  defaultOffset?: (id: string) => number,
+  shape?: string | number
+) {
   const list = useRef<FlatList<T> | null>(null);
   const offsets = useRef(new Map<string, number>());
   /*
-    Read by the callbacks, which must record against the category that was on
-    screen when the finger moved — not whichever one a later render reached.
+    Read by the callbacks, which must record against the category — and the
+    shape — that was on screen when the finger moved, not whichever one a
+    later render reached.
   */
-  const currentId = useRef(categoryId);
+  const currentId = useRef(`${shape ?? ""}\u0000${categoryId}`);
   /** The category the current list has already been put back to, if any. */
   const restoredFor = useRef<string | null>(null);
   /** Nought until the list has measured content; see the third case above. */
@@ -88,7 +119,9 @@ export function useCategoryScroll<T>(categoryId: string, defaultOffset?: (id: st
     if (restoredFor.current === id) return;
     const target = list.current;
     if (!target) return;
-    const offset = offsets.current.get(id) ?? defaultOffsetRef.current?.(id) ?? 0;
+    /* `defaultOffset` is asked about the category, which is all it knows. */
+    const category = id.slice(id.indexOf("\u0000") + 1);
+    const offset = offsets.current.get(id) ?? defaultOffsetRef.current?.(category) ?? 0;
 
     /*
       Back to the top is both always possible and always necessary, so it is
@@ -124,10 +157,10 @@ export function useCategoryScroll<T>(categoryId: string, defaultOffset?: (id: st
   }, []);
 
   useEffect(() => {
-    currentId.current = categoryId;
+    currentId.current = `${shape ?? ""}\u0000${categoryId}`;
     restoredFor.current = null;
     restore();
-  }, [categoryId, restore]);
+  }, [categoryId, shape, restore]);
 
   const remember = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const id = currentId.current;

@@ -96,7 +96,7 @@ interface CategoryTab {
 export default function SeriesCategoriesScreen() {
   // Repaints this screen — and everything it renders — when the theme changes.
   useThemeRerender();
-  const { t, isRTL } = useI18n();
+  const { t } = useI18n();
   const session = getActiveSession();
   const columns = useGridColumns(PORTRAIT_COLUMNS);
   /*
@@ -136,7 +136,6 @@ export default function SeriesCategoriesScreen() {
     steps through. Both read the same list the chip strip is built from,
     so the gesture and the strip can never disagree about what comes next.
   */
-  const { listRef, scrollProps } = useCategoryScroll<SeriesSummary>(activeCategoryId);
   const categoryIds = useMemo(() => (categories ?? []).map((c) => c.id), [categories]);
   /* Handed to both the strip and the drag surface, so the chips travel with the finger. */
   const categoryDrag = useCategoryDrag();
@@ -153,6 +152,20 @@ export default function SeriesCategoriesScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  /*
+    Where the viewer was in each category — declared here, below the
+    search term, because the term is part of its key. A pixel offset
+    belongs to the shape that produced it: the column count, which
+    changes when the phone is turned, and the search, which changes what
+    is in the list at all. Give it a different shape and it reports no
+    remembered position rather than a wrong one, and the list opens at
+    the top.
+  */
+  const { listRef, scrollProps } = useCategoryScroll<SeriesSummary>(
+    activeCategoryId,
+    undefined,
+    `${columns}|${search}`
+  );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasDataRef = useRef(false);
 
@@ -318,7 +331,6 @@ export default function SeriesCategoriesScreen() {
           ids={categoryIds}
           activeId={activeCategoryId}
           onSelect={setActiveCategoryId}
-          isRTL={isRTL}
           enabled={!isTvBuild}
           progress={categoryDrag}
         >

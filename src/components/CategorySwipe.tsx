@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { I18nManager, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
@@ -137,11 +137,29 @@ const EDGE_RESISTANCE = 3;
  */
 const STRANDED_MS = 320;
 
+/**
+ * Which way the chips actually run, taken from the layout rather than from
+ * the locale (review, 2026-10-07).
+ *
+ * These are not the same thing, and assuming they were inverted the gesture.
+ * `useI18n().isRTL` follows the chosen language and flips the moment it is
+ * chosen; the layout follows `I18nManager.forceRTL`, which Android applies on
+ * the *next launch* — and the app says so, offering a restart whose first
+ * button is "Later". Between choosing Arabic and restarting, the chips still
+ * read left to right while the locale says otherwise, so every drag selected
+ * the category on the opposite side of the one it pointed at.
+ *
+ * The strip is a plain horizontal list with no direction prop of its own, so
+ * the order its chips appear in is decided by this and nothing else. Reading
+ * it once at module scope is right as well as cheap: it cannot change while
+ * the app is running, which is the entire point.
+ */
+const RTL_LAYOUT = I18nManager.isRTL;
+
 export function CategorySwipe({
   ids,
   activeId,
   onSelect,
-  isRTL,
   enabled = true,
   progress,
   style,
@@ -151,8 +169,6 @@ export function CategorySwipe({
   ids: string[];
   activeId: string;
   onSelect: (id: string) => void;
-  /** From `useI18n()`, so the direction matches the strip the viewer is looking at. */
-  isRTL: boolean;
   /** False while the screen has nothing to show — a loading or error state. */
   enabled?: boolean;
   /**
@@ -213,9 +229,8 @@ export function CategorySwipe({
    * Which way is "next": the chips are laid out in the reading direction, so
    * in Arabic the next chip sits to the *left* of the current one and the
    * drag that brings it in is a drag to the right — the same convention
-   * every paged interface uses, mirrored. Taking the direction from the
-   * app's own locale rather than from `I18nManager` keeps it in step with
-   * the strip above, which is drawn from the same source.
+   * every paged interface uses, mirrored. `RTL_LAYOUT` is what decides it;
+   * see its own note for why the locale is the wrong source and was.
    */
   const commit = (direction: 1 | -1) => {
     const next = ids.indexOf(activeId) + direction;
@@ -247,7 +262,7 @@ export function CategorySwipe({
       "worklet";
       /* Mid-transition: swallow the drag rather than fight the animation. */
       if (changing.value) return;
-      const forward = isRTL ? event.translationX > 0 : event.translationX < 0;
+      const forward = RTL_LAYOUT ? event.translationX > 0 : event.translationX < 0;
       const direction: 1 | -1 = forward ? 1 : -1;
       const target = indexValue.value + direction;
       const blocked = target < 0 || target >= countValue.value;
@@ -282,7 +297,7 @@ export function CategorySwipe({
 
       const distance = Math.abs(event.translationX);
       const flicked = Math.abs(event.velocityX) > COMMIT_VELOCITY && distance > FLICK_MIN_DISTANCE;
-      const forward = isRTL ? event.translationX > 0 : event.translationX < 0;
+      const forward = RTL_LAYOUT ? event.translationX > 0 : event.translationX < 0;
       const direction: 1 | -1 = forward ? 1 : -1;
       const target = indexValue.value + direction;
       const blocked = target < 0 || target >= countValue.value;
