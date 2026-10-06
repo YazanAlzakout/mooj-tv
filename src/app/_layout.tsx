@@ -1,3 +1,4 @@
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { useEffect, useState } from "react";
@@ -64,11 +65,26 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <ThemeProvider>
-      <I18nProvider>
-        <ThemedRoot />
-      </I18nProvider>
-    </ThemeProvider>
+    /*
+     * `react-native-gesture-handler` has been a dependency all along — it
+     * arrives with the navigator — but nothing in this app used it, so its
+     * root view was never mounted. It has to be, and it has to be the
+     * outermost view: without it `GestureDetector` attaches to nothing on
+     * Android and every gesture built on it silently never fires, with no
+     * error anywhere to say why.
+     *
+     * Mounted for the sideways category swipe on the browse screens
+     * (2026-10-06, `CategorySwipe`). The player's own gestures are older
+     * and built on React Native's responder system; they are untouched by
+     * this and keep working exactly as they did.
+     */
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <I18nProvider>
+          <ThemedRoot />
+        </I18nProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 

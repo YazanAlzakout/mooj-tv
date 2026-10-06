@@ -23,7 +23,9 @@ import { TvBrowseLayout } from "@/components/TvBrowseLayout";
 import { ScreenBackground, TV_OVERSCAN_X } from "@/components/ScreenBackground";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
+import { CategorySwipe } from "@/components/CategorySwipe";
 import { useI18n } from "@/core/i18n/I18nContext";
+import { useCategoryScroll } from "@/core/layout/useCategoryScroll";
 import { LIST_WINDOW } from "@/core/layout/listWindow";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
@@ -93,7 +95,7 @@ interface CategoryTab {
 export default function SeriesCategoriesScreen() {
   // Repaints this screen — and everything it renders — when the theme changes.
   useThemeRerender();
-  const { t } = useI18n();
+  const { t, isRTL } = useI18n();
   const session = getActiveSession();
   const columns = useGridColumns(PORTRAIT_COLUMNS);
   /*
@@ -128,6 +130,13 @@ export default function SeriesCategoriesScreen() {
   const [series, setSeries] = useState<SeriesSummary[] | null>(() => getSeriesList());
   const [categories, setCategories] = useState<CategoryTab[] | null>(null);
   const [activeCategoryId, setActiveCategoryId] = useState<string>(ALL_CATEGORY_ID);
+  /*
+    Where the viewer was in each category, and the order a sideways drag
+    steps through. Both read the same list the chip strip is built from,
+    so the gesture and the strip can never disagree about what comes next.
+  */
+  const { listRef, scrollProps } = useCategoryScroll<SeriesSummary>(activeCategoryId);
+  const categoryIds = useMemo(() => (categories ?? []).map((c) => c.id), [categories]);
   /** Only the first load picks a default; a refresh must not yank the user back. */
   const categoryAppliedRef = useRef(false);
   /**
@@ -291,6 +300,19 @@ export default function SeriesCategoriesScreen() {
       )}
 
       <TvBrowseLayout categories={categories} activeId={activeCategoryId} onSelect={setActiveCategoryId}>
+        {/*
+          Sideways drag changes category, over the whole content area so
+          an empty one can be swiped out of as easily as a full one. It
+          is off on the television, which has no touchscreen and steps
+          through the rail with a remote instead.
+        */}
+        <CategorySwipe
+          ids={categoryIds}
+          activeId={activeCategoryId}
+          onSelect={setActiveCategoryId}
+          isRTL={isRTL}
+          enabled={!isTvBuild}
+        >
     {errorMessage && (
       <View style={styles.errorBlock}>
         <Text style={styles.error}>{errorMessage}</Text>
@@ -313,6 +335,8 @@ export default function SeriesCategoriesScreen() {
       </View>
     ) : (
       <FlatList
+        ref={listRef}
+        {...scrollProps}
         data={filteredSeries}
         keyExtractor={(item) => item.providerItemId}
         key={columns}
@@ -340,6 +364,7 @@ export default function SeriesCategoriesScreen() {
         {...LIST_WINDOW}
       />
     )}
+        </CategorySwipe>
       </TvBrowseLayout>
       </SafeAreaView>
     </ScreenBackground>

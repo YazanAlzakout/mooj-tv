@@ -2,7 +2,7 @@ import { useEventListener } from "expo";
 import { useKeepAwake } from "expo-keep-awake";
 import { router, useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView, type VideoContentFit } from "expo-video";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
@@ -39,6 +39,8 @@ import { useTVRemote } from "@/playback/useTVRemote";
 import { PlayerLifecycleMonitor } from "@/playback/diagnostics/PlayerLifecycleMonitor";
 import { GestureHud } from "@/playback/GestureHud";
 import { LiveDot } from "@/playback/LiveDot";
+import { useCategoryScroll } from "@/core/layout/useCategoryScroll";
+import { CHANNEL_ROW_HEIGHT, CHANNEL_ROW_SPACING } from "@/playback/ChannelListRow";
 import { SplitChannelView } from "@/playback/SplitChannelView";
 import { ChannelSwitchController, type ChannelSwitchTarget } from "@/playback/switching/ChannelSwitchController";
 import { TrackSelectorModal } from "@/playback/TrackSelectorModal";
@@ -272,6 +274,23 @@ export default function LivePlayerScreen() {
   const [retryPending, setRetryPending] = useState(false);
   const [currentChannel, setCurrentChannel] = useState<LiveChannel | null>(
     () => channels.find((c) => c.providerItemId === channelId) ?? channels[0] ?? null
+  );
+  /*
+    The split list's place in each category, kept here rather than in the
+    list: turning the phone unmounts `SplitChannelView`, so a memory held
+    inside it would be thrown away by the very thing it exists to survive.
+
+    A category never opened before falls back to the channel that is
+    playing — where someone opening the player expects to be looking. Only
+    that first time: after it, wherever they scrolled to is theirs.
+  */
+  const splitListDefaultOffset = useCallback(() => {
+    const index = channels.findIndex((channel) => channel.providerItemId === currentChannel?.providerItemId);
+    return index < 0 ? 0 : index * (CHANNEL_ROW_HEIGHT + CHANNEL_ROW_SPACING);
+  }, [channels, currentChannel]);
+  const { listRef: splitListRef, scrollProps: splitScrollProps } = useCategoryScroll<LiveChannel>(
+    listCategoryId,
+    splitListDefaultOffset
   );
   const [guideVisible, setGuideVisible] = useState(false);
   const [tracksVisible, setTracksVisible] = useState(false);
@@ -1638,6 +1657,8 @@ export default function LivePlayerScreen() {
           activeCategoryId={listCategoryId}
           currentChannelId={currentChannel?.providerItemId ?? null}
           nowPlayingName={currentChannel?.name ?? ""}
+          listRef={splitListRef}
+          scrollProps={splitScrollProps}
           isPlaying={isPlaying}
           isBuffering={status === "loading"}
           contentFit={contentFit}

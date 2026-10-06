@@ -2,7 +2,11 @@ import type { VideoContentFit, VideoPlayer } from "expo-video";
 import { VideoView } from "expo-video";
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { useMemo, type RefObject } from "react";
+
 import { brandLogoOnDark } from "@/components/BrandLogo";
+import { CategorySwipe } from "@/components/CategorySwipe";
+import type { CategoryScrollProps } from "@/core/layout/useCategoryScroll";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { Focusable } from "@/components/Focusable";
 import { CategoryTabs, type CategoryTabItem } from "@/components/CategoryTabs";
@@ -47,6 +51,8 @@ export function SplitChannelView({
   onSelectChannel,
   onTogglePlay,
   onExpand,
+  listRef,
+  scrollProps,
 }: {
   player: VideoPlayer;
   channels: LiveChannel[];
@@ -81,10 +87,20 @@ export function SplitChannelView({
   onSelectChannel: (channel: LiveChannel) => void;
   onTogglePlay: () => void;
   onExpand: () => void;
+  /**
+   * The list's place in each category, owned by the player screen.
+   *
+   * It cannot live here: this view is only rendered while the phone is
+   * upright, so turning it unmounts the list and anything it remembered
+   * goes with it. The screen above survives the rotation, so the memory
+   * does — which is the whole point of it.
+   */
+  listRef: RefObject<FlatList<LiveChannel> | null>;
+  scrollProps: CategoryScrollProps;
 }) {
-  const { t } = useI18n();
-  /* Only for the scroll anchor below; -1 means this category does not hold it. */
-  const currentIndex = channels.findIndex((c) => c.providerItemId === currentChannelId);
+  const { t, isRTL } = useI18n();
+  /* The strip's own order, so a sideways drag and the chips can never disagree. */
+  const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
 
   return (
     <View style={styles.root}>
@@ -155,6 +171,17 @@ export function SplitChannelView({
         />
       )}
 
+      {/*
+        A sideways drag changes category, over the list only — the picture
+        above keeps its own buttons and is never part of the gesture.
+      */}
+      <CategorySwipe
+        ids={categoryIds}
+        activeId={activeCategoryId}
+        onSelect={onSelectCategory}
+        isRTL={isRTL}
+        enabled={!isTvBuild}
+      >
       {channels.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyText}>{t("liveChannelList", "noChannelsAvailable")}</Text>
@@ -162,48 +189,21 @@ export function SplitChannelView({
       ) : (
         <FlatList
           /*
-            **The list opens on the channel that is playing, not at the top.**
+            **Where the viewer was, not where the list begins.**
 
-            Three complaints, one cause. This view is rendered only while the
-            phone is upright (`showSplit` in the player screen is
-            `splitPreference && !isLandscape`), so **turning the phone
-            unmounts this whole subtree** — the scroll offset lives in the
-            native ScrollView and goes with it, and turning back built a fresh
-            list at row zero. A viewer who had scrolled into a category came
-            back to the top of it ("يرجع المؤشر الى البداية", reported by a
-            viewer 2026-10-05). The same list also never anchored on first
-            open: starting a channel 800 rows down showed the lineup from the
-            beginning with the highlighted row far below the fold.
+            `useCategoryScroll` in the player screen keeps one offset per
+            category and hands it back here. It covers both ways this list
+            arrives: a category change, where the list stays and the data
+            changes, and a rotation, where the list is a new one that has
+            to be told where it was.
 
-            Anchoring beats remembering an offset. A saved offset means
-            `onScroll` on every frame and a number that is meaningless the
-            moment the category changes under it; the channel being watched is
-            a place that still exists after a rotation, after a category
-            change, and on first open — and it is the place the viewer wants.
-
-            `getItemLayout` below is what makes `initialScrollIndex` exact:
-            every row is the same height, so the list can place row 800
-            without measuring the 799 above it. An index of -1 — the playing
-            channel is not in this category — becomes `undefined` and the
-            list starts at the top, which is right.
+            `getItemLayout` below is what makes the restore exact — every
+            row is the same height, so an offset can be honoured without
+            measuring anything.
           */
+          ref={listRef}
+          {...scrollProps}
           data={channels}
-          initialScrollIndex={currentIndex < 0 ? undefined : currentIndex}
-          /*
-            **A category change is a different list, so it is mounted as one.**
-
-            Choosing a category in the strip above hands this list a new
-            `channels` array, and a FlatList keeps its scroll offset across
-            that: leaving "All" at row 800 for a category with thirty channels
-            left it scrolled past its own end, clamped to the last rows, which
-            reads as a broken scroll ("يوجد مشكلة في السكرول ... بعد التنقل
-            بالتصنيفات"). Keying on the category remounts the list, which
-            re-applies `initialScrollIndex` above — so the new category opens
-            on the playing channel when it holds it, and at the top when it
-            does not. Twelve rows are built; it is cheaper than the scroll it
-            replaces.
-          */
-          key={activeCategoryId}
           keyExtractor={(item) => item.providerItemId}
           style={styles.listArea}
           contentContainerStyle={styles.list}
@@ -235,6 +235,7 @@ export function SplitChannelView({
           removeClippedSubviews={!isTvBuild}
         />
       )}
+      </CategorySwipe>
     </View>
   );
 }
