@@ -8,6 +8,7 @@ import Animated, {
   useSharedValue,
   withSpring,
   withTiming,
+  type SharedValue,
 } from "react-native-reanimated";
 
 /**
@@ -142,6 +143,7 @@ export function CategorySwipe({
   onSelect,
   isRTL,
   enabled = true,
+  progress,
   style,
   children,
 }: {
@@ -153,6 +155,16 @@ export function CategorySwipe({
   isRTL: boolean;
   /** False while the screen has nothing to show — a loading or error state. */
   enabled?: boolean;
+  /**
+   * Published to the chip strip so it can travel with the finger: 0 at rest,
+   * ±1 at the point a change commits, positive towards the next category.
+   *
+   * The same shared value is handed to `CategoryTabs`, which turns it into a
+   * scroll position. Writing a number here rather than driving the strip from
+   * this component keeps the two apart — the strip owns its own geometry, and
+   * this owns only how far the finger has gone.
+   */
+  progress?: SharedValue<number>;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }) {
@@ -162,6 +174,12 @@ export function CategorySwipe({
   const entryFrom = useSharedValue(0);
   /** Set from the moment a change is committed until the new content has arrived. */
   const changing = useSharedValue(false);
+  /*
+    Stands in when no strip is listening, so every write below is unconditional
+    and the hook order never varies with the props.
+  */
+  const unwatched = useSharedValue(0);
+  const drag = progress ?? unwatched;
 
   /*
     The gesture runs on the UI thread, where it cannot read React state. The
@@ -184,6 +202,7 @@ export function CategorySwipe({
   const settle = () => {
     awaiting.current = false;
     changing.value = false;
+    drag.value = withSpring(0, RETURN_SPRING);
     translateX.value = withSpring(0, RETURN_SPRING);
     opacity.value = withTiming(1, { duration: RETURN_MS, easing: ARRIVING });
   };
@@ -236,6 +255,15 @@ export function CategorySwipe({
       translateX.value = blocked ? travel / EDGE_RESISTANCE : travel;
       /* Dims in proportion to the drag, by a tenth at most. */
       opacity.value = 1 - (Math.abs(translateX.value) / MAX_FOLLOW) * DRAG_DIM;
+      /*
+        What the chip strip follows. Measured against the commit distance
+        rather than against MAX_FOLLOW, so the chips arrive at the next one
+        exactly as the drag becomes long enough to change category — and the
+        same resistance is applied at the ends of the strip, so a drag with
+        nowhere to go barely moves the chips either.
+      */
+      const gone = Math.min(1, Math.abs(event.translationX) / COMMIT_DISTANCE);
+      drag.value = direction * (blocked ? gone / EDGE_RESISTANCE : gone);
     })
     /*
       `commit` reads `awaiting`, and handing it to `runOnJS` here looks to
@@ -261,12 +289,20 @@ export function CategorySwipe({
 
       /* `success` is false for a drag the system took away mid-gesture. */
       if (!success || blocked || (distance < COMMIT_DISTANCE && !flicked)) {
+        drag.value = withSpring(0, RETURN_SPRING);
         translateX.value = withSpring(0, RETURN_SPRING);
         opacity.value = withTiming(1, { duration: RETURN_MS, easing: ARRIVING });
         return;
       }
 
       changing.value = true;
+      /*
+        Carry the strip the rest of the way on the same curve the content
+        leaves on, so the chips finish arriving as the old content finishes
+        going. At 1 the strip is already centred on the next chip, which is
+        where it has to be when the category changes a moment later.
+      */
+      drag.value = withTiming(direction, { duration: OUT_MS, easing: LEAVING });
       const leaving = event.translationX < 0 ? -EXIT_DISTANCE : EXIT_DISTANCE;
       entryFrom.value = leaving < 0 ? ENTER_DISTANCE : -ENTER_DISTANCE;
       opacity.value = withTiming(0, { duration: OUT_MS, easing: LEAVING });
@@ -285,11 +321,27 @@ export function CategorySwipe({
    * a value that an effect declared earlier depends on, so every other write
    * has to appear above this. Execution order is unaffected — it still runs
    * after the index mirror, which is the only ordering that matters.
+   *
+   * The `immutability` suppression is for `drag.value = 0` below.
+   * `react-hooks/immutability` sees `drag` as an ordinary local, because the
+   * `??` that gives it a stand-in erases the fact that both sides of it are
+   * shared values — the rule knows what `useSharedValue` returns and does not
+   * follow that knowledge through a fallback. Mutation across renders is the
+   * entire contract of a shared value, and the identical assignment inside
+   * the gesture worklets below is accepted; only this one, in an effect, is
+   * not.
    */
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => {
     if (!awaiting.current) return;
     awaiting.current = false;
     changing.value = false;
+    /*
+      The strip is already centred on this category — it was carried there
+      while the old content left. Returning to 0 against the new index is the
+      same pixel, so the strip does not move; it only stops being mid-drag.
+    */
+    drag.value = 0;
     translateX.value = entryFrom.value;
     translateX.value = withTiming(0, { duration: IN_MS, easing: ARRIVING });
     opacity.value = withTiming(1, { duration: IN_MS, easing: ARRIVING });

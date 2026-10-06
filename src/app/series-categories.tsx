@@ -25,6 +25,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
 import { CategorySwipe } from "@/components/CategorySwipe";
 import { useI18n } from "@/core/i18n/I18nContext";
+import { useCategoryDrag } from "@/core/layout/useCategoryDrag";
 import { useCategoryScroll } from "@/core/layout/useCategoryScroll";
 import { LIST_WINDOW } from "@/core/layout/listWindow";
 import { isTvBuild } from "@/core/platform/isTvBuild";
@@ -137,6 +138,8 @@ export default function SeriesCategoriesScreen() {
   */
   const { listRef, scrollProps } = useCategoryScroll<SeriesSummary>(activeCategoryId);
   const categoryIds = useMemo(() => (categories ?? []).map((c) => c.id), [categories]);
+  /* Handed to both the strip and the drag surface, so the chips travel with the finger. */
+  const categoryDrag = useCategoryDrag();
   /** Only the first load picks a default; a refresh must not yank the user back. */
   const categoryAppliedRef = useRef(false);
   /**
@@ -284,7 +287,12 @@ export default function SeriesCategoriesScreen() {
             needs in order not to be clipped.
           */}
           {categories && categories.length > 1 && (
-            <CategoryTabs categories={categories} activeId={activeCategoryId} onSelect={setActiveCategoryId} />
+            <CategoryTabs
+              categories={categories}
+              activeId={activeCategoryId}
+              onSelect={setActiveCategoryId}
+              progress={categoryDrag}
+            />
           )}
 
           <TextInput
@@ -312,6 +320,7 @@ export default function SeriesCategoriesScreen() {
           onSelect={setActiveCategoryId}
           isRTL={isRTL}
           enabled={!isTvBuild}
+          progress={categoryDrag}
         >
     {errorMessage && (
       <View style={styles.errorBlock}>

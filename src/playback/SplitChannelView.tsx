@@ -6,6 +6,7 @@ import { useMemo } from "react";
 
 import { brandLogoOnDark } from "@/components/BrandLogo";
 import { CategorySwipe } from "@/components/CategorySwipe";
+import { useCategoryDrag } from "@/core/layout/useCategoryDrag";
 import type { CategoryScrollProps } from "@/core/layout/useCategoryScroll";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { Focusable } from "@/components/Focusable";
@@ -105,6 +106,8 @@ export function SplitChannelView({
   const { t, isRTL } = useI18n();
   /* The strip's own order, so a sideways drag and the chips can never disagree. */
   const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
+  /* Handed to both the strip and the drag surface, so the chips travel with the finger. */
+  const categoryDrag = useCategoryDrag();
 
   return (
     <View style={styles.root}>
@@ -172,6 +175,7 @@ export function SplitChannelView({
           activeId={activeCategoryId}
           alwaysDark
           onSelect={onSelectCategory}
+          progress={categoryDrag}
         />
       )}
 
@@ -185,6 +189,7 @@ export function SplitChannelView({
         onSelect={onSelectCategory}
         isRTL={isRTL}
         enabled={!isTvBuild}
+        progress={categoryDrag}
       >
       {channels.length === 0 ? (
         <View style={styles.empty}>

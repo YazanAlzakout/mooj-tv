@@ -23,6 +23,7 @@ import { ScreenHeader } from "@/components/ScreenHeader";
 import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
 import { CategorySwipe } from "@/components/CategorySwipe";
 import { useI18n } from "@/core/i18n/I18nContext";
+import { useCategoryDrag } from "@/core/layout/useCategoryDrag";
 import { useCategoryScroll } from "@/core/layout/useCategoryScroll";
 import { LIST_WINDOW } from "@/core/layout/listWindow";
 import { imageHostIsDead, noteImageFailed } from "@/core/media/deadImageHosts";
@@ -127,6 +128,8 @@ export default function LiveCategoriesScreen() {
   */
   const { listRef, scrollProps } = useCategoryScroll<LiveChannel>(activeCategoryId);
   const categoryIds = useMemo(() => (categories ?? []).map((c) => c.id), [categories]);
+  /* Handed to both the strip and the drag surface, so the chips travel with the finger. */
+  const categoryDrag = useCategoryDrag();
   /** Read once per screen; a toggle updates it locally rather than re-querying. */
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(() => new Set());
   /**
@@ -464,7 +467,12 @@ export default function LiveCategoriesScreen() {
       {isTvBuild ? null : (
         <>
           {categories && categories.length > 1 && (
-            <CategoryTabs categories={categories} activeId={activeCategoryId} onSelect={selectCategory} />
+            <CategoryTabs
+              categories={categories}
+              activeId={activeCategoryId}
+              onSelect={selectCategory}
+              progress={categoryDrag}
+            />
           )}
 
           <TextInput
@@ -492,6 +500,7 @@ export default function LiveCategoriesScreen() {
           onSelect={selectCategory}
           isRTL={isRTL}
           enabled={!isTvBuild}
+          progress={categoryDrag}
         >
         {screenBody}
         </CategorySwipe>
