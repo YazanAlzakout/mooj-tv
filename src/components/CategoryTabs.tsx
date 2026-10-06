@@ -209,14 +209,22 @@ export function CategoryTabs({
     content changing under the finger, with the strip above still showing
     the old category filled in.
 
-    This is the settling path, for a tap and for any category chosen from
-    elsewhere. A drag is handled by the reaction below, which is already
-    holding the strip at the right place by the time this runs — so it steps
-    aside rather than start a second, competing scroll.
+    This runs for every category change, a drag included, and **must not be
+    made conditional on the drag.** It was, briefly: the reaction below was
+    supposed to have already placed the strip, so this stood aside to avoid a
+    second competing scroll. The two then failed together — the reaction did
+    nothing for its own reasons and this had disarmed itself — and the strip
+    sat perfectly still through a swipe that was otherwise working. One path
+    doing redundant work is nothing; two paths that can only work together
+    are a single point of failure with extra steps.
+
+    There is no conflict to avoid anyway. This fires once per category
+    change, never during a drag, and when the reaction has done its job the
+    chip is already centred — so this asks for a scroll to where the strip
+    already is, which costs nothing and shows nothing.
   */
   useEffect(() => {
     if (activeIndex < 0) return;
-    if (drag.value !== 0) return;
     retried.current = { index: -1, count: 0 };
     bring(activeIndex);
     /*
@@ -242,30 +250,38 @@ export function CategoryTabs({
         tap or a category chosen elsewhere, which the settling effect
         animates. Nought *after* a drag is the end of one, and is handled —
         it is what puts the strip exactly on the chip when the neighbour was
-        never measured and the interpolation above could not reach it.
+        never measured and the interpolation could not reach it.
       */
       if (p === 0 && !previous) return;
-      const index = activeIndexValue.value;
       const viewport = stripWidth.value;
       if (viewport <= 0) return;
 
-      const limit = Math.max(0, contentWidth.value - viewport);
-      const centre = (i: number) => {
-        "worklet";
-        const box = boxes.value[i];
-        if (!box) return null;
-        return Math.max(0, Math.min(limit, box.x + box.width / 2 - viewport / 2));
-      };
+      /*
+        Written out rather than factored into a `centre(i)` helper, and that
+        is not a style choice. A function declared inside a worklet is
+        workletized in its own right by the Babel plugin — the compiled file
+        carried five worklets where it should carry four — and building one
+        worklet inside another, on the UI thread, every frame of a drag, is
+        how this reaction came to do nothing at all on the device while
+        raising nothing a log would show.
+      */
+      const frames = boxes.value;
+      const index = activeIndexValue.value;
+      const here = frames[index];
+      if (!here) return;
 
-      const from = centre(index);
-      if (from === null) return;
+      const limit = Math.max(0, contentWidth.value - viewport);
+      const from = Math.max(0, Math.min(limit, here.x + here.width / 2 - viewport / 2));
       if (p === 0) {
         scrollTo(listRef, from, 0, false);
         return;
       }
-      const to = centre(index + (p > 0 ? 1 : -1));
-      const target = to === null ? from : from + Math.abs(p) * (to - from);
-      scrollTo(listRef, target, 0, false);
+
+      const next = frames[index + (p > 0 ? 1 : -1)];
+      const to = next
+        ? Math.max(0, Math.min(limit, next.x + next.width / 2 - viewport / 2))
+        : from;
+      scrollTo(listRef, from + Math.abs(p) * (to - from), 0, false);
     }
   );
 
