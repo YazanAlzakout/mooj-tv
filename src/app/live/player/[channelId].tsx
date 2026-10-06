@@ -1637,6 +1637,7 @@ export default function LivePlayerScreen() {
           categories={categories}
           activeCategoryId={listCategoryId}
           currentChannelId={currentChannel?.providerItemId ?? null}
+          nowPlayingName={currentChannel?.name ?? ""}
           isPlaying={isPlaying}
           isBuffering={status === "loading"}
           contentFit={contentFit}

@@ -36,6 +36,7 @@ export function SplitChannelView({
   categories,
   activeCategoryId,
   currentChannelId,
+  nowPlayingName,
   isPlaying,
   isBuffering,
   contentFit,
@@ -52,6 +53,22 @@ export function SplitChannelView({
   categories: CategoryTabItem[];
   activeCategoryId: string;
   currentChannelId: string | null;
+  /**
+   * The name of the channel that is playing, which is **not** read from the
+   * list below.
+   *
+   * The list is filtered by the category strip, so the moment the viewer
+   * browses a category the playing channel does not belong to, it is not in
+   * `channels` at all — and a name derived from `channels` went empty. An
+   * empty `Text` measures no line box on Android, so the line collapsed and
+   * everything under it jumped up by its height, which is what the viewer
+   * saw as a flicker while stepping through categories (2026-10-06).
+   *
+   * Browsing is not tuning: the picture is still playing that channel, so
+   * its name is still the truth and has to come from the screen that owns
+   * the player rather than from whatever the list happens to be showing.
+   */
+  nowPlayingName: string;
   isPlaying: boolean;
   isBuffering: boolean;
   contentFit: VideoContentFit;
@@ -66,8 +83,8 @@ export function SplitChannelView({
   onExpand: () => void;
 }) {
   const { t } = useI18n();
+  /* Only for the scroll anchor below; -1 means this category does not hold it. */
   const currentIndex = channels.findIndex((c) => c.providerItemId === currentChannelId);
-  const currentChannel = currentIndex < 0 ? null : channels[currentIndex];
 
   return (
     <View style={styles.root}>
@@ -126,7 +143,7 @@ export function SplitChannelView({
       </View>
 
       <Text style={styles.nowPlaying} numberOfLines={1}>
-        {currentChannel?.name ?? ""}
+        {nowPlayingName}
       </Text>
 
       {categories.length > 1 && (
@@ -277,7 +294,16 @@ const styles = StyleSheet.create({
   playButtonPressed: { opacity: 1, backgroundColor: "rgba(0,0,0,0.6)" },
   playButtonText: { color: Colors.text, fontSize: 18, fontFamily: FontFamily.bold },
 
+  /**
+   * A fixed height, not a line that grows from its text.
+   *
+   * `paddingTop` plus the 22 of `lineHeight`. Belt and braces beside the
+   * prop above: the name is empty for the moment between opening the screen
+   * and the channel resolving, and an empty `Text` is zero units tall on
+   * Android — so without this the page would still shift once on entry.
+   */
   nowPlaying: {
+    height: Spacing.sm + 22,
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.sm,
     color: Colors.text,
