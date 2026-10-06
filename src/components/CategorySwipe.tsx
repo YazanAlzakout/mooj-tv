@@ -154,7 +154,7 @@ const RETURN_SPRING = { damping: 20, stiffness: 240, mass: 0.6 } as const;
  * as mechanical however smooth it is, while a spring ends when the motion is
  * spent. Nothing here bounces; it settles, which is a different thing.
  */
-const ARRIVE_SPRING = { damping: 24, stiffness: 220, mass: 0.8 } as const;
+const ARRIVE_SPRING = { damping: 30, stiffness: 220, mass: 0.8 } as const;
 
 /**
  * Resistance at the ends of the strip.
@@ -190,7 +190,14 @@ const STRANDED_MS = 320;
  * it once at module scope is right as well as cheap: it cannot change while
  * the app is running, which is the entire point.
  */
-const RTL_LAYOUT = I18nManager.isRTL;
+const FORWARD_IS_LEFT = true;
+
+/*
+  Kept only so the import still earns its place: the strip is pinned
+  left-to-right in every language (see CategoryTabs), and this records that
+  the app's own layout direction is deliberately not consulted here.
+*/
+void I18nManager;
 
 export function CategorySwipe({
   ids,
@@ -301,7 +308,7 @@ export function CategorySwipe({
       "worklet";
       /* Mid-transition: swallow the drag rather than fight the animation. */
       if (changing.value) return;
-      const forward = RTL_LAYOUT ? event.translationX > 0 : event.translationX < 0;
+      const forward = FORWARD_IS_LEFT ? event.translationX < 0 : event.translationX > 0;
       const direction: 1 | -1 = forward ? 1 : -1;
       const target = indexValue.value + direction;
       const blocked = target < 0 || target >= countValue.value;
@@ -342,7 +349,7 @@ export function CategorySwipe({
 
       const distance = Math.abs(event.translationX);
       const flicked = Math.abs(event.velocityX) > COMMIT_VELOCITY && distance > FLICK_MIN_DISTANCE;
-      const forward = RTL_LAYOUT ? event.translationX > 0 : event.translationX < 0;
+      const forward = FORWARD_IS_LEFT ? event.translationX < 0 : event.translationX > 0;
       const direction: 1 | -1 = forward ? 1 : -1;
       const target = indexValue.value + direction;
       const blocked = target < 0 || target >= countValue.value;

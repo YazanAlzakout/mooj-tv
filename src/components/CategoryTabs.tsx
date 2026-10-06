@@ -366,8 +366,26 @@ const styles = themedStyles((C: ThemeColors) =>
    * empty band above and below the strip rather than as a scroll area.
    * The height stays content-driven, so a taller label still fits.
    */
-  strip: { flexGrow: 0 },
+  /*
+    `direction: "ltr"` pins the chip order in every language, and it is
+    there to kill a whole class of bug rather than for looks.
+
+    Arabic forces a right-to-left layout, where the first chip is the
+    rightmost and x counts down. Measured positions and scroll offsets are
+    physical and count up, so the two ran opposite each other: the strip
+    hit a boundary and jammed, and a drag chose the category on the far
+    side of the one it pointed at. Pinning the direction makes the
+    gesture, the chip order and the scroll arithmetic agree everywhere,
+    with no language branch left anywhere in the feature.
+
+    The cost is named plainly: in Arabic the first category now sits on
+    the left. That is against the grain of an Arabic interface, and it is
+    the price of one behaviour in every language, agreed with the owner
+    on 2026-10-07.
+  */
+  strip: { flexGrow: 0, direction: "ltr" },
   list: {
+    direction: "ltr",
     paddingHorizontal: Spacing.lg,
     gap: Spacing.xs,
     paddingTop: Spacing.xs,
