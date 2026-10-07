@@ -12,48 +12,43 @@ import Animated, {
 /**
  * Categories as pages you can see past the edge of (2026-10-07).
  *
- * The category either side of the one you are on is **mounted and on
- * screen**, just off the edge, so a drag reveals it travelling in rather
- * than swapping the content once the finger lifts. This is what a paged
- * interface does everywhere else on the phone, and the viewer was right to
- * expect it.
+ * The category either side of the one you are on is **mounted and on screen**,
+ * just off the edge, so a drag reveals it travelling in rather than swapping
+ * the content once the finger lifts.
  *
- * ## Why this replaces `CategorySwipe`, and why that one was wrong
+ * ## Why this replaces `CategorySwipe`
  *
- * `CategorySwipe` moved a single list, faded it out, changed the data behind
- * it and faded it back. Its own comment defended that: a real pager "would
- * hold two lists of up to twenty thousand rows alive at once", on screens
- * this project has twice repaired for stuttering.
+ * `CategorySwipe` moved a single list, faded it out, changed the data behind it
+ * and faded it back. Its own comment defended that: a real pager "would hold two
+ * lists of up to twenty thousand rows alive at once".
  *
- * **That number was wrong, and it is worth being precise about how.** A
- * `FlatList` is virtualized: it mounts the cells in its window — fifteen or
- * so — and never the twenty thousand rows behind them. Three pages is
- * therefore about forty-five mounted cells, not sixty thousand, and forty-five
- * is the order of what one page costs. Android's own ViewPager2 keeps exactly
- * this window for exactly this reason. The caution was real; the figure it
- * rested on was not, and it kept the obvious interaction out of the app.
+ * That was wrong, though not by as much as the first version of this comment
+ * then claimed in the other direction. A `FlatList` is virtualized: it mounts
+ * the cells in its window and never the twenty thousand rows behind them. Three
+ * pages is three windows, not sixty thousand rows — but it is genuinely three,
+ * not "about what one page costs", which is what this file used to say. Three
+ * pages of a three-column grid is on the order of a hundred and fifty mounted
+ * cells against fifty. That is affordable; it is not free, and `active` below
+ * exists because of the part that is not.
  *
- * ## The handover
+ * ## Committing, and why it no longer waits
  *
- * Each page is placed by its distance from the current one — minus one, nought,
- * plus one, times the screen width — and the whole row is offset by the drag.
- * When a drag commits, the row settles at exactly one screen width, and *then*
- * the category changes: the window re-centres, every page's own offset shifts
- * by one, and the row returns to nought. The page that was at plus one is now
- * at nought, which is the same pixel it already occupied. Nothing moves at the
- * moment of the swap, so there is no frame to get wrong and no ordering to
- * arrange between React and the UI thread.
+ * The first version committed the category change inside the settling spring's
+ * completion callback, so the data change waited out the whole animation — about
+ * half a second, which is what the viewer reported as the strip lagging. Worse,
+ * a second drag during that window cancelled the spring, the callback never ran,
+ * and the page that had already arrived snapped back a full screen.
  *
- * Because the page arriving is the real list, already laid out and already
- * scrolled where the viewer left it, it is finished before it arrives: it can
- * be scrolled the instant it lands, with nothing to fetch, render or restore.
+ * So the commit now happens the instant the finger lifts, and the animation runs
+ * **after** it. The effect below does the arithmetic that makes that invisible:
+ * at the moment the category changes, every page's offset shifts by one screen
+ * width, so adding that same width back to the row leaves every page exactly
+ * where it already was. Then the row springs to nought. Nothing waits on
+ * anything, and there is no completion callback left to lose.
  *
- * ## Direction
- *
- * A drag to the left always goes to the next category, in every language.
- * The chip strip is pinned left-to-right for the same reason (see
- * `CategoryTabs`), so the gesture, the chips and the pages agree everywhere
- * without a single branch on the locale.
+ * This is also what makes a drag interruptible: `startX` picks up wherever the
+ * row happens to be, so a second swipe during the settle continues from there
+ * instead of fighting it or being swallowed.
  */
 
 /** Sideways travel before the pan takes the touch from the list. */
@@ -63,10 +58,9 @@ const FAIL_Y = 12;
 /**
  * How much of the screen must be crossed to commit, as a fraction.
  *
- * A fraction rather than the fixed 1.15 cm the viewer originally asked for:
- * with the next page visibly coming in, the distance is no longer a hidden
- * threshold to be guessed at, it is something being watched. A fifth of the
- * screen is both a deliberate movement and an obvious one.
+ * A fraction rather than a fixed distance: with the next page visibly coming in,
+ * the threshold is no longer something to be guessed at, it is something being
+ * watched.
  */
 const COMMIT_FRACTION = 0.2;
 /** A flick may stand in for the distance, past this speed and this much travel. */
@@ -76,19 +70,22 @@ const FLICK_MIN_DISTANCE = 24;
 const EDGE_RESISTANCE = 3;
 
 /**
- * What the pages settle on.
+ * What the row settles on.
  *
- * Damped past critical for this stiffness and mass, so a page arrives and
- * stops without overshooting — the calmer settle the viewer asked for after
- * the first spring bounced a little on the way in.
+ * Written in Reanimated 4's duration form on purpose. The first attempt used
+ * `damping`/`stiffness`/`mass` with `restDisplacementThreshold` and
+ * `restSpeedThreshold` — and those last two are **Reanimated 2 and 3 keys that
+ * version 4 does not have**. They were ignored in silence, and TypeScript said
+ * nothing because excess-property checking does not reach through an `as const`
+ * variable. So the attempt to stop the spring crawling changed nothing, and the
+ * spring went on ending only once its energy fell below `energyThreshold`, whose
+ * default is 6e-9: a very long tail.
+ *
+ * `dampingRatio: 1` is critical damping and `overshootClamping` forbids passing
+ * the target, which together are the calm settle without the bounce that was
+ * asked for — and `duration` bounds it, so it cannot crawl again.
  */
-const SETTLE = {
-  damping: 26,
-  stiffness: 300,
-  mass: 0.55,
-  restDisplacementThreshold: 0.5,
-  restSpeedThreshold: 2,
-} as const;
+const SETTLE = { duration: 300, dampingRatio: 1, overshootClamping: true } as const;
 
 /** How far a page off to the side sits back, at a full screen away. */
 const PAGE_RECEDE = 0.06;
@@ -96,11 +93,20 @@ const PAGE_RECEDE = 0.06;
 const PAGE_DIM = 0.3;
 
 /**
+ * How long the commit is allowed not to arrive before the row is put back.
+ *
+ * The effect below runs when `activeId` changes. A screen that declines the
+ * change — or sets it to the category already showing — would otherwise leave
+ * the row displaced with nothing coming to straighten it.
+ */
+const STRANDED_MS = 400;
+
+/**
  * One page, placed by its distance from the current category.
  *
- * A component of its own because the depth has to be computed per page on the
- * UI thread, and `react-hooks/static-components` forbids declaring a
- * component inside another one.
+ * A component of its own because the depth is computed per page on the UI
+ * thread, and `react-hooks/static-components` forbids declaring a component
+ * inside another one.
  */
 function Page({
   offset,
@@ -139,8 +145,16 @@ export function CategoryPager({
   ids: string[];
   activeId: string;
   onSelect: (id: string) => void;
-  /** Builds the list for one category. Called for the current page and the one either side. */
-  renderPage: (categoryId: string) => React.ReactNode;
+  /**
+   * Builds the list for one category.
+   *
+   * `active` is false for the two pages either side. They are mounted and
+   * visible at the edge of the screen, so they must render — but a screen can
+   * use this to do less for them, and the grids use it to hold back artwork:
+   * three pages of posters fetching at once is three times the traffic to a
+   * provider that answers a burst with empty 404s on every endpoint.
+   */
+  renderPage: (categoryId: string, active: boolean) => React.ReactNode;
   /**
    * Published to the chip strip so it travels with the finger: 0 at rest,
    * ±1 one page along, positive towards the next category.
@@ -151,17 +165,29 @@ export function CategoryPager({
   /**
    * Render the current category only, with no gesture and no neighbours.
    *
-   * For the television, where the remote steps through the rail and the
-   * three-page window would be three focusable grids where there should be
-   * one. The screens pass `isTvBuild`, so the television keeps exactly the
-   * single list it had before this component existed.
+   * For the television, where the remote steps through the rail and three
+   * focusable grids where there should be one would wreck focus.
    */
   single?: boolean;
 }) {
   const { width } = useWindowDimensions();
-  const index = ids.indexOf(activeId);
+
+  /*
+    **Clamped, and that is not belt and braces.** `activeCategoryId` can name a
+    category that is no longer in the strip: the screens restore a remembered
+    one without checking it still exists, and the live list drops any category
+    that has been hidden or has lost its last channel. `indexOf` then returns
+    −1, every page is placed one screen to the right of where it belongs, and
+    the content area — which clips — shows nothing at all while the header still
+    reports a few hundred channels. Falling back to the first category means the
+    worst case is the wrong category rather than a blank screen.
+  */
+  const found = ids.indexOf(activeId);
+  const index = found < 0 ? 0 : found;
 
   const translateX = useSharedValue(0);
+  /** Where the row was when the current gesture began, so a drag can interrupt a settle. */
+  const startX = useSharedValue(0);
   const unwatched = useSharedValue(0);
   const drag = progress ?? unwatched;
 
@@ -175,86 +201,121 @@ export function CategoryPager({
     widthValue.value = width;
   }, [index, ids.length, width, indexValue, countValue, widthValue]);
 
-  /** True between committing a change and the window having re-centred. */
-  const awaiting = useRef(false);
+  /** +1 or −1 while a committed change is on its way to React; 0 otherwise. */
+  const shift = useRef(0);
 
   const commit = (direction: 1 | -1) => {
-    const next = ids.indexOf(activeId) + direction;
+    const next = index + direction;
     if (next < 0 || next >= ids.length) {
       translateX.value = withSpring(0, SETTLE);
       drag.value = withSpring(0, SETTLE);
       return;
     }
-    awaiting.current = true;
+    shift.current = direction;
     onSelect(ids[next]);
+    /*
+      If the screen declines the change, nothing will straighten the row. One
+      timer per commit is a cheap price for never leaving the grid displaced.
+    */
+    setTimeout(() => {
+      if (!shift.current) return;
+      shift.current = 0;
+      translateX.value = withSpring(0, SETTLE);
+      drag.value = withSpring(0, SETTLE);
+    }, STRANDED_MS);
   };
 
   const pan = Gesture.Pan()
-    .enabled(enabled && ids.length > 1)
+    .enabled(enabled && !single && ids.length > 1)
     .activeOffsetX([-ACTIVATE_X, ACTIVATE_X])
     .failOffsetY([-FAIL_Y, FAIL_Y])
+    .onBegin(() => {
+      "worklet";
+      /* Take over from wherever the row is, mid-settle or at rest. */
+      startX.value = translateX.value;
+    })
     .onUpdate((event) => {
       "worklet";
-      let dx = event.translationX;
-      const atStart = indexValue.value <= 0 && dx > 0;
-      const atEnd = indexValue.value >= countValue.value - 1 && dx < 0;
+      const w = Math.max(1, widthValue.value);
+      let x = startX.value + event.translationX;
+      const atStart = indexValue.value <= 0 && x > 0;
+      const atEnd = indexValue.value >= countValue.value - 1 && x < 0;
       /* Nothing to reveal that way, so the row gives only a third as far. */
-      if (atStart || atEnd) dx = dx / EDGE_RESISTANCE;
-      translateX.value = dx;
+      if (atStart || atEnd) x = x / EDGE_RESISTANCE;
+      translateX.value = x;
       /* The strip follows the same journey, measured in pages rather than pixels. */
-      drag.value = -dx / Math.max(1, widthValue.value);
+      drag.value = -x / w;
     })
     /*
-      `commit` reads `awaiting`, and handing it to `runOnJS` here looks to
-      `react-hooks/refs` like a ref escaping into render. It is not: the only
-      caller is the completion callback of the settling spring, well after the
-      finger has left the glass, and `commit` never runs while this component
-      renders. The flag has to be a ref rather than a shared value because its
-      writer and its reader are both on the JavaScript thread.
+      `commit` reads and writes `shift`, and handing it to `runOnJS` here looks
+      to `react-hooks/refs` like a ref escaping into render. It is not: the only
+      caller is this gesture's end, and `commit` never runs while this component
+      renders.
     */
     // eslint-disable-next-line react-hooks/refs
     .onEnd((event, success) => {
       "worklet";
       const w = Math.max(1, widthValue.value);
+      const travelled = Math.abs(startX.value + event.translationX);
       const distance = Math.abs(event.translationX);
       const flicked =
         Math.abs(event.velocityX) > COMMIT_VELOCITY && distance > FLICK_MIN_DISTANCE;
-      const forward = event.translationX < 0;
+
+      /*
+        A flick takes its direction from the velocity, everything else from how
+        far the row has actually moved. Reading direction from displacement
+        alone sent a reversing flick — dragged one way, thrown back the other —
+        to the category opposite the one it was thrown towards.
+      */
+      const forward = flicked ? event.velocityX < 0 : startX.value + event.translationX < 0;
       const target = indexValue.value + (forward ? 1 : -1);
       const blocked = target < 0 || target >= countValue.value;
 
-      if (!success || blocked || (distance < w * COMMIT_FRACTION && !flicked)) {
+      if (!success || blocked || (travelled < w * COMMIT_FRACTION && !flicked)) {
         translateX.value = withSpring(0, SETTLE);
         drag.value = withSpring(0, SETTLE);
         return;
       }
 
-      drag.value = withSpring(forward ? 1 : -1, SETTLE);
-      translateX.value = withSpring(forward ? -w : w, SETTLE, (finished) => {
-        "worklet";
-        if (!finished) return;
-        runOnJS(commit)(forward ? 1 : -1);
-      });
+      /*
+        No animation here on purpose: the effect below re-bases the row the
+        moment React has the new category, and animating first would be a race
+        against it. See "committing, and why it no longer waits".
+      */
+      runOnJS(commit)(forward ? 1 : -1);
     });
 
   /*
-    The window has re-centred, so the row goes back to nought. Nothing moves:
-    the page that was one screen along is now the current one and already
-    occupies this exact position. See "the handover" above.
+    The category has changed, so every page's offset has moved by one screen
+    width. Adding that width back leaves every page exactly where it already
+    was, and the row then springs to nought from there — which is the whole
+    transition, happening entirely after the commit rather than before it.
 
-    `react-hooks/immutability` sees `drag` as an ordinary local because the
-    `??` above erases what `useSharedValue` returned; mutation across renders
-    is the whole contract of a shared value, and the identical write inside
-    the worklets above is accepted.
+    `react-hooks/immutability` sees `drag` as an ordinary local because the `??`
+    above erases what `useSharedValue` returned; mutation across renders is the
+    entire contract of a shared value.
   */
   // eslint-disable-next-line react-hooks/immutability
   useEffect(() => {
-    if (!awaiting.current) return;
-    awaiting.current = false;
-    translateX.value = 0;
-    drag.value = 0;
+    const moved = shift.current;
+    if (!moved) return;
+    shift.current = 0;
+    translateX.value = translateX.value + moved * widthValue.value;
+    translateX.value = withSpring(0, SETTLE);
+    drag.value = drag.value - moved;
+    drag.value = withSpring(0, SETTLE);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
+
+  /*
+    `single` is the television. The empty list is the moment between a
+    catalogue arriving and its categories arriving: there is nothing to page
+    between yet, and the window loop below would produce no pages at all, so
+    the screen would be blank while holding a full catalogue.
+  */
+  if (single || ids.length === 0) {
+    return <View style={styles.fill}>{renderPage(activeId, true)}</View>;
+  }
 
   /*
     The current category and the one either side. Keyed by category id, so a
@@ -266,16 +327,12 @@ export function CategoryPager({
     if (i >= 0 && i < ids.length) windowIds.push(ids[i]);
   }
 
-  if (single) {
-    return <View style={styles.fill}>{renderPage(activeId)}</View>;
-  }
-
   return (
     <GestureDetector gesture={pan}>
       <View style={styles.fill}>
         {windowIds.map((id) => (
           <Page key={id} offset={ids.indexOf(id) - index} width={width} translateX={translateX}>
-            {renderPage(id)}
+            {renderPage(id, id === ids[index])}
           </Page>
         ))}
       </View>

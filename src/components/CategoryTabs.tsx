@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef } from "react";
 import {
   FlatList,
   StyleSheet,
@@ -171,24 +171,71 @@ export function CategoryTabs({
   const atRest = useSharedValue(0);
   const drag = progress ?? atRest;
 
-  /** Measured cell boxes by index, and the viewport they are scrolled inside. */
-  const boxes = useSharedValue<Record<number, { x: number; width: number }>>({});
-  const stripWidth = useSharedValue(0);
-  const contentWidth = useSharedValue(0);
-  const activeIndexValue = useSharedValue(activeIndex);
+  /*
+    **The measurements live in plain refs, and only three numbers cross to
+    the UI thread.**
+
+    The first version kept every measured box in a shared value, as one
+    object rebuilt on each cell's layout: `boxes.value = { ...boxes.value,
+    [i]: box }`. That is a read-modify-write of a value that lives in two
+    runtimes, run once per cell and dozens of times in a single layout pass,
+    and it is not safe to assume each write is visible to the next read. A
+    whole batch could collapse to a single entry, after which the reaction
+    below found no box for the active chip and did nothing at all.
+
+    It was also more than was ever needed. The reaction only interpolates
+    between the current chip and the one it is heading for, so three numbers
+    are enough. They are computed here, on the thread that does the
+    measuring, and only the results are published.
+  */
+  const boxes = useRef(new Map<number, { x: number; width: number }>());
+  const stripWidth = useRef(0);
+  const contentWidth = useRef(0);
+  const activeIndexRef = useRef(activeIndex);
+
+  /** Scroll offsets that centre the current chip and its two neighbours; −1 means unknown. */
+  const hereCentre = useSharedValue(-1);
+  const prevCentre = useSharedValue(-1);
+  const nextCentre = useSharedValue(-1);
+
+  const centreOf = useCallback((index: number) => {
+    const box = boxes.current.get(index);
+    const viewport = stripWidth.current;
+    if (!box || viewport <= 0) return -1;
+    const limit = Math.max(0, contentWidth.current - viewport);
+    return Math.max(0, Math.min(limit, box.x + box.width / 2 - viewport / 2));
+  }, []);
+
+  /** Publish the three offsets the reaction needs. Cheap, and only on layout. */
+  const publish = useCallback(() => {
+    const index = activeIndexRef.current;
+    hereCentre.value = centreOf(index);
+    prevCentre.value = centreOf(index - 1);
+    nextCentre.value = centreOf(index + 1);
+    /*
+      The shared values are deliberately absent: each is one stable object
+      for the life of the component, and naming it would forbid writing to
+      it under `react-hooks/immutability`, which is an error here where
+      `exhaustive-deps` is only a warning.
+    */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centreOf]);
 
   const report = (index: number, x: number, width: number) => {
-    const known = boxes.value[index];
+    const known = boxes.current.get(index);
     if (known && known.x === x && known.width === width) return;
-    boxes.value = { ...boxes.value, [index]: { x, width } };
+    boxes.current.set(index, { x, width });
+    publish();
   };
 
   const onStripLayout = (event: LayoutChangeEvent) => {
-    stripWidth.value = event.nativeEvent.layout.width;
+    stripWidth.current = event.nativeEvent.layout.width;
+    publish();
   };
 
   const onContentSizeChange = (width: number) => {
-    contentWidth.value = width;
+    contentWidth.current = width;
+    publish();
   };
 
   const bring = (index: number) => {
@@ -196,8 +243,9 @@ export function CategoryTabs({
   };
 
   useEffect(() => {
-    activeIndexValue.value = activeIndex;
-  }, [activeIndex, activeIndexValue]);
+    activeIndexRef.current = activeIndex;
+    publish();
+  }, [activeIndex, publish]);
 
   /*
     **The chosen chip is always in view.**
@@ -253,35 +301,23 @@ export function CategoryTabs({
         never measured and the interpolation could not reach it.
       */
       if (p === 0 && !previous) return;
-      const viewport = stripWidth.value;
-      if (viewport <= 0) return;
 
       /*
-        Written out rather than factored into a `centre(i)` helper, and that
-        is not a style choice. A function declared inside a worklet is
-        workletized in its own right by the Babel plugin — the compiled file
-        carried five worklets where it should carry four — and building one
-        worklet inside another, on the UI thread, every frame of a drag, is
-        how this reaction came to do nothing at all on the device while
+        Three numbers, no object, no helper function. A function declared
+        inside a worklet is workletized in its own right by the Babel plugin,
+        so building one on the UI thread on every frame of a drag is how an
+        earlier version of this reaction came to do nothing at all while
         raising nothing a log would show.
       */
-      const frames = boxes.value;
-      const index = activeIndexValue.value;
-      const here = frames[index];
-      if (!here) return;
-
-      const limit = Math.max(0, contentWidth.value - viewport);
-      const from = Math.max(0, Math.min(limit, here.x + here.width / 2 - viewport / 2));
+      const from = hereCentre.value;
+      if (from < 0) return;
       if (p === 0) {
         scrollTo(listRef, from, 0, false);
         return;
       }
 
-      const next = frames[index + (p > 0 ? 1 : -1)];
-      const to = next
-        ? Math.max(0, Math.min(limit, next.x + next.width / 2 - viewport / 2))
-        : from;
-      scrollTo(listRef, from + Math.abs(p) * (to - from), 0, false);
+      const to = p > 0 ? nextCentre.value : prevCentre.value;
+      scrollTo(listRef, to < 0 ? from : from + Math.abs(p) * (to - from), 0, false);
     }
   );
 

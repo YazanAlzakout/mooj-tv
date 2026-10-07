@@ -40,6 +40,9 @@ import { loadSeriesCategories } from "@/state/categoryQueries";
 import { getSeriesList, loadSeriesList } from "@/state/seriesStore";
 
 const ALL_CATEGORY_ID = "all";
+
+/** One empty array for every category with nothing in it, so the list is never handed a new one. */
+const NOTHING: never[] = [];
 const SEARCH_DEBOUNCE_MS = 200;
 /** Portrait density; landscape is decided by `useGridColumns`. */
 const PORTRAIT_COLUMNS = 3;
@@ -233,15 +236,43 @@ export default function SeriesCategoriesScreen() {
    * filtering can no longer be a value derived from `activeCategoryId`: it
    * has to answer for whichever three categories are on screen at once.
    */
+  /*
+    **Every category grouped once, rather than filtered three times.**
+
+    Three pages ask for their items on every render, and the obvious shape
+    — a function that filters on demand — is three scans of the whole
+    catalogue each time, with a `toLowerCase` allocation per item. One
+    pass that buckets everything costs the same as a single one of those
+    scans and answers every category, including the ones the pager has not
+    reached yet.
+
+    A cache behind a closure was the first attempt and is not allowed here:
+    `react-hooks/immutability` forbids mutating a local after render, and
+    the mutation in that shape happens when a page calls the closure. This
+    builds its map during the render that creates it, which is exactly what
+    the rule is asking for, and is the better algorithm anyway.
+  */
+  const byCategory = useMemo(() => {
+    const grouped = new Map<string, SeriesSummary[]>();
+    if (!series) return grouped;
+    const pool = search
+      ? series.filter((s) => s.name.toLowerCase().includes(search))
+      : series;
+    grouped.set(ALL_CATEGORY_ID, pool);
+    for (const item of pool) {
+      /* The provider leaves this null on some rows; those live in "All" only. */
+      const key = item.categoryId;
+      if (key === null) continue;
+      const bucket = grouped.get(key);
+      if (bucket) bucket.push(item);
+      else grouped.set(key, [item]);
+    }
+    return grouped;
+  }, [series, search]);
+
   const itemsFor = useCallback(
-    (categoryId: string) => {
-      if (!series) return [];
-      const inCategory =
-        categoryId === ALL_CATEGORY_ID ? series : series.filter((s) => s.categoryId === categoryId);
-      if (!search) return inCategory;
-      return inCategory.filter((s) => s.name.toLowerCase().includes(search));
-    },
-    [series, search]
+    (categoryId: string) => byCategory.get(categoryId) ?? NOTHING,
+    [byCategory]
   );
 
   /** Only for the count in the header, which is about the category being looked at. */
@@ -366,7 +397,7 @@ export default function SeriesCategoriesScreen() {
         enabled={!isTvBuild}
         single={isTvBuild}
         progress={categoryDrag}
-        renderPage={(pageCategoryId) => (
+        renderPage={(pageCategoryId, pageActive) => (
       <FlatList
         ref={pages(pageCategoryId).listRef}
         {...pages(pageCategoryId).scroll}
@@ -384,7 +415,7 @@ export default function SeriesCategoriesScreen() {
           )
         }
         renderItem={({ item, index }) => (
-          <SeriesPoster series={item} columns={columns} tvFocusFirst={index === 0 && !tvFocusClaimedRef.current}
+          <SeriesPoster series={item} columns={columns} artwork={pageActive} tvFocusFirst={index === 0 && !tvFocusClaimedRef.current}
             onTvFocus={() => {
               tvFocusClaimedRef.current = true;
             }} onPress={() => openSeries(item)} />
@@ -414,12 +445,24 @@ export default function SeriesCategoriesScreen() {
 function SeriesPoster({
   series,
   columns,
+  artwork,
   tvFocusFirst,
   onTvFocus,
   onPress,
 }: {
   series: SeriesSummary;
   columns: number;
+  /**
+   * Whether this page may fetch its poster.
+   *
+   * False for the two pages either side of the one being looked at. They are
+   * mounted so a drag can reveal them, which means they would otherwise all
+   * fetch at once — three screens of artwork for a provider that answers a
+   * burst with empty 404s on every endpoint, two of those screens for nobody.
+   * The skeleton underneath already carries the name, so holding the image
+   * back reads as a card that has not loaded yet rather than as a hole.
+   */
+  artwork: boolean;
   /** Exactly one cell per screen sets this — where a TV remote starts. */
   tvFocusFirst: boolean;
   /** Latches the screen's one-shot focus request — see `tvFocusClaimedRef`. */
@@ -442,7 +485,7 @@ function SeriesPoster({
             {series.name}
           </Text>
         </View>
-        {series.posterUrl && (
+        {series.posterUrl && artwork && (
           <CachedImage uri={series.posterUrl} style={styles.posterImage} resizeMode="cover" />
         )}
         {series.rating !== null && (

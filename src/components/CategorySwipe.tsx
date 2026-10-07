@@ -142,6 +142,12 @@ const ARRIVING = Easing.out(Easing.cubic);
  * overshoots a hair and settles, which reads as "not far enough" the way a
  * linear glide back does not. Damped well short of a bounce — this is a
  * correction, not a toy.
+ *
+ * Note for anyone tuning this: `restDisplacementThreshold` and
+ * `restSpeedThreshold` are Reanimated 2 and 3 keys. Version 4 does not have
+ * them, ignores them in silence, and TypeScript will not object through an
+ * `as const`. Reach for `duration` with `dampingRatio` instead, as the arrival
+ * spring below does.
  */
 const RETURN_SPRING = { damping: 20, stiffness: 240, mass: 0.6 } as const;
 
@@ -154,13 +160,7 @@ const RETURN_SPRING = { damping: 20, stiffness: 240, mass: 0.6 } as const;
  * as mechanical however smooth it is, while a spring ends when the motion is
  * spent. Nothing here bounces; it settles, which is a different thing.
  */
-const ARRIVE_SPRING = {
-  damping: 26,
-  stiffness: 300,
-  mass: 0.55,
-  restDisplacementThreshold: 0.5,
-  restSpeedThreshold: 2,
-} as const;
+const ARRIVE_SPRING = { duration: 300, dampingRatio: 1, overshootClamping: true } as const;
 
 /**
  * Resistance at the ends of the strip.
