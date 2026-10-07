@@ -120,6 +120,24 @@ const STRANDED_MS = 400;
 const SETTLE_WORK_MS = 360;
 
 /**
+ * How many categories either side of the current one are kept mounted.
+ *
+ * One was not enough, and the reason is specific. Holding the window still
+ * during a move only means "this move builds nothing" when the move starts
+ * from rest — then the three mounted pages are already the three it needs.
+ * Swipe again before the first move has settled and the centre advances onto
+ * a page that was never built, so it is built at the instant the second slide
+ * begins: exactly the stutter the hold exists to prevent, on every swipe of a
+ * run after the first.
+ *
+ * Two means a run of two swipes needs nothing new. The two outer pages are a
+ * full screen width beyond the edge, so they are never seen; they render
+ * quiet and without artwork, which is four cells each. That is the price of
+ * the stutter: eight cells per screen, built while nothing is moving.
+ */
+const PAGE_RADIUS = 2;
+
+/**
  * One page, placed by its distance from the current category.
  *
  * A component of its own because the depth is computed per page on the UI
@@ -240,10 +258,22 @@ export function CategoryPager({
    * A page is let through when the viewer actually reaches it, and never
    * closed again. So a move costs exactly one page of artwork — the rate
    * the app fetched at before it had pages at all — while a page already
-   * seen keeps what it has, and the two unvisited neighbours of a screen
-   * that has just opened still fetch nothing.
+   * seen keeps what it has, and the unvisited neighbours of a screen that
+   * has just opened still fetch nothing.
+   *
+   * **It starts empty, and seeding it was a real bug.** Seeding it with the
+   * first `activeId` looks harmless and is not: on every browse screen that
+   * first value is the "All" chip, held for the frame or two before the
+   * catalogue loads and the screen moves to a real category. "All" is then
+   * the left neighbour for ever, and being in this set it rendered at the
+   * full window with artwork — the whole catalogue, twelve posters, fetching
+   * beside the current category's twelve on every single screen open. That
+   * is the two-page burst this mechanism exists to prevent, and the exact
+   * arrangement rejected two commits ago for costing the transition its
+   * smoothness. Nothing is lost by starting empty: a page that is active and
+   * still gets its artwork from the second half of the test below.
    */
-  const [seen, setSeen] = useState<Set<string>>(() => new Set([activeId]));
+  const [seen, setSeen] = useState<Set<string>>(() => new Set<string>());
   /**
    * True from the moment a move commits until the row has stopped.
    *
@@ -289,15 +319,23 @@ export function CategoryPager({
     */
     const arriving = ids[next];
     /*
-      The page being left is recorded now — it already has its artwork and
-      must keep it while it slides away. The page arriving is recorded
-      later, with `settling`, so that nothing it needs is fetched or built
-      while the row is moving.
+      The page being left is recorded so that it keeps its posters while it
+      slides away — but only if it has any. Mid-run it does not: it arrived
+      moments ago, its own timer has not fired, and it is still quiet and
+      imageless. Recording it then did the opposite of what this line is for,
+      flipping it from four cells to twelve and starting a full page of
+      poster requests at the instant the next slide began, for a category
+      already being left behind.
     */
-    if (!seen.has(activeId)) setSeen(new Set(seen).add(activeId));
+    if (!settling && !seen.has(activeId)) setSeen(new Set(seen).add(activeId));
+    /*
+      Only on the first move of a run. Advancing it on every move is what
+      walked the window onto an unbuilt page mid-animation; leaving it where
+      the run started keeps the mounted set still for as long as the run
+      stays inside `PAGE_RADIUS`.
+    */
+    if (!settling) setWindowCentre(index);
     setSettling(true);
-    /* Where the window stays until the row stops. See `windowCentre`. */
-    setWindowCentre(index);
     const token = settleToken.current + 1;
     settleToken.current = token;
     onSelect(arriving);
@@ -422,9 +460,22 @@ export function CategoryPager({
     again, which is also what makes a chip tap — where nothing moves and
     `settling` is never set — land on a correct window immediately.
   */
-  const centre = settling ? windowCentre : index;
+  const held = settling ? windowCentre : index;
+  /*
+    The hold gives way only as far as it must, and no further. A run longer
+    than the radius — or anything that moves the category without a drag —
+    would put the page being looked at outside the window, and not mounting
+    the page on screen is a blank screen, which is worse than any stutter.
+
+    Dragging the centre to the nearest value that still contains `index`,
+    rather than jumping it onto `index`, is what keeps that cheap: the
+    window slides by one and mounts one page. Jumping would move it by the
+    whole distance and mount the radius over again — three pages at once on
+    the third swipe of a run, which is worse than the behaviour being fixed.
+  */
+  const centre = Math.min(Math.max(held, index - PAGE_RADIUS), index + PAGE_RADIUS);
   const windowIds: string[] = [];
-  for (let i = centre - 1; i <= centre + 1; i++) {
+  for (let i = centre - PAGE_RADIUS; i <= centre + PAGE_RADIUS; i++) {
     if (i >= 0 && i < ids.length) windowIds.push(ids[i]);
   }
 
