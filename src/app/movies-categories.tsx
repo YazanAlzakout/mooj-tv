@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -300,13 +300,32 @@ export default function MoviesCategoriesScreen() {
     if (!session) router.replace("/providers");
   }, [session]);
 
+  /*
+    Stable on purpose, and the memo below is worthless without it.
+
+    A `FlatList` builds a new render closure on every render of itself, and
+    with `numColumns` above one it also hands each row a freshly allocated
+    array. `CellRenderer` is a `PureComponent`, so both of those already
+    fail reference equality — which is why every mounted cell re-rendered on
+    every list render. A fast fling makes that happen inside the scroll
+    handler itself, once per frame, which is the difference between the
+    three per cent this list measures on a slow scroll and the twenty-two
+    it measures on a fling.
+
+    The cell can only bail out if what it is handed is identical, so the
+    callbacks take the item rather than closing over it.
+  */
+  const openMovie = useCallback((movie: MovieSummary) => {
+    router.push({ pathname: "/movies/details/[movieId]", params: { movieId: movie.providerItemId } });
+  }, []);
+
+  const claimTvFocus = useCallback(() => {
+    tvFocusClaimedRef.current = true;
+  }, []);
   if (!session) {
     return null;
   }
 
-  function openMovie(movie: MovieSummary) {
-    router.push({ pathname: "/movies/details/[movieId]", params: { movieId: movie.providerItemId } });
-  }
 
   return (
     <ScreenBackground>
@@ -433,10 +452,14 @@ export default function MoviesCategoriesScreen() {
           )
         }
         renderItem={({ item, index }) => (
-          <MoviePoster movie={item} columns={columns} artwork={pageActive} tvFocusFirst={index === 0 && !tvFocusClaimedRef.current}
-            onTvFocus={() => {
-              tvFocusClaimedRef.current = true;
-            }} onPress={() => openMovie(item)} />
+          <MoviePoster
+            movie={item}
+            columns={columns}
+            artwork={pageActive}
+            tvFocusFirst={index === 0 && !tvFocusClaimedRef.current}
+            onTvFocus={claimTvFocus}
+            onPress={openMovie}
+          />
         )}
         getItemLayout={(_, index) => ({
           length: gridRowHeight,
@@ -461,7 +484,14 @@ export default function MoviesCategoriesScreen() {
  * Reanimated values re-fire on every recycle during scroll, which is what
  * made scrolling stutter.
  */
-function MoviePoster({
+/*
+  Memoised. See `openMovie` for why, and for why this is only worth
+  anything together with the stable callbacks above.
+
+  `memo(function …)` rather than an arrow: `react/display-name` requires a
+  named function here.
+*/
+const MoviePoster = memo(function MoviePoster({
   movie,
   columns,
   artwork,
@@ -486,11 +516,16 @@ function MoviePoster({
   tvFocusFirst: boolean;
   /** Latches the screen's one-shot focus request — see `tvFocusClaimedRef`. */
   onTvFocus: () => void;
-  onPress: () => void;
+  onPress: (movie: MovieSummary) => void;
 }) {
+  /*
+    One closure for the life of this cell, rather than a new one handed
+    down on every render of the list. That is what lets the memo bail.
+  */
+  const press = useCallback(() => onPress(movie), [onPress, movie]);
   return (
     <View style={[styles.posterCell, { flex: 1 / columns, maxWidth: `${100 / columns}%` }]}>
-    <Focusable onPress={onPress} style={styles.posterWrap} hasTVPreferredFocus={tvFocusFirst} onFocus={onTvFocus}>
+    <Focusable onPress={press} style={styles.posterWrap} hasTVPreferredFocus={tvFocusFirst} onFocus={onTvFocus}>
       <View style={styles.posterImageWrap}>
         {/*
           The title sits *behind* the poster rather than being switched in
@@ -521,7 +556,7 @@ function MoviePoster({
     </Focusable>
     </View>
   );
-}
+});
 
 const styles = themedStyles((C: ThemeColors) =>
   StyleSheet.create({

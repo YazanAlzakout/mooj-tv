@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useRef } from "react";
 import {
   FlatList,
   StyleSheet,
@@ -130,6 +130,57 @@ function MeasuredCell({
   );
 }
 
+/**
+ * One chip.
+ *
+ * A component of its own, memoised, because the strip is a scrolling list
+ * and every chip inside it is a `BouncePressable` — which means a shared
+ * value and an animated style per chip, created when it mounts. That is the
+ * exact cost this project removed from the browse grids and wrote down at
+ * the top of `MoviePoster`: "per-cell entrance animations plus per-cell
+ * Reanimated values re-fire on every recycle during scroll, which is what
+ * made scrolling stutter". The strip was left doing it, and it measures:
+ * a hard fling of the strip costs more than a hard fling of the channel
+ * list beneath it, which carries images.
+ *
+ * Memoising does not remove that cost on a genuine mount — nothing can,
+ * short of dropping the bounce — but it stops every mounted chip paying it
+ * again on each render of the strip, which is what a category change used
+ * to do to all of them at once.
+ *
+ * `memo(function …)` rather than an arrow: `react/display-name` wants a
+ * named function here.
+ */
+const Chip = memo(function Chip({
+  id,
+  name,
+  active,
+  alwaysDark,
+  onSelect,
+}: {
+  id: string;
+  name: string;
+  active: boolean;
+  alwaysDark: boolean;
+  /** Takes the id, so the chip is handed one stable function rather than a new closure. */
+  onSelect: (id: string) => void;
+}) {
+  const press = useCallback(() => onSelect(id), [onSelect, id]);
+  return (
+    <BouncePressable
+      style={[styles.tab, alwaysDark && styles.tabDark, active && styles.tabActive]}
+      onPress={press}
+    >
+      <Text
+        style={[styles.tabText, alwaysDark && styles.tabTextDark, active && styles.tabTextActive]}
+        numberOfLines={1}
+      >
+        {name}
+      </Text>
+    </BouncePressable>
+  );
+});
+
 export function CategoryTabs({
   categories,
   activeId,
@@ -232,12 +283,23 @@ export function CategoryTabs({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [centreOf]);
 
-  const report = (index: number, x: number, width: number) => {
-    const known = boxes.current.get(index);
-    if (known && known.x === x && known.width === width) return;
-    boxes.current.set(index, { x, width });
-    publish();
-  };
+  /*
+    Stable, and that matters more than it looks.
+
+    This is the context value every cell reads, so a new function on each
+    render re-rendered every mounted chip — on every category change, which
+    is exactly when the strip is also scrolling itself to the new chip and
+    the list below it is swapping its data.
+  */
+  const report = useCallback(
+    (index: number, x: number, width: number) => {
+      const known = boxes.current.get(index);
+      if (known && known.x === x && known.width === width) return;
+      boxes.current.set(index, { x, width });
+      publish();
+    },
+    [publish]
+  );
 
   const onStripLayout = (event: LayoutChangeEvent) => {
     stripWidth.current = event.nativeEvent.layout.width;
@@ -389,21 +451,13 @@ export function CategoryTabs({
         style={styles.strip}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
-          <BouncePressable
-            style={[styles.tab, alwaysDark && styles.tabDark, activeId === item.id && styles.tabActive]}
-            onPress={() => onSelect(item.id)}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                alwaysDark && styles.tabTextDark,
-                activeId === item.id && styles.tabTextActive,
-              ]}
-              numberOfLines={1}
-            >
-              {item.name}
-            </Text>
-          </BouncePressable>
+          <Chip
+            id={item.id}
+            name={item.name}
+            active={activeId === item.id}
+            alwaysDark={alwaysDark}
+            onSelect={onSelect}
+          />
         )}
       />
     </CellMeasure.Provider>
