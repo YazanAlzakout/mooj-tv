@@ -204,22 +204,28 @@ export function CategoryPager({
   }, [index, ids.length, width, indexValue, countValue, widthValue]);
 
   /**
-   * Whether artwork may be fetched for the pages either side as well.
+   * The categories whose artwork has been let through, one at a time.
    *
-   * False until the first category change, true for ever after. The point
-   * of holding artwork back was the burst when a screen first opens: three
-   * pages fetching at once, two of them for categories nobody has looked
-   * at. Once the viewer is moving between categories that reasoning stops
-   * applying — at most one page in the window is new per move, which is
-   * exactly the rate the app fetched at before it had pages at all.
+   * Two wrong versions came before this, and the difference between them is
+   * one page of images per move:
    *
-   * Gating on "is this page active" instead was wrong, and the viewer
-   * caught it: active flips at the moment the category commits, so the
-   * page being left lost its posters while it was still sliding across the
-   * screen, and every return to a category paid for its images again.
-   * Latching removes that without giving up the protection that mattered.
+   *   - gating on "is this page the active one" flips at the moment a
+   *     category commits, so the page being left lost its posters while it
+   *     was still sliding across the screen, and every return to a category
+   *     paid for its images again;
+   *   - a single flag for "the viewer has started moving" fixed that and
+   *     opened the floodgate instead: the category *ahead*, which nobody
+   *     had looked at yet, began loading too. Two pages of posters decoding
+   *     during the animation rather than one, and the transition stopped
+   *     being smooth.
+   *
+   * A page is let through when the viewer actually reaches it, and never
+   * closed again. So a move costs exactly one page of artwork — the rate
+   * the app fetched at before it had pages at all — while a page already
+   * seen keeps what it has, and the two unvisited neighbours of a screen
+   * that has just opened still fetch nothing.
    */
-  const [warm, setWarm] = useState(false);
+  const [seen, setSeen] = useState<Set<string>>(() => new Set([activeId]));
 
   /** +1 or −1 while a committed change is on its way to React; 0 otherwise. */
   const shift = useRef(0);
@@ -232,9 +238,21 @@ export function CategoryPager({
       return;
     }
     shift.current = direction;
-    /* An event, not a render: the first move is what makes the neighbours worth loading. */
-    if (!warm) setWarm(true);
-    onSelect(ids[next]);
+    /*
+      An event, not a render. Both ends of the move go in: the one being
+      reached, and the one being left — which matters when it was arrived at
+      by tapping a chip rather than by a drag, and so was never recorded.
+      Batched with `onSelect` below into the single render the commit
+      already causes.
+    */
+    const arriving = ids[next];
+    if (!seen.has(arriving) || !seen.has(activeId)) {
+      const grown = new Set(seen);
+      grown.add(activeId);
+      grown.add(arriving);
+      setSeen(grown);
+    }
+    onSelect(arriving);
     /*
       If the screen declines the change, nothing will straighten the row. One
       timer per commit is a cheap price for never leaving the grid displaced.
@@ -354,7 +372,7 @@ export function CategoryPager({
       <View style={styles.fill}>
         {windowIds.map((id) => (
           <Page key={id} offset={ids.indexOf(id) - index} width={width} translateX={translateX}>
-            {renderPage(id, warm || id === ids[index])}
+            {renderPage(id, seen.has(id) || id === ids[index])}
           </Page>
         ))}
       </View>
