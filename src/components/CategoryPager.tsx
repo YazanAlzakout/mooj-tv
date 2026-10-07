@@ -253,6 +253,19 @@ export function CategoryPager({
    * tapping a chip is unaffected, because nothing is moving then.
    */
   const [settling, setSettling] = useState(false);
+  /**
+   * Which category the mounted window is built around while the row moves.
+   *
+   * Only consulted during a move. The window is normally centred on the
+   * current category, but that changes at the instant of the commit — which
+   * is the instant the row starts moving — so the category beyond the one
+   * arriving was mounted mid-animation, a whole page of grid cells built
+   * during the one moment that has to be smooth. Holding the centre where
+   * it was means the three pages already on screen are the three that stay
+   * on screen: the page arriving was a neighbour a moment ago and is
+   * already built, so the move mounts nothing at all.
+   */
+  const [windowCentre, setWindowCentre] = useState(index);
   /** Distinguishes the timer of the current move from an earlier one's. */
   const settleToken = useRef(0);
 
@@ -283,6 +296,8 @@ export function CategoryPager({
     */
     if (!seen.has(activeId)) setSeen(new Set(seen).add(activeId));
     setSettling(true);
+    /* Where the window stays until the row stops. See `windowCentre`. */
+    setWindowCentre(index);
     const token = settleToken.current + 1;
     settleToken.current = token;
     onSelect(arriving);
@@ -400,9 +415,16 @@ export function CategoryPager({
     The current category and the one either side. Keyed by category id, so a
     page keeps the same component — and with it its list, its cells and
     wherever the viewer had scrolled it — as the window moves across it.
+
+    While the row is moving the centre is held one behind, so the window is
+    the same three pages that were already mounted and the move builds
+    nothing. The instant it is not moving the centre is the current category
+    again, which is also what makes a chip tap — where nothing moves and
+    `settling` is never set — land on a correct window immediately.
   */
+  const centre = settling ? windowCentre : index;
   const windowIds: string[] = [];
-  for (let i = index - 1; i <= index + 1; i++) {
+  for (let i = centre - 1; i <= centre + 1; i++) {
     if (i >= 0 && i < ids.length) windowIds.push(ids[i]);
   }
 
