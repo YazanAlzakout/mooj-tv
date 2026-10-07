@@ -14,6 +14,7 @@ import {
 import { Focusable } from "@/components/Focusable";
 
 import { CachedImage } from "@/components/CachedImage";
+import { forgetImageFailures } from "@/core/media/deadImageHosts";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BouncePressable } from "@/components/BouncePressable";
@@ -124,7 +125,30 @@ export default function MoviesCategoriesScreen() {
 
   const [movies, setMovies] = useState<MovieSummary[] | null>(() => getVodMovies());
   const [categories, setCategories] = useState<CategoryTab[] | null>(null);
-  const [activeCategoryId, setActiveCategoryId] = useState<string>(ALL_CATEGORY_ID);
+  const [chosenCategoryId, setActiveCategoryId] = useState<string>(ALL_CATEGORY_ID);
+  /**
+   * The category actually being shown, which is not always the one chosen.
+   *
+   * A chosen id can stop existing: it is dropped when the viewer hides that
+   * category, when the provider stops listing it, or when its last channel
+   * goes — and on Live TV it is remembered across launches, so it can
+   * arrive already stale. Nothing used to reconcile the two, and the three
+   * things that read it then disagreed: the header counted nought, the
+   * grid fell back to "All" through the pager's own clamp, and the strip
+   * filled in no chip at all, because none of them matched. The viewer saw
+   * "0 channels" written over a full lineup with nothing highlighted, and
+   * only tapping a chip got out of it.
+   *
+   * Derived rather than corrected in an effect: an effect that calls
+   * `setState` on a render is a cascade this project's lint rules reject,
+   * and there is nothing to correct anyway — what is shown *is* a function
+   * of the chosen id and the list that exists.
+   */
+  const activeCategoryId = useMemo(() => {
+    const strip = categories ?? [];
+    if (strip.length === 0) return chosenCategoryId;
+    return strip.some((c) => c.id === chosenCategoryId) ? chosenCategoryId : strip[0].id;
+  }, [categories, chosenCategoryId]);
   /*
     Where the viewer was in each category, and the order a sideways drag
     steps through. Both read the same list the chip strip is built from,
@@ -212,6 +236,12 @@ export default function MoviesCategoriesScreen() {
   }, [searchInput]);
 
   async function handleRefresh() {
+    /*
+      A pull is the viewer saying "try again", and artwork is the part of the
+      screen they can see has failed. Without this the only cure for a tile
+      that went blank on a bad connection was killing the app.
+    */
+    forgetImageFailures();
     setRefreshing(true);
     await load(true);
     setRefreshing(false);

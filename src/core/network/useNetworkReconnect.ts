@@ -1,4 +1,5 @@
 import { useNetworkState } from "expo-network";
+import { forgetImageFailures } from "@/core/media/deadImageHosts";
 import { useEffect, useRef } from "react";
 
 /**
@@ -52,6 +53,13 @@ export function useNetworkReconnect(onReconnect: () => void): void {
     if (!isConnected) return;
     if (wasDisconnectedRef.current) {
       wasDisconnectedRef.current = false;
+      /*
+        Every artwork failure recorded while the line was down says nothing
+        about the image or its host — only about the line. Keeping them
+        meant a customer who walked through a tunnel came out to a catalogue
+        of empty tiles that stayed empty until the app was killed.
+      */
+      forgetImageFailures();
       onReconnectRef.current();
     }
   }, [isConnected, isDisconnected]);

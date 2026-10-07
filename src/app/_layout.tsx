@@ -1,3 +1,4 @@
+import { useNetworkReconnect } from "@/core/network/useNetworkReconnect";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
@@ -92,7 +93,21 @@ export default function RootLayout() {
  * Split from `RootLayout` only so it can read the theme — a provider's own
  * component cannot consume the context it creates.
  */
+/** Stable, so the root's reconnect listener is never re-subscribed. */
+const NOTHING_TO_RESELECT = () => {};
+
 function ThemedRoot() {
+  /*
+    Mounted here so the whole app recovers, not only the player.
+
+    This hook clears the recorded artwork failures when the line comes back,
+    and until now the only screen that used it was the live player — so a
+    customer whose signal dropped while browsing kept a catalogue of empty
+    tiles no matter how good the signal became afterwards. The callback is
+    empty on purpose: there is nothing for the root to re-select, and the
+    recovery is the hook's own doing.
+  */
+  useNetworkReconnect(NOTHING_TO_RESELECT);
   const { colors, scheme } = useTheme();
   const [introDone, setIntroDone] = useState(false);
 

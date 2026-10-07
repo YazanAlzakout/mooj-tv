@@ -139,11 +139,26 @@ function isHostLevelFailure(error: string | null | undefined): boolean {
     text.includes("unable to resolve host") ||
     text.includes("no address associated") ||
     text.includes("connectexception") ||
-    text.includes("failed to connect") ||
-    text.includes("sockettimeout") ||
-    text.includes("timeout")
+    text.includes("failed to connect")
   );
 }
+
+/*
+  **Timeouts used to be on that list and must not be.**
+
+  A socket timeout is the signature of a weak line, not of a host that has
+  gone away, and a provider serves its whole catalogue of posters and logos
+  from one or two hosts. So three slow requests on two bars of signal — not
+  a rare event — marked every image in the catalogue unrequestable: posters
+  on Movies and Series, logos on Live TV, in the guide, in the split list,
+  in History, Library and Search, all of them blank at once. Nothing cleared
+  it, so full signal did not help and only killing the app did.
+
+  A name that will not resolve, or a connection actively refused, really is
+  the host. A timeout is still remembered per URL, which stops that one
+  image being asked for again and leaves the rest of the host alone — the
+  safe direction this file already describes.
+*/
 
 /**
  * Records that this image failed to load. Safe to call more than once.
@@ -172,6 +187,26 @@ export function noteImageFailed(
   const host = hostOf(uri);
   if (!host) return;
   failuresByHost.set(host, (failuresByHost.get(host) ?? 0) + 1);
+}
+
+/**
+ * Forget every recorded failure, URL and host alike.
+ *
+ * Called when the network comes back, and when the session changes. Both
+ * of those invalidate the only thing this file knows: that something failed
+ * *before*. A URL that timed out on two bars is not a bad URL, and a host
+ * that could not be reached on a dead connection is not a dead host — but
+ * nothing here can tell the difference at the time, so the record is kept
+ * and then dropped at the two moments it is known to be stale.
+ *
+ * Without this the state was permanent for the life of the process: the
+ * overflow at `MAX_REMEMBERED_FAILURES` clears the URL set only, and
+ * switching provider, signing out and pulling to refresh all leave the host
+ * map untouched.
+ */
+export function forgetImageFailures(): void {
+  failedUrls.clear();
+  failuresByHost.clear();
 }
 
 /**

@@ -284,4 +284,26 @@ export const migrations: Migration[] = [
       ALTER TABLE app_state DROP COLUMN tv_channel_layout;
     `,
   },
+  {
+    /*
+     * The index `getDownloadByContent` has always needed (2026-10-07).
+     *
+     * `download_tasks` carried indexes on `status` and `updated_at` only,
+     * while the query every row of an episode list runs on mount looks up
+     * `(content_type, provider_item_id)` — so each one was a full table scan.
+     * A series on this provider can run past two hundred episodes, and the
+     * list is virtualized, so a fling re-mounts rows continuously and fires
+     * one scan per row on the thread that draws the screen. That is the
+     * pattern this project has twice removed and documented as removed.
+     *
+     * The index does not remove the per-row query — that needs the state
+     * hoisting out of the row, which is a larger change — but it turns each
+     * one from a scan of every download ever recorded into a point lookup.
+     */
+    version: 20,
+    up: `
+      CREATE INDEX IF NOT EXISTS idx_download_tasks_content
+        ON download_tasks(content_type, provider_item_id);
+    `,
+  },
 ];
