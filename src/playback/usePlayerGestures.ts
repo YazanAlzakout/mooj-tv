@@ -239,6 +239,8 @@ export function usePlayerGestures(
    * startup would be its own bug.
    */
   const volumeRef = useRef(1);
+  /** The dim level last pushed to React, so a move that changes nothing costs nothing. */
+  const dimPercentRef = useRef(1);
   const kindRef = useRef<GestureHudKind>(null);
   /** When the last volume write went out, for the throttle. */
   const lastVolumeWriteRef = useRef(0);
@@ -423,6 +425,22 @@ export function usePlayerGestures(
           player.volume = next;
           trace(`set=${next.toFixed(3)} readback=${String(player.volume)} muted=${String(player.muted)}`);
         } else {
+          /*
+            The same early return the volume branch makes above, and for the
+            same reason — it was simply never written here.
+
+            `setDim` and `showHud` are React state read by the fullscreen
+            player, and nothing in that subtree is memoised, so every move
+            event re-rendered the whole screen while a video was decoding.
+            A finger crossing the screen produces move events far faster
+            than the dim can visibly change: at `DIM_MAX` the overlay has
+            about a hundred distinguishable steps, and a drag fires several
+            hundred events. Rounding to the percent the viewer can actually
+            see drops the great majority of those renders and changes
+            nothing about how the gesture looks.
+          */
+          if (Math.round(next * 100) === Math.round(dimPercentRef.current * 100)) return;
+          dimPercentRef.current = next;
           const nextDim = (1 - next) * DIM_MAX;
           trace(`dim=${Math.round(next * 100)}%`);
           dimRef.current = nextDim;

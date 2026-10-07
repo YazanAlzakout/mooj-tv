@@ -214,5 +214,20 @@ export function clearImageCache(): void {
   inFlight.clear();
   onDisk.clear();
   cachedDirectory = null;
-  indexPrimed = false;
+  /*
+    **Still primed, because the index is now accurate — it is empty.**
+
+    Clearing this flag read as "re-read the directory next time" and meant
+    the opposite: `primeCacheIndex` is called once per process, from the
+    root on mount, so nothing ever set it back. For the rest of the session
+    `knownLocalUri` returned null for every URL and the render path could
+    never hand a local file to the image loader again — the first-launch
+    warm-up the viewer waited through was not just deleted but unreachable,
+    with no path back short of restarting the app.
+
+    The three maps above have just been emptied in the same breath, so what
+    this flag promises — that the in-memory index matches the directory —
+    is true, not false.
+  */
+  indexPrimed = true;
 }

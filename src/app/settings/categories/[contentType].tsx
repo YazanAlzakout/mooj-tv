@@ -150,7 +150,17 @@ export default function CategoryVisibilityScreen() {
               <Switch value={!hidden.has(item.id)} onValueChange={() => toggle(item.id)} trackColor={{ true: Brand.primary }} />
             </View>
           )}
-          getItemLayout={(_, index) => ({ length: 58, offset: 58 * index, index })}
+          /*
+            Fifty-eight plus eight. The row is 58 tall with an 8 bottom
+            margin, and this is the one list in the app whose content
+            container also adds an 8 gap between cells — so the pitch is
+            74, not 58. With `getItemLayout` supplied a list never measures
+            a cell and trusts this arithmetic completely, so the promise
+            drifted by a quarter of the distance scrolled and the window
+            rendered the wrong rows once a long category list was scrolled
+            far enough for the drift to outrun the buffer.
+          */
+          getItemLayout={(_, index) => ({ length: 74, offset: 74 * index, index })}
           initialNumToRender={16}
           windowSize={7}
         />

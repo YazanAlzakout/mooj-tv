@@ -159,6 +159,17 @@ export function CategoryTabs({
   progress?: SharedValue<number>;
 }) {
   const listRef = useAnimatedRef<FlatList<CategoryTabItem>>();
+  /**
+   * The pending retry, so a category change can call it off.
+   *
+   * Nothing held it before, so a chain armed for the old chip went on
+   * firing `scrollToIndex` for the old index after the category had
+   * changed — dragging the strip back to where it had just come from for
+   * as long as a second. Resetting the counter made it worse: the old
+   * chain's next failure read as a fresh one and was given six more
+   * attempts of its own.
+   */
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Which chip the list has refused to scroll to, and how often. See the handler. */
   const retried = useRef({ index: -1, count: 0 });
   const activeIndex = categories.findIndex((category) => category.id === activeId);
@@ -273,6 +284,8 @@ export function CategoryTabs({
   */
   useEffect(() => {
     if (activeIndex < 0) return;
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    retryTimer.current = null;
     retried.current = { index: -1, count: 0 };
     bring(activeIndex);
     /*
@@ -365,7 +378,11 @@ export function CategoryTabs({
               animated: true,
             });
           }
-          setTimeout(() => bring(info.index), SCROLL_RETRY_MS);
+          if (retryTimer.current) clearTimeout(retryTimer.current);
+          retryTimer.current = setTimeout(() => {
+            retryTimer.current = null;
+            bring(info.index);
+          }, SCROLL_RETRY_MS);
         }}
         data={categories}
         keyExtractor={(item) => item.id}
