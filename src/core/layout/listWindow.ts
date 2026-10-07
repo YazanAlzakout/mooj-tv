@@ -76,6 +76,27 @@ export const LIST_WINDOW = isTvBuild
     };
 
 /**
+ * For a page the viewer has not reached yet (`CategoryPager`).
+ *
+ * Two of the three pages on a browse screen are off the edge, waiting to be
+ * dragged into view, and one of them is brand new after every move — mounted
+ * at the exact moment the transition starts. At the full window that is a
+ * dozen cells built while the screen is animating, which is a stutter the
+ * viewer can feel on every swipe.
+ *
+ * A third of the cells, built more slowly, is enough: the page only has to
+ * look right along the edge it is revealed from, and it is given the full
+ * window the moment the viewer actually arrives on it.
+ */
+export const QUIET_LIST_WINDOW = {
+  initialNumToRender: 4,
+  maxToRenderPerBatch: 2,
+  updateCellsBatchingPeriod: 80,
+  windowSize: 2,
+  removeClippedSubviews: undefined as boolean | undefined,
+};
+
+/**
  * The one prop every remote-navigated list needs, for the lists that are not
  * grids and therefore do not take `LIST_WINDOW`.
  *

@@ -102,6 +102,24 @@ const PAGE_DIM = 0.3;
 const STRANDED_MS = 400;
 
 /**
+ * How long new work is held off after a move, in milliseconds.
+ *
+ * The settle plus a margin. Everything a move costs — the arriving page's
+ * artwork, and the mounting of the page beyond it — used to happen at the
+ * instant of the commit, which is the instant the row starts moving, so the
+ * viewer felt a stutter on every single swipe. None of it is urgent: the
+ * page arriving is already built and already scrolled where it was left, so
+ * the only thing it is waiting for is pictures, and the page beyond it is
+ * not on screen at all.
+ *
+ * The cost of this is honest and worth naming: posters appear about a third
+ * of a second after the page lands rather than during the slide. That is a
+ * wait you can see, placed where nothing is moving, instead of a stutter in
+ * the one moment that has to be smooth.
+ */
+const SETTLE_WORK_MS = 360;
+
+/**
  * One page, placed by its distance from the current category.
  *
  * A component of its own because the depth is computed per page on the UI
@@ -226,6 +244,17 @@ export function CategoryPager({
    * that has just opened still fetch nothing.
    */
   const [seen, setSeen] = useState<Set<string>>(() => new Set([activeId]));
+  /**
+   * True from the moment a move commits until the row has stopped.
+   *
+   * While it is set, a page that is merely *active* does not get artwork —
+   * only a page already in `seen` does. That is what keeps the arriving
+   * page from fetching its posters during the slide. A category reached by
+   * tapping a chip is unaffected, because nothing is moving then.
+   */
+  const [settling, setSettling] = useState(false);
+  /** Distinguishes the timer of the current move from an earlier one's. */
+  const settleToken = useRef(0);
 
   /** +1 or −1 while a committed change is on its way to React; 0 otherwise. */
   const shift = useRef(0);
@@ -246,13 +275,23 @@ export function CategoryPager({
       already causes.
     */
     const arriving = ids[next];
-    if (!seen.has(arriving) || !seen.has(activeId)) {
-      const grown = new Set(seen);
-      grown.add(activeId);
-      grown.add(arriving);
-      setSeen(grown);
-    }
+    /*
+      The page being left is recorded now — it already has its artwork and
+      must keep it while it slides away. The page arriving is recorded
+      later, with `settling`, so that nothing it needs is fetched or built
+      while the row is moving.
+    */
+    if (!seen.has(activeId)) setSeen(new Set(seen).add(activeId));
+    setSettling(true);
+    const token = settleToken.current + 1;
+    settleToken.current = token;
     onSelect(arriving);
+    setTimeout(() => {
+      /* A later move has already taken over; that one owns the end of it. */
+      if (settleToken.current !== token) return;
+      setSettling(false);
+      setSeen((already) => (already.has(arriving) ? already : new Set(already).add(arriving)));
+    }, SETTLE_WORK_MS);
     /*
       If the screen declines the change, nothing will straighten the row. One
       timer per commit is a cheap price for never leaving the grid displaced.
@@ -372,7 +411,7 @@ export function CategoryPager({
       <View style={styles.fill}>
         {windowIds.map((id) => (
           <Page key={id} offset={ids.indexOf(id) - index} width={width} translateX={translateX}>
-            {renderPage(id, seen.has(id) || id === ids[index])}
+            {renderPage(id, seen.has(id) || (!settling && id === ids[index]))}
           </Page>
         ))}
       </View>

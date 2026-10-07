@@ -27,7 +27,7 @@ import { CategoryPager } from "@/components/CategoryPager";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { useCategoryDrag } from "@/core/layout/useCategoryDrag";
 import { useCategoryPages } from "@/core/layout/useCategoryPages";
-import { LIST_WINDOW } from "@/core/layout/listWindow";
+import { LIST_WINDOW, QUIET_LIST_WINDOW } from "@/core/layout/listWindow";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
@@ -413,7 +413,7 @@ export default function MoviesCategoriesScreen() {
           offset: gridRowHeight * index,
           index,
         })}
-        {...LIST_WINDOW}
+        {...(pageActive ? LIST_WINDOW : QUIET_LIST_WINDOW)}
       />
         )}
       />
