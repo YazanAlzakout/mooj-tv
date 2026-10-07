@@ -388,7 +388,19 @@ export function CategoryPager({
     .onEnd((event, success) => {
       "worklet";
       const w = Math.max(1, widthValue.value);
-      const travelled = Math.abs(startX.value + event.translationX);
+      /*
+        **Measured from this gesture alone, never from where the row happens
+        to be.**
+
+        `startX` exists so a drag can pick the row up mid-settle and carry on
+        from there; it has no business in the decision. Reading the decision
+        from `startX + translationX` inverted it: after a commit the row is
+        re-based a full screen width and springs home over 300 ms, so a drag
+        begun in the first half of that window started with the threshold
+        already crossed and with the sign of the *leftover offset* rather
+        than of the finger. Swiping forward twice in quick succession landed
+        back on the category it started from.
+      */
       const distance = Math.abs(event.translationX);
       const flicked =
         Math.abs(event.velocityX) > COMMIT_VELOCITY && distance > FLICK_MIN_DISTANCE;
@@ -399,11 +411,11 @@ export function CategoryPager({
         alone sent a reversing flick — dragged one way, thrown back the other —
         to the category opposite the one it was thrown towards.
       */
-      const forward = flicked ? event.velocityX < 0 : startX.value + event.translationX < 0;
+      const forward = flicked ? event.velocityX < 0 : event.translationX < 0;
       const target = indexValue.value + (forward ? 1 : -1);
       const blocked = target < 0 || target >= countValue.value;
 
-      if (!success || blocked || (travelled < w * COMMIT_FRACTION && !flicked)) {
+      if (!success || blocked || (distance < w * COMMIT_FRACTION && !flicked)) {
         translateX.value = withSpring(0, SETTLE);
         drag.value = withSpring(0, SETTLE);
         return;

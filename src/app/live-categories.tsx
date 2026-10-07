@@ -26,7 +26,7 @@ import { useI18n } from "@/core/i18n/I18nContext";
 import { useCategoryDrag } from "@/core/layout/useCategoryDrag";
 import { useCategoryPages } from "@/core/layout/useCategoryPages";
 import { LIST_WINDOW, QUIET_LIST_WINDOW } from "@/core/layout/listWindow";
-import { imageHostIsDead, noteImageFailed } from "@/core/media/deadImageHosts";
+import { artworkIsKnownBad, noteImageFailed } from "@/core/media/deadImageHosts";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { AndroidTextFix, ArtworkTile, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
@@ -636,7 +636,24 @@ function ChannelCard({
    * in CachedImage — and it is only consulted when the cell mounts, which
    * is the only moment the decision matters.
    */
-  const [logoFailed, setLogoFailed] = useState(() => imageHostIsDead(channel.logoUrl));
+  /*
+    **The same test `CachedImage` uses, and that is the whole point.**
+
+    This asked `imageHostIsDead`, which is host-level only — three connect
+    failures against one host. `CachedImage` suppresses on the wider
+    `artworkIsKnownBad`, which also covers a single URL that has already
+    404'd, and it suppresses by returning null before any image exists.
+
+    Between those two tests sat the failure this provider produces most: a
+    live host answering 404 for one logo. The card took the image branch
+    because the host was healthy, `CachedImage` returned null because the
+    URL was known bad, and the ternary below had already swapped the letter
+    out — so the tile drew empty. With no image mounted `onError` could
+    never fire either, so the cell could not correct itself for the rest of
+    the session. Movies and Series never showed this because their skeleton
+    sits permanently behind the poster instead of being swapped out.
+  */
+  const [logoFailed, setLogoFailed] = useState(() => artworkIsKnownBad(channel.logoUrl));
   /*
    * The saved state is handed down, not looked up here. Every card used to
    * run its own `isInLibrary` query on mount, and virtualised cells mount
