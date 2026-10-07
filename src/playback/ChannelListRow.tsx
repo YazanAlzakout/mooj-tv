@@ -2,6 +2,7 @@ import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { CachedImage } from "@/components/CachedImage";
+import { artworkIsKnownBad } from "@/core/media/deadImageHosts";
 import { Focusable } from "@/components/Focusable";
 import { AndroidTextFix, Brand, Colors, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { LiveChannel } from "@/domain/provider/types";
@@ -40,7 +41,24 @@ export function ChannelListRow({
   tvFocusFirst?: boolean;
   onPress: () => void;
 }) {
-  const [logoFailed, setLogoFailed] = useState(false);
+  /*
+    **The same test `CachedImage` uses, not a blank `false`.**
+
+    The branch below swaps the letter OUT for the image, so whenever
+    `CachedImage` declines to render — and it declines by returning null,
+    before any image exists, for a URL already known bad — this row drew
+    nothing at all where the logo goes. Starting from `false` meant that
+    happened on every mount after the first failure, and with no image
+    mounted `onError` could never fire, so the row could not correct
+    itself for the rest of the session.
+
+    This is the second site of the defect fixed on the browse grid in
+    45d89d0; that one at least consulted the host, this one asked nothing.
+    It matters more here: the modern channel view keeps seven screens of
+    rows in its window, so a list that is scrolled at all remounts rows
+    continuously beside a playing video.
+  */
+  const [logoFailed, setLogoFailed] = useState(() => artworkIsKnownBad(channel.logoUrl));
 
   return (
     <Focusable onPress={onPress} style={[styles.row, active && styles.rowActive]} hasTVPreferredFocus={tvFocusFirst}>
