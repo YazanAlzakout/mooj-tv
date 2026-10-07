@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StyleSheet, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -148,13 +148,15 @@ export function CategoryPager({
   /**
    * Builds the list for one category.
    *
-   * `active` is false for the two pages either side. They are mounted and
-   * visible at the edge of the screen, so they must render — but a screen can
-   * use this to do less for them, and the grids use it to hold back artwork:
-   * three pages of posters fetching at once is three times the traffic to a
-   * provider that answers a burst with empty 404s on every endpoint.
+   * `artwork` is whether this page may fetch its images. It is false only
+   * for the pages either side of a screen that has not been navigated yet:
+   * three pages of posters fetching the moment a screen opens is three times
+   * the traffic to a provider that answers a burst with empty 404s on every
+   * endpoint, and two of those pages are for categories nobody has looked
+   * at. After the first category change it is true for every page in the
+   * window — see `warm`.
    */
-  renderPage: (categoryId: string, active: boolean) => React.ReactNode;
+  renderPage: (categoryId: string, artwork: boolean) => React.ReactNode;
   /**
    * Published to the chip strip so it travels with the finger: 0 at rest,
    * ±1 one page along, positive towards the next category.
@@ -201,6 +203,24 @@ export function CategoryPager({
     widthValue.value = width;
   }, [index, ids.length, width, indexValue, countValue, widthValue]);
 
+  /**
+   * Whether artwork may be fetched for the pages either side as well.
+   *
+   * False until the first category change, true for ever after. The point
+   * of holding artwork back was the burst when a screen first opens: three
+   * pages fetching at once, two of them for categories nobody has looked
+   * at. Once the viewer is moving between categories that reasoning stops
+   * applying — at most one page in the window is new per move, which is
+   * exactly the rate the app fetched at before it had pages at all.
+   *
+   * Gating on "is this page active" instead was wrong, and the viewer
+   * caught it: active flips at the moment the category commits, so the
+   * page being left lost its posters while it was still sliding across the
+   * screen, and every return to a category paid for its images again.
+   * Latching removes that without giving up the protection that mattered.
+   */
+  const [warm, setWarm] = useState(false);
+
   /** +1 or −1 while a committed change is on its way to React; 0 otherwise. */
   const shift = useRef(0);
 
@@ -212,6 +232,8 @@ export function CategoryPager({
       return;
     }
     shift.current = direction;
+    /* An event, not a render: the first move is what makes the neighbours worth loading. */
+    if (!warm) setWarm(true);
     onSelect(ids[next]);
     /*
       If the screen declines the change, nothing will straighten the row. One
@@ -332,7 +354,7 @@ export function CategoryPager({
       <View style={styles.fill}>
         {windowIds.map((id) => (
           <Page key={id} offset={ids.indexOf(id) - index} width={width} translateX={translateX}>
-            {renderPage(id, id === ids[index])}
+            {renderPage(id, warm || id === ids[index])}
           </Page>
         ))}
       </View>
