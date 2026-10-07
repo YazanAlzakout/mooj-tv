@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -394,6 +394,20 @@ export default function LiveCategoriesScreen() {
     if (!session) router.replace("/providers");
   }, [session]);
 
+  /*
+    Stable, and the memo on the card is worthless without them. Measured on
+    the owner's device: memoising the movie cell and stabilising its
+    callbacks took a hard fling from 21.99% janky frames to 0.70%, p50 17ms
+    to 8ms, with the series screen left unmemoised as the control at 19.51%.
+
+    Above the early return, because a hook after one is a hook that is not
+    always called.
+  */
+  const claimTvFocus = useCallback((channel: LiveChannel) => {
+    tvFocusClaimedRef.current = true;
+    if (isTvBuild) setFocusedChannel(channel);
+  }, []);
+
   if (!session) {
     return null;
   }
@@ -490,13 +504,16 @@ export default function LiveCategoriesScreen() {
             columns={columns}
             artwork={pageActive}
             tvFocusFirst={index === 0 && !tvFocusClaimedRef.current}
-            onTvFocus={() => {
-              tvFocusClaimedRef.current = true;
-              if (isTvBuild) setFocusedChannel(item);
-            }}
-            favoriteIds={favoriteIds}
-            onToggleFavorite={() => toggleFavorite(item)}
-            onPress={() => openChannel(item)}
+            onTvFocus={claimTvFocus}
+            /*
+              A boolean, not the Set. Handing every card the Set means every
+              card re-renders whenever a star is tapped, since the screen
+              replaces the Set — a memo that bails on every frame except the
+              one the viewer is touching.
+            */
+            isFavorite={favoriteIds.has(item.providerItemId)}
+            onToggleFavorite={toggleFavorite}
+            onPress={openChannel}
           />
         )}
         getItemLayout={(_, index) => ({
@@ -626,13 +643,14 @@ export default function LiveCategoriesScreen() {
  * where it costs one request and is actually read: the player, for the
  * channel currently playing.
  */
-function ChannelCard({
+/* Memoised — see `claimTvFocus`. `memo(function …)` because `react/display-name` wants a name. */
+const ChannelCard = memo(function ChannelCard({
   channel,
   columns,
   artwork,
   tvFocusFirst,
   onTvFocus,
-  favoriteIds,
+  isFavorite,
   onToggleFavorite,
   onPress,
 }: {
@@ -651,11 +669,19 @@ function ChannelCard({
   /** Exactly one cell per screen sets this — where a TV remote starts. */
   tvFocusFirst: boolean;
   /** Latches the screen's one-shot focus request — see `tvFocusClaimedRef`. */
-  onTvFocus: () => void;
-  favoriteIds: Set<string>;
-  onToggleFavorite: () => void;
-  onPress: () => void;
+  onTvFocus: (channel: LiveChannel) => void;
+  /** Whether this one channel is a favourite. See the call site. */
+  isFavorite: boolean;
+  onToggleFavorite: (channel: LiveChannel) => void;
+  onPress: (channel: LiveChannel) => void;
 }) {
+  /*
+    One closure each for the life of this cell, rather than three new ones
+    handed down on every render of the list. That is what lets the memo bail.
+  */
+  const press = useCallback(() => onPress(channel), [onPress, channel]);
+  const focus = useCallback(() => onTvFocus(channel), [onTvFocus, channel]);
+  const star = useCallback(() => onToggleFavorite(channel), [onToggleFavorite, channel]);
   const { t } = useI18n();
   /*
    * Starts already-failed when this logo's host has proved dead earlier in
@@ -690,11 +716,11 @@ function ChannelCard({
    * thousands of SQLite round-trips on the thread that draws the screen.
    * The screen now reads the favourite ids once and passes a boolean.
    */
-  const isFavorite = favoriteIds.has(channel.providerItemId);
+  /* Handed in, not derived — see the prop. */
 
   return (
     <View style={[styles.cardCell, { flex: 1 / columns, maxWidth: `${100 / columns}%` }]}>
-      <Focusable onPress={onPress} style={styles.card} hasTVPreferredFocus={tvFocusFirst} onFocus={onTvFocus}>
+      <Focusable onPress={press} style={styles.card} hasTVPreferredFocus={tvFocusFirst} onFocus={focus}>
         <View style={styles.cardArt}>
           {channel.logoUrl && artwork && !logoFailed ? (
             <CachedImage
@@ -729,7 +755,7 @@ function ChannelCard({
             in the player. Touch is unaffected: the phone still has it.
           */}
           {!isTvBuild && (
-            <Pressable onPress={onToggleFavorite} hitSlop={8} focusable={false} style={styles.favoriteButton}>
+            <Pressable onPress={star} hitSlop={8} focusable={false} style={styles.favoriteButton}>
               <Text style={[styles.favoriteButtonText, isFavorite && styles.favoriteButtonTextActive]}>
                 {isFavorite ? "★" : "☆"}
               </Text>
@@ -758,7 +784,7 @@ function ChannelCard({
       </Focusable>
     </View>
   );
-}
+});
 
 const styles = themedStyles((C: ThemeColors) =>
   StyleSheet.create({

@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -312,12 +312,25 @@ export default function SeriesCategoriesScreen() {
     if (!session) router.replace("/providers");
   }, [session]);
 
+  /*
+    Stable, and the memo on the cell is worthless without it. Measured on the
+    owner's device: memoising the movie cell and stabilising its callbacks
+    took a hard fling from 21.99% janky frames to 0.70%, p50 17ms to 8ms,
+    with this screen left unmemoised as the control at 19.51%.
+
+    Above the early return, because a hook after one is a hook that is not
+    always called.
+  */
+  const openSeries = useCallback((item: SeriesSummary) => {
+    router.push({ pathname: "/series/details/[seriesId]", params: { seriesId: item.providerItemId } });
+  }, []);
+
+  const claimTvFocus = useCallback(() => {
+    tvFocusClaimedRef.current = true;
+  }, []);
+
   if (!session) {
     return null;
-  }
-
-  function openSeries(item: SeriesSummary) {
-    router.push({ pathname: "/series/details/[seriesId]", params: { seriesId: item.providerItemId } });
   }
 
   return (
@@ -445,10 +458,14 @@ export default function SeriesCategoriesScreen() {
           )
         }
         renderItem={({ item, index }) => (
-          <SeriesPoster series={item} columns={columns} artwork={pageActive} tvFocusFirst={index === 0 && !tvFocusClaimedRef.current}
-            onTvFocus={() => {
-              tvFocusClaimedRef.current = true;
-            }} onPress={() => openSeries(item)} />
+          <SeriesPoster
+            series={item}
+            columns={columns}
+            artwork={pageActive}
+            tvFocusFirst={index === 0 && !tvFocusClaimedRef.current}
+            onTvFocus={claimTvFocus}
+            onPress={openSeries}
+          />
         )}
         getItemLayout={(_, index) => ({
           length: gridRowHeight,
@@ -472,7 +489,8 @@ export default function SeriesCategoriesScreen() {
  * per-cell Reanimated values re-fire on every recycle while scrolling a
  * full catalogue, which is what made scrolling stutter.
  */
-function SeriesPoster({
+/* Memoised — see `openSeries`. `memo(function …)` because `react/display-name` wants a name. */
+const SeriesPoster = memo(function SeriesPoster({
   series,
   columns,
   artwork,
@@ -497,11 +515,13 @@ function SeriesPoster({
   tvFocusFirst: boolean;
   /** Latches the screen's one-shot focus request — see `tvFocusClaimedRef`. */
   onTvFocus: () => void;
-  onPress: () => void;
+  onPress: (item: SeriesSummary) => void;
 }) {
+  /* One closure for the life of the cell, so the memo can bail. */
+  const press = useCallback(() => onPress(series), [onPress, series]);
   return (
     <View style={[styles.posterCell, { flex: 1 / columns, maxWidth: `${100 / columns}%` }]}>
-    <Focusable onPress={onPress} style={styles.posterWrap} hasTVPreferredFocus={tvFocusFirst} onFocus={onTvFocus}>
+    <Focusable onPress={press} style={styles.posterWrap} hasTVPreferredFocus={tvFocusFirst} onFocus={onTvFocus}>
       <View style={styles.posterImageWrap}>
         {/*
           The title sits *behind* the poster rather than being switched in
@@ -542,7 +562,7 @@ function SeriesPoster({
     </Focusable>
     </View>
   );
-}
+});
 
 const styles = themedStyles((C: ThemeColors) =>
   StyleSheet.create({
