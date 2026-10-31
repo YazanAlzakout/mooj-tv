@@ -62,17 +62,17 @@ const ANDROID_PACKAGE = isDevId ? "com.albasera.player.dev" : "com.albasera.play
  * never uploaded, so those numbers are still free on Play. 14/15 was built
  * and sideloaded on the test television; 20/21 was the last pair before the
  * television moved to its own repository and its own 200+ range, and this
- * one is 22/23 — so `dumpsys package` can always say which build a device
+ * one is 24/25 — so `dumpsys package` can always say which build a device
  * is actually running, which is how a build that had silently never
  * produced an APK at all was caught.
  *
- * 22 rather than 21 on purpose: the repository disagrees with itself about
- * whether 20 was uploaded or only sideloaded (the comment above says 10/11
- * are the only codes on Play; the 2026-09-18 baseline commit says 20 went up
- * as 2.1). 22 is free under either account, so the upload cannot be refused
- * over a number nobody can now confirm.
+ * 24 rather than 23: on 2026-10-28 Play refused 22 outright, saying that
+ * version code 22 had already been used. So the 6 October build did reach
+ * a test track after all, and the repository record of what was uploaded
+ * cannot be trusted on its own. 23 is the television half of that same
+ * refused pair, so the next pair certainly free is 24/25.
  */
-const VERSION_CODE_BASE = 22;
+const VERSION_CODE_BASE = 24;
 
 /*
  * Phone and TV are one app on Play — same listing, same package id, with
