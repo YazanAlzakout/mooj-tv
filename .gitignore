@@ -67,3 +67,9 @@ signing.properties
 
 # CMake/ninja scratch for the native module — same story as build/ above.
 modules/*/android/.cxx/
+
+# JVM crash dumps. Gradle drops these in the project root when the
+# daemon dies, which on this machine means it ran out of memory. They are
+# diagnostics for one run on one machine, never source.
+hs_err_pid*.log
+replay_pid*.log
