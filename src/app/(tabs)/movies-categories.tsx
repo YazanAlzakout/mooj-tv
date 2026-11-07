@@ -1,4 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -381,12 +382,26 @@ export default function MoviesCategoriesScreen() {
             needs in order not to be clipped.
           */}
           {categories && categories.length > 1 && (
+            /*
+             * The strip arrives rather than simply being there. A transform
+             * is safe even though this component measures itself: onLayout
+             * reports layout position, which a transform does not move, so
+             * the chip centring still lands on the right chip.
+             *
+             * Nothing below this is animated. The grid is a CategoryPager,
+             * which places its pages by absolute offset and was tuned down
+             * to 0.70% janky frames by taking work out of exactly this
+             * moment. An entrance wrapped round it would put that work
+             * straight back.
+             */
+            <Animated.View entering={FadeInDown.delay(60).duration(380).springify().damping(18)}>
             <CategoryTabs
               categories={categories}
               activeId={activeCategoryId}
               onSelect={setActiveCategoryId}
               progress={categoryDrag}
             />
+            </Animated.View>
           )}
 
           <TextInput

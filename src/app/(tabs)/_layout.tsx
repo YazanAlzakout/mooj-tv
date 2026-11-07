@@ -2,6 +2,7 @@ import { Tabs } from "expo-router/js-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
+  AnimatedTabGlyph,
   HomeGlyph,
   LiveGlyph,
   MoreGlyph,
@@ -87,35 +88,45 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: t("tabs", "home"),
-          tabBarIcon: ({ color }) => <HomeGlyph color={color} size={22} />,
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabGlyph Glyph={HomeGlyph} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="live-categories"
         options={{
           title: t("home", "liveTV"),
-          tabBarIcon: ({ color }) => <LiveGlyph color={color} size={22} />,
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabGlyph Glyph={LiveGlyph} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="movies-categories"
         options={{
           title: t("home", "movies"),
-          tabBarIcon: ({ color }) => <MoviesGlyph color={color} size={22} />,
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabGlyph Glyph={MoviesGlyph} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="series-categories"
         options={{
           title: t("home", "series"),
-          tabBarIcon: ({ color }) => <SeriesGlyph color={color} size={22} />,
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabGlyph Glyph={SeriesGlyph} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="more"
         options={{
           title: t("tabs", "more"),
-          tabBarIcon: ({ color }) => <MoreGlyph color={color} size={22} />,
+          tabBarIcon: ({ color, focused }) => (
+            <AnimatedTabGlyph Glyph={MoreGlyph} color={color} focused={focused} />
+          ),
         }}
       />
     </Tabs>

@@ -1,6 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Focusable } from "@/components/Focusable";
@@ -58,12 +59,14 @@ export default function MoreScreen() {
             glyph="⌕"
             tint={Brand.primaryLight}
             label={t("home", "search")}
+            delay={0}
             onPress={() => router.push("/search")}
           />
           <Row
             glyph="★"
             tint="#F6C445"
             label={t("home", "favorites")}
+            delay={55}
             count={favoriteCount}
             onPress={() =>
               router.push({ pathname: "/library/[listType]", params: { listType: "favorite" } })
@@ -73,6 +76,7 @@ export default function MoreScreen() {
             glyph="⏱"
             tint="#8B5CF6"
             label={t("home", "watchLater")}
+            delay={110}
             count={watchLaterCount}
             onPress={() =>
               router.push({ pathname: "/library/[listType]", params: { listType: "watch_later" } })
@@ -83,6 +87,7 @@ export default function MoreScreen() {
               glyph="⬇"
               tint="#06B6D4"
               label={t("home", "downloads")}
+            delay={165}
               count={downloadsCount}
               onPress={() => router.push("/downloads")}
             />
@@ -91,12 +96,14 @@ export default function MoreScreen() {
             glyph="◷"
             tint={Brand.primary}
             label={t("history", "title")}
+            delay={220}
             onPress={() => router.push("/history")}
           />
           <Row
             glyph="⚙"
             tint="#94A3B8"
             label={t("home", "settings")}
+            delay={275}
             onPress={() => router.push("/settings")}
           />
         </ScrollView>
@@ -118,15 +125,24 @@ function Row({
   tint,
   label,
   count,
+  delay,
   onPress,
 }: {
   glyph: string;
   tint: string;
   label: string;
   count?: number | null;
+  delay: number;
   onPress: () => void;
 }): ReactNode {
   return (
+    /*
+     * Each row arrives a beat after the one above it. 55ms is small enough
+     * that the list still reads as one object settling rather than six
+     * things queueing, and the whole cascade is over in a third of a
+     * second — before anyone could have decided what to tap.
+     */
+    <Animated.View entering={FadeInDown.delay(delay).duration(340).springify().damping(16)}>
     <Focusable onPress={onPress} style={styles.row}>
       <View style={[styles.glyphWrap, { backgroundColor: tint + "22", borderColor: tint + "55" }]}>
         <Text style={[styles.glyph, { color: tint }]}>{glyph}</Text>
@@ -137,6 +153,7 @@ function Row({
       {typeof count === "number" && <Text style={styles.count}>{count}</Text>}
       <Text style={styles.chevron}>›</Text>
     </Focusable>
+    </Animated.View>
   );
 }
 

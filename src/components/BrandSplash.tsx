@@ -5,11 +5,27 @@ import { Image, StyleSheet, View } from "react-native";
 import Animated, { FadeOut } from "react-native-reanimated";
 
 import { brandLogoSource } from "./BrandLogo";
+import { Brand } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles } from "@/core/theme/themedStyles";
 
-/** Hard ceiling — the app must never be gated on the intro clip finishing, or failing to. */
-const MAX_SPLASH_MS = 2600;
+/**
+ * Hard ceiling — the app must never be gated on the intro clip finishing,
+ * or failing to.
+ *
+ * Raised from 2600 when the brand's own intro replaced the generated one:
+ * that clip runs 4.70s, and the old ceiling cut it at the moment the
+ * wordmark arrived, so nobody ever saw it land. This is the clip plus half
+ * a second, and it is still a ceiling rather than a wait — `playToEnd`
+ * almost always fires first.
+ *
+ * **It is also the price of the intro.** Startup work on a warm launch
+ * finishes well inside a second, so the remainder is the animation and
+ * nothing else, on every single launch. If that ever reads as slow, the
+ * answer is to play the full clip on first launch only and a short silent
+ * cut afterwards — not to trim the piece itself.
+ */
+const MAX_SPLASH_MS = 5200;
 
 /**
  * Brand intro clip, played once over the app's own background while fonts,
@@ -26,7 +42,17 @@ export function BrandSplash({ onFinish }: { onFinish: () => void }) {
 
   const player = useVideoPlayer(require("../../assets/images/splash-vid.mp4"), (p) => {
     p.loop = false;
-    p.muted = true;
+    /*
+     * Unmuted, deliberately, and this is the one decision here a viewer
+     * will have an opinion about. The clip carries a calm four-second bed
+     * written for it; muted, the file would be shipping an audio track
+     * nobody could ever hear, which is what the previous build did.
+     *
+     * Android honours the ringer: on a phone set to silent this plays
+     * nothing, which is the behaviour most people expect from an app that
+     * makes noise at launch.
+     */
+    p.muted = false;
     p.play();
   });
 
@@ -80,7 +106,14 @@ const styles = themedStyles((C: ThemeColors) =>
     width: 260,
     height: 260,
     borderRadius: 130,
-    backgroundColor: "rgba(229,9,20,0.16)",
+    /*
+     * Was a hard-coded red — the other brand's accent, written as a
+     * literal rather than a token, so changing the palette left it behind
+     * and the name-based brand check could not see it either. Only ever
+     * visible on a device that cannot decode the clip, which is exactly
+     * where a wrong colour would go unnoticed longest.
+     */
+    backgroundColor: Brand.primaryMuted,
   },
   logo: { width: 180, height: 100 },
   })

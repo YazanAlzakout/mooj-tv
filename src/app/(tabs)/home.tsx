@@ -5,7 +5,7 @@ import { FlatList, Image, ScrollView, StyleSheet, Text, View } from "react-nativ
 import { NO_CLIP } from "@/core/layout/listWindow";
 
 import { CachedImage } from "@/components/CachedImage";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BouncePressable } from "@/components/BouncePressable";
@@ -217,7 +217,13 @@ export default function HomeScreen() {
           </Animated.View>
 
           {featured.length > 0 && (
-            <>
+            /*
+             * The section arrives as one piece — header and rail together.
+             * The cards inside are deliberately left alone; see the note on
+             * FeaturedCard for why a recycling row must not have an
+             * entrance of its own.
+             */
+            <Animated.View entering={FadeInDown.delay(90).duration(420).springify().damping(17)}>
               <SectionHeader title={t("home", "featured")} />
               <FlatList
         {...NO_CLIP}
@@ -228,9 +234,10 @@ export default function HomeScreen() {
                 contentContainerStyle={styles.rail}
                 renderItem={({ item }) => <FeaturedCard item={item} onPress={() => openFeatured(item)} />}
               />
-            </>
+            </Animated.View>
           )}
 
+          <Animated.View entering={FadeInDown.delay(180).duration(420).springify().damping(17)}>
           <SectionHeader
             title={t("home", "continueWatching")}
             action={
@@ -263,6 +270,7 @@ export default function HomeScreen() {
               )}
             />
           )}
+          </Animated.View>
         </ScrollView>
       </SafeAreaView>
 
@@ -299,9 +307,14 @@ export default function HomeScreen() {
 
 /**
  * No `entering` animation: the rails are horizontal FlatLists, so cards
- * recycle as they scroll and an entrance would re-fire each time. Home's
- * entrance motion lives on the fixed elements above (header, browse cards,
- * quick actions), which mount exactly once.
+ * recycle as they scroll and an entrance would re-fire each time — a card
+ * would fade in again every time it came back round, which reads as a
+ * glitch rather than as motion.
+ *
+ * Home's entrance motion therefore lives on things that mount exactly
+ * once. That used to mean the browse cards and the quick-action grid;
+ * those moved to the tab bar and the more screen, so it is now the header
+ * and the two section wrappers, each a beat behind the last.
  */
 function FeaturedCard({ item, onPress }: { item: FeaturedItem; onPress: () => void }) {
   const [failed, setFailed] = useState(false);

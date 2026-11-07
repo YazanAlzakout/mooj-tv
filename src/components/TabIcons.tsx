@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { View, type ColorValue } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 /**
  * The five glyphs in the bottom tab bar.
@@ -195,5 +197,49 @@ export function MoreGlyph({ color, size }: GlyphProps) {
         <View style={dot} />
       </View>
     </Box>
+  );
+}
+
+/**
+ * The glyph as the tab bar actually renders it: scaled up and lifted a
+ * couple of pixels while its tab is the selected one.
+ *
+ * The bar already interpolates the tint, so without this the only thing
+ * that moves when a viewer changes section is a colour — which reads as a
+ * screenshot changing rather than as a thing responding. The spring is
+ * small on purpose: this fires on every tab press, several times a minute,
+ * and anything with real travel in it becomes tiring by the third day.
+ *
+ * `{ duration, dampingRatio }` is the Reanimated 4 spring form. The older
+ * `{ stiffness, damping }` pair still works, but `restDisplacementThreshold`
+ * and friends do not — version 4 ignores them in silence, which is how a
+ * spring that looked configured sat visibly wrong for a week in the project
+ * this was cloned from.
+ */
+export function AnimatedTabGlyph({
+  Glyph,
+  color,
+  focused,
+}: {
+  Glyph: (props: GlyphProps) => React.ReactElement;
+  color: ColorValue;
+  focused: boolean;
+}) {
+  const lift = useSharedValue(focused ? 1 : 0);
+
+  useEffect(() => {
+    lift.value = withSpring(focused ? 1 : 0, { duration: 340, dampingRatio: 0.68 });
+    // `lift` is a shared value and never changes identity; `focused` is the input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + lift.value * 0.15 }, { translateY: -lift.value * 2 }],
+  }));
+
+  return (
+    <Animated.View style={style}>
+      <Glyph color={color} size={22} />
+    </Animated.View>
   );
 }
