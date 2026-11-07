@@ -130,7 +130,6 @@ export default function LiveCategoriesScreen() {
   useThemeRerender();
   const { t } = useI18n();
   const session = getActiveSession();
-  const columns = useGridColumns(PORTRAIT_COLUMNS);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   /*
    * Turned sideways the categories move to a strip on top, so nothing
@@ -155,8 +154,16 @@ export default function LiveCategoriesScreen() {
     `useSafeAreaInsets` reports that padding. Leaving it out overstated the
     row height by the width of two 96dp margins spread across the columns.
   */
+  /*
+   * Width first, then the column count, then the row height — in that
+   * order and not the other way round. The count is now worked out FROM
+   * the row height a given count would produce (see useGridColumns), and
+   * the row height needs the grid's width, which does not depend on the
+   * count. No cycle, but the declaration order has to say so.
+   */
   const gridWidth =
     windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : phoneRail);
+  const columns = useGridColumns(PORTRAIT_COLUMNS, (c) => rowHeight(gridWidth, c));
   const gridRowHeight = rowHeight(gridWidth, columns);
 
   const [categories, setCategories] = useState<CategoryTab[] | null>(null);

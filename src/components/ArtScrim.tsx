@@ -1,72 +1,80 @@
-import { StyleSheet, View } from "react-native";
+import { Image, StyleSheet } from "react-native";
 
 /**
  * The shade that lets a title be read over artwork.
  *
- * ## Why it is eight views and not one
+ * ## It is one image, and it had to become one
  *
- * The first version was a single translucent band across the bottom
- * 46% of the card. On screen that is a straight horizontal line drawn
- * across every poster — through faces, through titles printed on the
- * artwork itself — and it reads as a rendering fault rather than as a
- * treatment. It was visible in every screenshot taken of it.
+ * This has now been three things. A single translucent band drew a
+ * straight line across every poster. Eight stacked bands with rising
+ * alphas were meant to hide that line by splitting it into eight smaller
+ * ones — and on screen they did not hide it, they multiplied it: a
+ * screenshot of the home hero on 2026-11-08 shows all eight edges as
+ * clear horizontal steps across a bright still.
  *
- * A gradient is the right answer and `expo-linear-gradient` is a native
- * module this project does not carry. Eight stacked bands get there
- * instead, and they ramp by themselves: each is the same low alpha, and
- * because they overlap, the shade compounds towards the bottom —
- * `1 - (1 - a)^n` at n overlapping layers. One value to tune, and no step
- * large enough to find at this size.
+ * The reason is that a flat band has a hard edge no matter how faint it
+ * is. The eye finds a discontinuity in a smooth surface far below the
+ * contrast at which it can name the shade either side of it — which is
+ * why a sky photographed in 8-bit bands and a sky painted in eight steps
+ * both look wrong, and why neither gets better by making the steps
+ * fainter.
+ *
+ * So the ramp is painted into a file instead. `assets/images/art-scrim.png`
+ * is 4 by 512 pixels of black whose alpha follows `0.74 * (y/h)²`, built
+ * with ffmpeg; its largest step between adjacent rows is one part in 255,
+ * which is the smallest difference the format can hold. Stretched over the
+ * card, the hardware interpolates between those rows, so there is no edge
+ * anywhere in it to find.
+ *
+ * ## What it costs
+ *
+ * One native view instead of eight, on a screen that draws this on every
+ * card — twelve on a grid, fourteen more down the home rows. The file is
+ * 231 bytes. There was never a performance argument for the stack; it was
+ * eight views doing worse than one.
+ *
+ * `expo-linear-gradient` would also solve it and remains the one thing
+ * this does not reach for: it is a native module, and a 231-byte asset
+ * does not justify one.
  *
  * ## Why it reaches so far up
  *
  * To 62% of the height, which is more than a single line of text needs.
- * Titles wrap: a two-line name on a poster whose shade stopped at 40%
- * had its first line sitting on bare artwork, which is the case that was
+ * Titles wrap: a two-line name on a poster whose shade stopped at 40% had
+ * its first line sitting on bare artwork, which is the case that was
  * actually unreadable. The shade has to cover the tallest title the card
- * can produce, not the usual one.
+ * can produce, not the usual one. The square curve means that extra reach
+ * costs almost nothing — at the halfway mark the shade is still only 18%,
+ * and the artwork reads through it.
  */
-
-/**
- * Each band as [height, alpha], tallest and faintest first.
- *
- * The alphas rise rather than repeating, and that is the whole trick. With
- * one value for all eight, the topmost edge carried the full step — on a
- * bright still that edge was a visible line drawn across the picture, which
- * is the fault the single band had, only eight times smaller. Starting at
- * 0.05 puts the first edge below what the eye can find, and every edge
- * after it lands on ground already darkened, where the same delta reads as
- * less. They compound to about 0.70 at the foot, which is what a white
- * title needs.
- */
-const BANDS: [number, number][] = [
-  [0.62, 0.05],
-  [0.54, 0.06],
-  [0.46, 0.08],
-  [0.39, 0.1],
-  [0.32, 0.13],
-  [0.25, 0.17],
-  [0.18, 0.22],
-  [0.11, 0.28],
-];
-
 export function ArtScrim() {
   return (
-    <>
-      {BANDS.map(([h, a]) => (
-        <View
-          key={h}
-          pointerEvents="none"
-          style={[
-            styles.band,
-            { height: `${h * 100}%`, backgroundColor: `rgba(5,10,20,${a})` },
-          ]}
-        />
-      ))}
-    </>
+    <Image
+      source={require("../../assets/images/art-scrim.png")}
+      style={styles.scrim}
+      /*
+       * `stretch`, not `cover`: this is a ramp, not a picture. Its aspect
+       * ratio means nothing and preserving it would letterbox the shade.
+       */
+      resizeMode="stretch"
+      /* Android fades a decoded image in by default; a scrim must not arrive late. */
+      fadeDuration={0}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  band: { position: "absolute", left: 0, right: 0, bottom: 0 },
+  /*
+   * `pointerEvents` lives in the style here, not as a prop: `Image` does
+   * not take the prop (checked against the installed ImageProps), and a
+   * shade that swallows a tap on the card under it is a broken card.
+   */
+  scrim: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "62%",
+    pointerEvents: "none",
+  },
 });

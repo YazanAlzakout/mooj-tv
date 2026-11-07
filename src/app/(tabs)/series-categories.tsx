@@ -117,7 +117,6 @@ export default function SeriesCategoriesScreen() {
   useThemeRerender();
   const { t } = useI18n();
   const session = getActiveSession();
-  const columns = useGridColumns(PORTRAIT_COLUMNS);
   /*
      * The list's own width, not the window's. The grid sits inside a
      * `SafeAreaView` with every edge enabled, and SDK 57 draws edge to edge,
@@ -151,6 +150,14 @@ export default function SeriesCategoriesScreen() {
   */
   const gridWidth =
     windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : phoneRail);
+  /*
+   * Width first, then the column count, then the row height — in that
+   * order and not the other way round. The count is now worked out FROM
+   * the row height a given count would produce (see useGridColumns), and
+   * the row height needs the grid's width, which does not depend on the
+   * count. No cycle, but the declaration order has to say so.
+   */
+  const columns = useGridColumns(PORTRAIT_COLUMNS, (c) => rowHeight(gridWidth, c));
   const gridRowHeight = rowHeight(gridWidth, columns);
 
   const [series, setSeries] = useState<SeriesSummary[] | null>(() => getSeriesList());
