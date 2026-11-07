@@ -197,6 +197,17 @@ const ar: TranslationShape = {
     noVodEmpty: "تم الاتصال، لكن هذا المزود لم يُرجع أي قنوات مباشرة.",
   },
 
+  /*
+   * The bottom tab bar's own two labels.
+   *
+   * Live, Movies and Series are not repeated here: the bar reads them from
+   * `home`, so renaming a section renames it everywhere at once.
+   */
+  tabs: {
+    home: "الرئيسية",
+    more: "المزيد",
+  },
+
   home: {
     welcomeBack: "مرحبًا بعودتك",
     search: "بحث",

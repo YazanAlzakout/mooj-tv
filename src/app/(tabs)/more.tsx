@@ -1,0 +1,186 @@
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useState, type ReactNode } from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { Focusable } from "@/components/Focusable";
+import { ScreenBackground } from "@/components/ScreenBackground";
+import { ScreenHeader } from "@/components/ScreenHeader";
+import { useI18n } from "@/core/i18n/I18nContext";
+import type { ThemeColors } from "@/core/theme/palettes";
+import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
+import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
+import { getDownloadsSummary } from "@/db/repositories/downloadRepository";
+import { getLibraryCount } from "@/db/repositories/libraryRepository";
+import { downloadsSupported } from "@/domain/downloads/eligibility";
+
+/**
+ * Everything that is not a content section.
+ *
+ * The app this was cloned from put these on the home screen as a grid of
+ * square tiles, where they competed for the first screen with the content
+ * itself. They are not a destination anybody opens the app for: they are
+ * what you go looking for when you already know what you want. So they get
+ * a list — scannable top to bottom, one line each, the count on the right —
+ * and the home screen gets its space back.
+ *
+ * Counts are refreshed on focus rather than on mount. This is a tab: it
+ * stays mounted while the viewer stars something three screens away, and a
+ * favourites count that only ever read right on the first visit would be
+ * worse than showing none at all.
+ */
+export default function MoreScreen() {
+  useThemeRerender();
+  const { t } = useI18n();
+
+  const [favoriteCount, setFavoriteCount] = useState<number | null>(null);
+  const [watchLaterCount, setWatchLaterCount] = useState<number | null>(null);
+  const [downloadsCount, setDownloadsCount] = useState<number | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      getLibraryCount("favorite").then(setFavoriteCount);
+      getLibraryCount("watch_later").then(setWatchLaterCount);
+      if (downloadsSupported()) getDownloadsSummary().then((s) => setDownloadsCount(s.count));
+    }, [])
+  );
+
+  return (
+    <ScreenBackground>
+      <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+        <ScreenHeader title={t("tabs", "more")} />
+
+        <ScrollView
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+        >
+          <Row
+            glyph="⌕"
+            tint={Brand.primaryLight}
+            label={t("home", "search")}
+            onPress={() => router.push("/search")}
+          />
+          <Row
+            glyph="★"
+            tint="#F6C445"
+            label={t("home", "favorites")}
+            count={favoriteCount}
+            onPress={() =>
+              router.push({ pathname: "/library/[listType]", params: { listType: "favorite" } })
+            }
+          />
+          <Row
+            glyph="⏱"
+            tint="#8B5CF6"
+            label={t("home", "watchLater")}
+            count={watchLaterCount}
+            onPress={() =>
+              router.push({ pathname: "/library/[listType]", params: { listType: "watch_later" } })
+            }
+          />
+          {downloadsSupported() && (
+            <Row
+              glyph="⬇"
+              tint="#06B6D4"
+              label={t("home", "downloads")}
+              count={downloadsCount}
+              onPress={() => router.push("/downloads")}
+            />
+          )}
+          <Row
+            glyph="◷"
+            tint={Brand.primary}
+            label={t("history", "title")}
+            onPress={() => router.push("/history")}
+          />
+          <Row
+            glyph="⚙"
+            tint="#94A3B8"
+            label={t("home", "settings")}
+            onPress={() => router.push("/settings")}
+          />
+        </ScrollView>
+      </SafeAreaView>
+    </ScreenBackground>
+  );
+}
+
+/**
+ * One line of the list.
+ *
+ * `count` is deliberately three-state: `null` while the query is still in
+ * flight, a number once it answers, and `undefined` for a row that has no
+ * count at all. Collapsing the first two would flash a zero on every visit
+ * and read as "you have no favourites" for as long as the database takes.
+ */
+function Row({
+  glyph,
+  tint,
+  label,
+  count,
+  onPress,
+}: {
+  glyph: string;
+  tint: string;
+  label: string;
+  count?: number | null;
+  onPress: () => void;
+}): ReactNode {
+  return (
+    <Focusable onPress={onPress} style={styles.row}>
+      <View style={[styles.glyphWrap, { backgroundColor: tint + "22", borderColor: tint + "55" }]}>
+        <Text style={[styles.glyph, { color: tint }]}>{glyph}</Text>
+      </View>
+      <Text style={styles.label} numberOfLines={1}>
+        {label}
+      </Text>
+      {typeof count === "number" && <Text style={styles.count}>{count}</Text>}
+      <Text style={styles.chevron}>›</Text>
+    </Focusable>
+  );
+}
+
+const styles = themedStyles((C: ThemeColors) =>
+  StyleSheet.create({
+    safeArea: { flex: 1 },
+    list: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl, gap: Spacing.sm },
+    row: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: Spacing.md,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.md,
+      backgroundColor: C.surface,
+      borderRadius: Radii.lg,
+      borderWidth: 1,
+      borderColor: C.border,
+    },
+    glyphWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: Radii.md,
+      borderWidth: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    glyph: { fontSize: 18, ...AndroidTextFix },
+    label: {
+      flex: 1,
+      color: C.text,
+      fontFamily: FontFamily.medium,
+      fontSize: 15,
+      ...AndroidTextFix,
+    },
+    count: {
+      color: C.textSecondary,
+      fontFamily: FontFamily.semiBold,
+      fontSize: 13,
+      ...AndroidTextFix,
+    },
+    chevron: {
+      color: C.textMuted,
+      fontSize: 20,
+      ...AndroidTextFix,
+    },
+  })
+);

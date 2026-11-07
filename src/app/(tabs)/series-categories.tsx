@@ -335,7 +335,9 @@ export default function SeriesCategoriesScreen() {
 
   return (
     <ScreenBackground>
-      <SafeAreaView style={styles.safeArea}>
+      {/* No bottom edge: the tab bar below already clears the gesture area,
+          and asking for it here too leaves a second empty strip. */}
+      <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <ScreenHeader
         title={t("seriesCategories", "title")}
         subtitle={`${filteredSeries.length.toLocaleString()} ${t("seriesGrid", "seriesCountSuffix")}`}

@@ -532,7 +532,9 @@ export default function LiveCategoriesScreen() {
 
   return (
     <ScreenBackground>
-      <SafeAreaView style={styles.safeArea}>
+      {/* No bottom edge: the tab bar below already clears the gesture area,
+          and asking for it here too leaves a second empty strip. */}
+      <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <ScreenHeader
         title={t("liveCategories", "title")}
         subtitle={`${filteredChannels.length.toLocaleString()} ${t("liveChannelList", "channelsCountSuffix")}`}

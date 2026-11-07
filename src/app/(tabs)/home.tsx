@@ -1,11 +1,11 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { FlatList, Image, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { FlatList, Image, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { NO_CLIP } from "@/core/layout/listWindow";
 
 import { CachedImage } from "@/components/CachedImage";
-import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BouncePressable } from "@/components/BouncePressable";
@@ -14,21 +14,15 @@ import { ScreenBackground } from "@/components/ScreenBackground";
 import { SectionHeader } from "@/components/SectionHeader";
 import { BRAND } from "@/core/brand";
 import { useI18n } from "@/core/i18n/I18nContext";
-import { isTvBuild } from "@/core/platform/isTvBuild";
-import { AndroidTextFix, Brand, CategoryColors, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
+import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import { brandLogoSource } from "@/components/BrandLogo";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
-import { getAppState, type AppState } from "@/db/repositories/appStateRepository";
-import { getDownloadsSummary } from "@/db/repositories/downloadRepository";
-import { getLibraryCount } from "@/db/repositories/libraryRepository";
-import { getLiveTvState } from "@/db/repositories/liveTvStateRepository";
 import {
   clearAllWatchProgress,
   getRecentWatchProgress,
   type WatchProgressEntry,
 } from "@/db/repositories/watchProgressRepository";
-import { downloadsSupported } from "@/domain/downloads/eligibility";
 import { clearActiveSession, getActiveSession } from "@/state/activeSessionStore";
 import { getSeriesList } from "@/state/seriesStore";
 import { getVodMovies } from "@/state/vodStore";
@@ -119,15 +113,7 @@ export default function HomeScreen() {
   useThemeRerender();
   const { t } = useI18n();
   const session = useMemo(() => getActiveSession(), []);
-  const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
-  const [movieCount, setMovieCount] = useState<number | null>(null);
-  const [seriesCount, setSeriesCount] = useState<number | null>(null);
   const [continueWatching, setContinueWatching] = useState<WatchProgressEntry[]>([]);
-  const [favoriteCount, setFavoriteCount] = useState(0);
-  const [watchLaterCount, setWatchLaterCount] = useState(0);
-  const [downloadsCount, setDownloadsCount] = useState(0);
-  const [appState, setAppState] = useState<AppState | null>(null);
   const [featured, setFeatured] = useState<FeaturedItem[]>([]);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
@@ -138,13 +124,7 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setMovieCount(getVodMovies()?.length ?? null);
-      setSeriesCount(getSeriesList()?.length ?? null);
       refreshContinueWatching();
-      getLibraryCount("favorite").then(setFavoriteCount);
-      getLibraryCount("watch_later").then(setWatchLaterCount);
-      getDownloadsSummary().then((s) => setDownloadsCount(s.count));
-      getAppState().then(setAppState);
       setFeatured(pickFeatured());
     }, [refreshContinueWatching])
   );
@@ -181,44 +161,6 @@ export default function HomeScreen() {
     }
   }
 
-  /**
-   * With the modern layout on, the channel grid is not a step on the way to
-   * watching — the split view carries its own category strip and channel
-   * list, so stopping at the grid first would just be the old flow wearing
-   * a new coat. Straight to the player, on the channel last watched (or the
-   * first one on a fresh install), already playing.
-   */
-  async function openLiveTv() {
-    /*
-     * A television always goes to the channel list — the category rail
-     * beside the grid is the only TV layout, resolved 2026-09-10 after the
-     * three selectable modes were removed (they were a settings choice the
-     * viewer had to discover, and two of them made the remote worse rather
-     * than better). `splitChannelView` describes the phone's portrait
-     * stack and never applies here.
-     */
-    if (isTvBuild) {
-      router.push("/live-categories");
-      return;
-    }
-
-    if (!session || !appState?.splitChannelView) {
-      router.push("/live-categories");
-      return;
-    }
-    const liveState = await getLiveTvState().catch(() => null);
-    const target =
-      session.channels.find((c) => c.providerItemId === liveState?.lastChannelId) ?? session.channels[0];
-    if (!target) {
-      router.push("/live-categories");
-      return;
-    }
-    router.push({
-      pathname: "/live/player/[channelId]",
-      params: { channelId: target.providerItemId, categoryId: liveState?.lastCategoryId ?? "all" },
-    });
-  }
-
   function openFeatured(item: FeaturedItem) {
     if (item.contentType === "movie") {
       router.push({ pathname: "/movies/details/[movieId]", params: { movieId: item.providerItemId } });
@@ -227,10 +169,6 @@ export default function HomeScreen() {
     }
   }
 
-  const showLive = appState?.liveSectionVisible ?? true;
-  const showMovies = appState?.moviesSectionVisible ?? true;
-  const showSeries = appState?.seriesSectionVisible ?? true;
-  const anyBrowseVisible = showLive || showMovies || showSeries;
 
   return (
     /* The drifting particles run entirely on the native thread (Reanimated
@@ -238,7 +176,9 @@ export default function HomeScreen() {
        per frame), so they cost the scrolling rails below nothing. Kept to a
        low count regardless: this is a background accent, not an effect. */
     <ScreenBackground particles>
-      <SafeAreaView style={styles.safeArea}>
+      {/* No bottom edge: the tab bar below already clears the gesture area,
+          and asking for it here too leaves a second empty strip. */}
+      <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Animated.View entering={FadeIn.duration(500)} style={styles.header}>
             <Image
@@ -274,84 +214,6 @@ export default function HomeScreen() {
                 <Text style={styles.disconnectButtonText}>✕</Text>
               </BouncePressable>
             </View>
-          </Animated.View>
-
-          {anyBrowseVisible && (
-            <>
-              <SectionHeader title={t("home", "browse")} />
-              <View style={styles.browseRow}>
-                {showLive && (
-                  <BrowseCard
-                    label={t("home", "liveTV")}
-                    count={session.channels.length.toLocaleString()}
-                    icon={<TvIcon />}
-                    landscape={isLandscape}
-                    color={CategoryColors.live}
-                    delay={80}
-                    onPress={openLiveTv}
-                  />
-                )}
-                {showMovies && (
-                  <BrowseCard
-                    label={t("home", "movies")}
-                    count={movieCount !== null ? movieCount.toLocaleString() : "—"}
-                    icon={<Text style={styles.browseGlyph}>▶</Text>}
-                    landscape={isLandscape}
-                    color={CategoryColors.movies}
-                    delay={160}
-                    onPress={() => router.push("/movies-categories")}
-                  />
-                )}
-                {showSeries && (
-                  <BrowseCard
-                    label={t("home", "series")}
-                    count={seriesCount !== null ? seriesCount.toLocaleString() : "—"}
-                    icon={<CameraIcon />}
-                    landscape={isLandscape}
-                    color={CategoryColors.series}
-                    delay={240}
-                    onPress={() => router.push("/series-categories")}
-                  />
-                )}
-              </View>
-            </>
-          )}
-
-          <SectionHeader title={t("home", "quickActions")} />
-          <Animated.View entering={FadeInUp.delay(300).duration(500)} style={styles.actionsRow}>
-            <ActionCard
-              landscape={isLandscape}
-              glyph="★"
-              tint="#EC4899"
-              label={t("home", "favorites")}
-              count={favoriteCount}
-              onPress={() => router.push({ pathname: "/library/[listType]", params: { listType: "favorite" } })}
-            />
-            <ActionCard
-              landscape={isLandscape}
-              glyph="◷"
-              tint="#F59E0B"
-              label={t("home", "watchLater")}
-              count={watchLaterCount}
-              onPress={() => router.push({ pathname: "/library/[listType]", params: { listType: "watch_later" } })}
-            />
-            {downloadsSupported() && (
-              <ActionCard
-                landscape={isLandscape}
-                glyph="⬇"
-                tint="#06B6D4"
-                label={t("home", "downloads")}
-                count={downloadsCount}
-                onPress={() => router.push("/downloads")}
-              />
-            )}
-            <ActionCard
-              landscape={isLandscape}
-              glyph="⚙"
-              tint="#8B5CF6"
-              label={t("home", "settings")}
-              onPress={() => router.push("/settings")}
-            />
           </Animated.View>
 
           {featured.length > 0 && (
@@ -516,115 +378,6 @@ function ContinueWatchingCard({ entry, onPress }: { entry: WatchProgressEntry; o
   );
 }
 
-/**
- * Live TV and Series are drawn from plain views rather than picked out of
- * the font. There is no monochrome character in Unicode for "a television
- * with two antennas" or "a stack of episodes", and the colour emoji that
- * come closest ignore the tint and clash with the flat white icons beside
- * them. A handful of bordered boxes costs nothing and says exactly the
- * right thing.
- */
-function TvIcon() {
-  return (
-    <View style={styles.tvIcon}>
-      <View style={styles.tvAntennaBar}>
-        <View style={[styles.tvAntenna, styles.tvAntennaLeft]} />
-        <View style={[styles.tvAntenna, styles.tvAntennaRight]} />
-      </View>
-      <View style={styles.tvScreen} />
-    </View>
-  );
-}
-
-/**
- * A shoulder camcorder — body, carry handle and lens. The lens is a
- * border-drawn triangle, which is the standard way to get a solid
- * non-rectangular shape in React Native without pulling in an SVG
- * renderer for one icon.
- */
-function CameraIcon() {
-  return (
-    <View style={styles.camIcon}>
-      <View style={styles.camHandle} />
-      <View style={styles.camRow}>
-        <View style={styles.camBody} />
-        <View style={styles.camLens} />
-      </View>
-    </View>
-  );
-}
-
-function BrowseCard({
-  label,
-  count,
-  icon,
-  color,
-  delay,
-  landscape,
-  onPress,
-}: {
-  label: string;
-  count: string;
-  icon: ReactNode;
-  color: string;
-  delay: number;
-  landscape: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Animated.View
-      entering={FadeInDown.delay(delay).duration(550).springify().damping(15)}
-      style={styles.browseCardWrap}
-    >
-      <BouncePressable style={[styles.browseCard, { backgroundColor: color }]} onPress={onPress}>
-        <View style={styles.browseGlow} />
-        <View style={styles.browseIconWrap}>{icon}</View>
-        <Text style={[styles.browseCount, !landscape && styles.browseCountPortrait]}>{count}</Text>
-        <Text style={styles.browseLabel} numberOfLines={1}>
-          {label}
-        </Text>
-      </BouncePressable>
-    </Animated.View>
-  );
-}
-
-function ActionCard({
-  label,
-  count,
-  glyph,
-  tint,
-  landscape,
-  onPress,
-}: {
-  label: string;
-  count?: number;
-  glyph: string;
-  tint: string;
-  landscape: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <BouncePressable
-      style={[styles.actionCard, landscape && styles.actionCardLandscape, { borderColor: `${tint}33` }]}
-      onPress={onPress}
-    >
-      <View
-        style={[styles.actionIconWrap, landscape && styles.actionIconWrapLandscape, { backgroundColor: `${tint}22` }]}
-      >
-        <Text style={[styles.actionGlyph, { color: tint }]}>{glyph}</Text>
-      </View>
-      <Text style={styles.actionLabel} numberOfLines={1}>
-        {label}
-      </Text>
-      {count !== undefined && count > 0 && (
-        <View style={[styles.actionBadge, { backgroundColor: tint }]}>
-          <Text style={[styles.actionBadgeText, !landscape && styles.actionBadgeTextPortrait]}>{count}</Text>
-        </View>
-      )}
-    </BouncePressable>
-  );
-}
-
 const styles = themedStyles((C: ThemeColors) =>
   StyleSheet.create({
   safeArea: { flex: 1 },
@@ -695,88 +448,17 @@ const styles = themedStyles((C: ThemeColors) =>
   },
   disconnectButtonText: { color: Brand.primaryLight, fontSize: 16, fontFamily: FontFamily.bold },
 
-  browseRow: { flexDirection: "row", gap: Spacing.md },
-  browseCardWrap: { flex: 1 },
-  browseCard: {
-    height: 128,
-    borderRadius: Radii.lg,
-    overflow: "hidden",
-    padding: Spacing.md,
-    justifyContent: "flex-end",
-    gap: 2,
-  },
-  browseGlow: {
-    position: "absolute",
-    top: -34,
-    end: -22,
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-  browseIconWrap: {
-    position: "absolute",
-    top: Spacing.md,
-    start: Spacing.md,
-    width: 38,
-    height: 38,
-    borderRadius: Radii.md,
-    backgroundColor: "rgba(255,255,255,0.18)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  browseGlyph: { color: "#fff", fontSize: 18 },
 
-  tvIcon: { alignItems: "center" },
-  tvAntennaBar: { width: 22, height: 6 },
-  tvAntenna: {
-    position: "absolute",
-    bottom: -1,
-    width: 1.5,
-    height: 10,
-    borderRadius: 1,
-    backgroundColor: "#fff",
-  },
-  tvAntennaLeft: { start: 6, transform: [{ rotate: "-33deg" }] },
-  tvAntennaRight: { end: 6, transform: [{ rotate: "33deg" }] },
-  tvScreen: { width: 20, height: 13.5, borderRadius: 3, borderWidth: 1.5, borderColor: "#fff" },
 
-  camIcon: { alignItems: "flex-start" },
-  camHandle: {
-    width: 9,
-    height: 2.5,
-    borderTopStartRadius: 1.5,
-    borderTopEndRadius: 1.5,
-    backgroundColor: "#fff",
-    marginStart: 3,
-    marginBottom: 1,
-  },
-  camRow: { flexDirection: "row", alignItems: "center" },
-  camBody: { width: 16, height: 13, borderRadius: 3, borderWidth: 1.6, borderColor: "#fff" },
   /**
    * A right-pointing triangle built from borders: zero-size box, a solid
    * start border for the body of the shape and transparent top/bottom
    * borders for its slopes.
    */
-  camLens: {
-    width: 0,
-    height: 0,
-    marginStart: 1.5,
-    borderTopWidth: 4.5,
-    borderBottomWidth: 4.5,
-    borderStartWidth: 7,
-    borderTopColor: "transparent",
-    borderBottomColor: "transparent",
-    borderStartColor: "#fff",
-    borderEndWidth: 0,
-  },
-  browseCount: { color: "#fff", fontSize: 21, fontFamily: FontFamily.extraBold },
   /**
    * Portrait only. Landscape already has narrower cards and shorter rows,
    * so the same figure carries the card there rather than crowding it.
    */
-  browseCountPortrait: { fontSize: 19 },
-  browseLabel: { color: "rgba(255,255,255,0.92)", fontSize: 12, fontFamily: FontFamily.medium },
 
   /**
    * An explicit percentage width per card, not `flexBasis` + `flexGrow`
@@ -785,48 +467,18 @@ const styles = themedStyles((C: ThemeColors) =>
    * row in landscape, where the screen is twice as wide and half as tall
    * and a 2×2 block of tall cards ate most of the viewport.
    */
-  actionsRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm },
   /**
    * Sized down by roughly a quarter, and most of what went was the empty
    * frame rather than the content: the vertical padding was `xl` on both
    * sides, which put more dead space in the card than icon and label
    * together.
    */
-  actionCard: {
-    width: "48%",
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderRadius: Radii.lg,
-    paddingVertical: Spacing.md,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xs,
-    aspectRatio: 1.7,
-  },
   /** Four across, and shorter: landscape has height to spare nowhere. */
-  actionCardLandscape: { width: "23%", paddingVertical: Spacing.md, gap: Spacing.xs, aspectRatio: 1.6 },
   /**
    * The card shrank; the symbol did not — it grew. What the smaller card
    * reclaimed was the empty frame around the icon, not the icon itself,
    * which is the part that has to be readable at a glance.
    */
-  actionIconWrap: { width: 52, height: 52, borderRadius: Radii.lg, alignItems: "center", justifyContent: "center" },
-  actionIconWrapLandscape: { width: 44, height: 44, borderRadius: Radii.md },
-  actionGlyph: { fontSize: 25, fontFamily: FontFamily.bold },
-  actionLabel: { color: C.text, fontSize: 12, fontFamily: FontFamily.semiBold },
-  actionBadge: {
-    position: "absolute",
-    top: Spacing.sm,
-    end: Spacing.sm,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionBadgeText: { fontSize: 11, fontFamily: FontFamily.bold, color: "#fff" },
-  actionBadgeTextPortrait: { fontSize: 10 },
 
   emptyCard: {
     backgroundColor: C.surface,

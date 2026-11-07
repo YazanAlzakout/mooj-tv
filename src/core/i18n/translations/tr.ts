@@ -198,6 +198,17 @@ const tr: TranslationShape = {
     noVodEmpty: "Bağlandı, ancak bu sağlayıcı hiçbir canlı kanal döndürmedi.",
   },
 
+  /*
+   * The bottom tab bar's own two labels.
+   *
+   * Live, Movies and Series are not repeated here: the bar reads them from
+   * `home`, so renaming a section renames it everywhere at once.
+   */
+  tabs: {
+    home: "Ana sayfa",
+    more: "Daha fazla",
+  },
+
   home: {
     welcomeBack: "Tekrar hoş geldiniz",
     search: "Ara",

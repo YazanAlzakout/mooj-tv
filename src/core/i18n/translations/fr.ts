@@ -198,6 +198,17 @@ const fr: TranslationShape = {
     noVodEmpty: "Connecté, mais ce fournisseur n'a renvoyé aucune chaîne en direct.",
   },
 
+  /*
+   * The bottom tab bar's own two labels.
+   *
+   * Live, Movies and Series are not repeated here: the bar reads them from
+   * `home`, so renaming a section renames it everywhere at once.
+   */
+  tabs: {
+    home: "Accueil",
+    more: "Plus",
+  },
+
   home: {
     welcomeBack: "Bon retour",
     search: "Rechercher",

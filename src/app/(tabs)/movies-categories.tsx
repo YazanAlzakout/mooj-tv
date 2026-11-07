@@ -329,7 +329,9 @@ export default function MoviesCategoriesScreen() {
 
   return (
     <ScreenBackground>
-      <SafeAreaView style={styles.safeArea}>
+      {/* No bottom edge: the tab bar below already clears the gesture area,
+          and asking for it here too leaves a second empty strip. */}
+      <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <ScreenHeader
         title={t("moviesCategories", "title")}
         subtitle={`${filteredMovies.length.toLocaleString()} ${t("moviesGrid", "moviesCountSuffix")}`}

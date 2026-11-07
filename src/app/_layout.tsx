@@ -153,13 +153,21 @@ function ThemedRoot() {
           <Stack.Screen name="onboarding" />
           <Stack.Screen name="providers" />
           <Stack.Screen name="add-provider" />
-          <Stack.Screen name="home" />
-          <Stack.Screen name="live-categories" />
+          {/*
+            The five tabbed sections, as one entry.
+
+            They are files in app/(tabs)/, and the parentheses keep the
+            group out of the URL — /home and /live-categories resolve
+            exactly as they did when those files sat here. Registering the
+            group rather than its members is what puts the tab bar under
+            them and, just as deliberately, keeps it off everything below:
+            a bar drawn over a running video is a strip of the picture
+            thrown away.
+          */}
+          <Stack.Screen name="(tabs)" />
           <Stack.Screen name="live/player/[channelId]" />
-          <Stack.Screen name="movies-categories" />
           <Stack.Screen name="movies/details/[movieId]" />
           <Stack.Screen name="movies/player/[movieId]" />
-          <Stack.Screen name="series-categories" />
           <Stack.Screen name="series/details/[seriesId]" />
           <Stack.Screen name="series/player/[episodeId]" />
           <Stack.Screen name="search" />

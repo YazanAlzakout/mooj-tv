@@ -202,6 +202,17 @@ const ckb: TranslationShape = {
     noVodEmpty: "پەیوەندی کرا، بەڵام ئەم دابینکەرە هیچ کەناڵێکی لایڤی نەگەڕاندەوە.",
   },
 
+  /*
+   * The bottom tab bar's own two labels.
+   *
+   * Live, Movies and Series are not repeated here: the bar reads them from
+   * `home`, so renaming a section renames it everywhere at once.
+   */
+  tabs: {
+    home: "سەرەکی",
+    more: "زیاتر",
+  },
+
   home: {
     welcomeBack: "بەخێربێیتەوە",
     search: "گەڕان",
