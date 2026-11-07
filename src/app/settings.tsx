@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Focusable } from "@/components/Focusable";
 import { BouncePressable } from "@/components/BouncePressable";
+import { useTapFeedback } from "@/core/feedback/useTapFeedback";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ScreenBackground } from "@/components/ScreenBackground";
 import { PinPrompt, PIN_LENGTH } from "@/components/PinPrompt";
@@ -360,69 +361,6 @@ export default function SettingsScreen() {
         <Row label={`${t("moviesCategories", "title")} — ${t("settings", "manageCategoryVisibility")}`} onPress={() => withParentalCheck(() => router.push({ pathname: "/settings/categories/[contentType]", params: { contentType: "movie" } }))} />
         <Row label={`${t("seriesCategories", "title")} — ${t("settings", "manageCategoryVisibility")}`} onPress={() => withParentalCheck(() => router.push({ pathname: "/settings/categories/[contentType]", params: { contentType: "series" } }))} />
 
-        <SectionLabel>{t("settings", "accountProvider")}</SectionLabel>
-        {session && (
-          <View style={styles.infoCard}>
-            <InfoRow label={t("settings", "provider")} value={session.provider.name} />
-            {/*
-              The server is masked, not printed. This card was the easiest
-              place in the app to read an account off an unlocked phone —
-              see core/storage/maskedValue.ts for what that is and is not
-              worth. The provider's name above stays visible: the viewer
-              chose it and it identifies the account without revealing it.
-            */}
-            <InfoRow label={t("settings", "server")} value={MASKED_VALUE} />
-            {/*
-              The username is shown; the server and the password are not.
-
-              A username identifies a line, a password authenticates it, and
-              masking the identifier costs support the one thing it needs
-              while buying almost nothing: whoever reads it off the screen
-              still cannot use it. Support asks "which line is this?" and
-              this row is the answer, without the viewer having to find the
-              paperwork they signed up with (2026-09-17).
-
-              There is no password row here and there must not be one. The
-              server stays masked because together with a weak password it
-              is the whole attack surface — see
-              core/storage/maskedValue.ts, which is also honest about how
-              little any of this masking is worth on a cleartext panel.
-            */}
-            <InfoRow label={t("settings", "username")} value={session.config.username} />
-            {accountInfo && (
-              <>
-                {accountInfo.status && (
-                  <InfoRow label={t("settings", "accountStatus")} value={accountInfo.status} />
-                )}
-                <InfoRow
-                  label={t("settings", "expiresOn")}
-                  value={
-                    accountInfo.expiresAt !== null
-                      ? formatDate(accountInfo.expiresAt)
-                      : t("settings", "neverExpires")
-                  }
-                />
-                {accountInfo.maxConnections !== null && (
-                  <InfoRow
-                    label={t("settings", "connections")}
-                    value={`${accountInfo.activeConnections ?? "—"} / ${accountInfo.maxConnections}`}
-                  />
-                )}
-                {accountInfo.allowedOutputFormats.length > 0 && (
-                  <InfoRow
-                    label={t("settings", "outputFormats")}
-                    value={accountInfo.allowedOutputFormats.join(", ")}
-                  />
-                )}
-                {accountInfo.serverTimezone && (
-                  <InfoRow label={t("settings", "serverTimezone")} value={accountInfo.serverTimezone} />
-                )}
-              </>
-            )}
-          </View>
-        )}
-        <Row label={t("settings", "manageProviders")} onPress={() => router.push("/providers")} />
-        <Row label={t("settings", "disconnect")} onPress={disconnect} destructive />
 
         <SectionLabel>{t("settings", "playback")}</SectionLabel>
         {state && (
@@ -536,6 +474,87 @@ export default function SettingsScreen() {
 
         <SectionLabel>{t("settings", "legal")}</SectionLabel>
         <Row label={t("settings", "termsConditions")} onPress={() => router.push("/legal")} />
+
+        {/*
+          Last but one, and it used to be third.
+
+          Everything above this point is something a viewer changes.
+          This card is something they read: the line they are on, when
+          it expires, how many connections it carries. Useful, looked up
+          perhaps twice in the life of an install, and it was sitting
+          between the appearance settings and the playback ones pushing
+          both apart — eight rows of text to scroll past to reach a
+          switch. Settings that are adjusted come first; settings that
+          are consulted come last.
+
+          Manage providers and Disconnect travel with it rather than
+          staying behind. They act on the account this card describes,
+          and one of them ends the session — neither belongs in the
+          part of the page a thumb sweeps through.
+        */}
+        <SectionLabel>{t("settings", "accountProvider")}</SectionLabel>
+        {session && (
+          <View style={styles.infoCard}>
+            <InfoRow label={t("settings", "provider")} value={session.provider.name} />
+            {/*
+              The server is masked, not printed. This card was the easiest
+              place in the app to read an account off an unlocked phone —
+              see core/storage/maskedValue.ts for what that is and is not
+              worth. The provider's name above stays visible: the viewer
+              chose it and it identifies the account without revealing it.
+            */}
+            <InfoRow label={t("settings", "server")} value={MASKED_VALUE} />
+            {/*
+              The username is shown; the server and the password are not.
+
+              A username identifies a line, a password authenticates it, and
+              masking the identifier costs support the one thing it needs
+              while buying almost nothing: whoever reads it off the screen
+              still cannot use it. Support asks "which line is this?" and
+              this row is the answer, without the viewer having to find the
+              paperwork they signed up with (2026-09-17).
+
+              There is no password row here and there must not be one. The
+              server stays masked because together with a weak password it
+              is the whole attack surface — see
+              core/storage/maskedValue.ts, which is also honest about how
+              little any of this masking is worth on a cleartext panel.
+            */}
+            <InfoRow label={t("settings", "username")} value={session.config.username} />
+            {accountInfo && (
+              <>
+                {accountInfo.status && (
+                  <InfoRow label={t("settings", "accountStatus")} value={accountInfo.status} />
+                )}
+                <InfoRow
+                  label={t("settings", "expiresOn")}
+                  value={
+                    accountInfo.expiresAt !== null
+                      ? formatDate(accountInfo.expiresAt)
+                      : t("settings", "neverExpires")
+                  }
+                />
+                {accountInfo.maxConnections !== null && (
+                  <InfoRow
+                    label={t("settings", "connections")}
+                    value={`${accountInfo.activeConnections ?? "—"} / ${accountInfo.maxConnections}`}
+                  />
+                )}
+                {accountInfo.allowedOutputFormats.length > 0 && (
+                  <InfoRow
+                    label={t("settings", "outputFormats")}
+                    value={accountInfo.allowedOutputFormats.join(", ")}
+                  />
+                )}
+                {accountInfo.serverTimezone && (
+                  <InfoRow label={t("settings", "serverTimezone")} value={accountInfo.serverTimezone} />
+                )}
+              </>
+            )}
+          </View>
+        )}
+        <Row label={t("settings", "manageProviders")} onPress={() => router.push("/providers")} />
+        <Row label={t("settings", "disconnect")} onPress={disconnect} destructive />
 
         <SectionLabel>{t("settings", "about")}</SectionLabel>
         <View style={styles.infoCard}>
@@ -706,6 +725,14 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * One settings row, and the tick it answers with.
+ *
+ * The feedback hook is taken here rather than threaded down from the
+ * screen, unlike the More list — this screen has upwards of twenty rows
+ * but only a handful are mounted as components at once, and the
+ * alternative is twenty props. Each instance loads the same cached asset.
+ */
 function Row({
   label,
   value,
@@ -717,8 +744,15 @@ function Row({
   onPress: () => void;
   destructive?: boolean;
 }) {
+  const tap = useTapFeedback();
   return (
-    <BouncePressable onPress={onPress} style={styles.row}>
+    <BouncePressable
+      onPress={() => {
+        tap();
+        onPress();
+      }}
+      style={styles.row}
+    >
       <Text style={[styles.rowText, destructive && styles.rowTextDestructive]}>{label}</Text>
       {value && <Text style={styles.rowValue}>{value}</Text>}
       {!destructive && <Text style={styles.rowChevron}>›</Text>}
@@ -727,10 +761,18 @@ function Row({
 }
 
 function ToggleRow({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+  const tap = useTapFeedback();
   return (
     <View style={styles.row}>
       <Text style={styles.rowText}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: Brand.primary }} />
+      <Switch
+        value={value}
+        onValueChange={(next) => {
+          tap();
+          onChange(next);
+        }}
+        trackColor={{ true: Brand.primary }}
+      />
     </View>
   );
 }

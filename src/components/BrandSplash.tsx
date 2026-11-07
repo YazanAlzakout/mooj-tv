@@ -60,6 +60,21 @@ export function BrandSplash({ onFinish }: { onFinish: () => void }) {
      * nothing, which is the behaviour most people expect from an app that
      * makes noise at launch.
      */
+    /*
+     * **Mix, never take.** Without this the intro opens a full
+     * AUDIOFOCUS_GAIN request, which tells Android to stop everything
+     * else — so launching this app while a podcast or music was playing
+     * killed it, for the sake of a four-second sting. `mixWithOthers`
+     * makes expo-video abandon focus outright, so the bed plays alongside
+     * whatever is already there.
+     *
+     * The ringer is a separate question from focus, and expo-video has no
+     * equivalent of expo-audio's `playsInSilentMode`. A silenced phone is
+     * honoured here only insofar as its media volume is down. The comment
+     * that used to sit here claimed otherwise, which was the worse half of
+     * the bug: a promise in a comment that the code never made.
+     */
+    p.audioMixingMode = "mixWithOthers";
     p.muted = false;
     p.play();
   });

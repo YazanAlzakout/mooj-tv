@@ -26,7 +26,7 @@ import Constants from "expo-constants";
 const FALLBACK = {
   key: "mooj",
   displayName: "Mooj TV",
-  wordmark: "MOOJ TV",
+  wordmark: "Mooj Tv",
   databaseName: "mooj.db",
 } as const;
 

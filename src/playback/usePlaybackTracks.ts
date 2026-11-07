@@ -34,10 +34,47 @@ function emptyState(sourceKey: string): TracksState {
   };
 }
 
-function matchesLanguage(track: AudioTrack | SubtitleTrack, preferred: string): boolean {
+/**
+ * The language tag reduced to its primary subtag: `pt-BR` and `pt_br`
+ * both become `pt`. BCP 47 puts the language first and everything that
+ * narrows it after, so this is the part a short preference is about.
+ */
+function primarySubtag(value: string): string {
+  return value.trim().toLowerCase().split(/[-_]/)[0];
+}
+
+/**
+ * Whether a track is the language the viewer asked for — in two passes,
+ * because one was wrong.
+ *
+ * It used to be a single substring test across language, label and name.
+ * Substrings are fine for a word and catastrophic for a code: "ar" is
+ * inside "Arabic" and also inside "Mandarin", "Hungarian", "Bulgarian"
+ * and "Catalan"; "fa" is inside "Farsi" and inside "Dari Afghan"; "he" is
+ * inside "Hebrew" and inside "Chechen". `find` takes the first hit, so a
+ * viewer who set "ar" got whichever of those the provider happened to
+ * list first — and with the common ordering, that is not Arabic.
+ *
+ * So the exact pass runs first and over the whole track list, and only if
+ * nothing matches does the loose pass run, and only for a needle long
+ * enough that a substring means something. Three characters, because
+ * ISO 639-2 codes are three long and a real word is longer.
+ */
+export function findPreferredTrack<T extends AudioTrack | SubtitleTrack>(
+  tracks: T[],
+  preferred: string
+): T | undefined {
   const needle = preferred.trim().toLowerCase();
-  if (!needle) return false;
-  return [track.language, track.label, track.name].some((v) => v?.toLowerCase().includes(needle));
+  if (!needle) return undefined;
+
+  const wanted = primarySubtag(needle);
+  const exact = tracks.find((track) => track.language && primarySubtag(track.language) === wanted);
+  if (exact) return exact;
+
+  if (needle.length <= 3) return undefined;
+  return tracks.find((track) =>
+    [track.language, track.label, track.name].some((v) => v?.toLowerCase().includes(needle))
+  );
 }
 
 /**
@@ -85,7 +122,7 @@ export function usePlaybackTracks(
   useEventListener(player, "availableAudioTracksChange", ({ availableAudioTracks }) => {
     let autoApplied = state.autoAudioApplied;
     if (!autoApplied && preferredAudioLang) {
-      const match = availableAudioTracks.find((track) => matchesLanguage(track, preferredAudioLang));
+      const match = findPreferredTrack(availableAudioTracks, preferredAudioLang);
       if (match) {
         autoApplied = true;
         player.audioTrack = match;
@@ -96,7 +133,7 @@ export function usePlaybackTracks(
   useEventListener(player, "availableSubtitleTracksChange", ({ availableSubtitleTracks }) => {
     let autoApplied = state.autoSubtitleApplied;
     if (!autoApplied && preferredSubtitleLang) {
-      const match = availableSubtitleTracks.find((track) => matchesLanguage(track, preferredSubtitleLang));
+      const match = findPreferredTrack(availableSubtitleTracks, preferredSubtitleLang);
       if (match) {
         autoApplied = true;
         player.subtitleTrack = match;

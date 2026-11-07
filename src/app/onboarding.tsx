@@ -84,17 +84,20 @@ export default function OnboardingScreen() {
    * only moment where interrupting costs nothing, because there is nothing
    * yet to interrupt.
    *
-   * Once, not every launch: this screen is shown a single time per install
-   * (gated on `onboardingSeenAt`), so the dialog inherits that for free.
-   * Initial state rather than an effect — a `setState` in an effect body is
-   * what `react-hooks/set-state-in-effect` exists to catch, and the answer
-   * is already known at first render.
+   * Closed on arrival, and that is the change.
    *
-   * Dismissible without choosing: the backdrop and the Android back button
-   * both close it, and the guess from the device locale stands. A dialog
-   * with no way out would be worse than the button it replaces.
+   * It used to open itself the moment the app did. The reasoning was that
+   * language is the first decision and a dialog asks it outright — but
+   * what it actually did was put a sheet of options over the brand intro
+   * the second the clip ended, so the first thing anyone saw of this app
+   * was a list. Nothing is to come up over the opening but the opening.
+   *
+   * The pill in the corner above says which language is in use and opens
+   * this when tapped, which is the whole of what the dialog was for. The
+   * guess from the device locale is right most of the time and visible
+   * either way.
    */
-  const [languagePickerOpen, setLanguagePickerOpen] = useState(true);
+  const [languagePickerOpen, setLanguagePickerOpen] = useState(false);
   /*
    * Measured live, not once at import. The width was read at module load,
    * so rotating during onboarding left the pager snapping by the new width

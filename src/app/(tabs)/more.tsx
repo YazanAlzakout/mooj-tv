@@ -5,8 +5,17 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Focusable } from "@/components/Focusable";
+import {
+  DownloadIcon,
+  FavoriteIcon,
+  HistoryIcon,
+  SearchIcon,
+  SettingsIcon,
+  WatchLaterIcon,
+} from "@/components/MenuIcons";
 import { ScreenBackground } from "@/components/ScreenBackground";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { useTapFeedback } from "@/core/feedback/useTapFeedback";
 import { useI18n } from "@/core/i18n/I18nContext";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
@@ -33,6 +42,13 @@ import { downloadsSupported } from "@/domain/downloads/eligibility";
 export default function MoreScreen() {
   useThemeRerender();
   const { t } = useI18n();
+  /*
+   * The same tick the tab bar answers a press with. A bar that clicks
+   * above a list that does not is worse than neither clicking — the
+   * viewer learns the sound means "that worked" and then stops getting
+   * it halfway down the same screen.
+   */
+  const tap = useTapFeedback();
 
   const [favoriteCount, setFavoriteCount] = useState<number | null>(null);
   const [watchLaterCount, setWatchLaterCount] = useState<number | null>(null);
@@ -57,49 +73,55 @@ export default function MoreScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Row
-            glyph="⌕"
+            Icon={SearchIcon}
             label={t("home", "search")}
             delay={0}
+            tap={tap}
             onPress={() => router.push("/search")}
           />
           <Row
-            glyph="★"
+            Icon={FavoriteIcon}
             gold
             label={t("home", "favorites")}
             delay={55}
             count={favoriteCount}
+            tap={tap}
             onPress={() =>
               router.push({ pathname: "/library/[listType]", params: { listType: "favorite" } })
             }
           />
           <Row
-            glyph="⏱"
+            Icon={WatchLaterIcon}
             label={t("home", "watchLater")}
             delay={110}
             count={watchLaterCount}
+            tap={tap}
             onPress={() =>
               router.push({ pathname: "/library/[listType]", params: { listType: "watch_later" } })
             }
           />
           {downloadsSupported() && (
             <Row
-              glyph="⬇"
+              Icon={DownloadIcon}
               label={t("home", "downloads")}
-            delay={165}
+              delay={165}
               count={downloadsCount}
+              tap={tap}
               onPress={() => router.push("/downloads")}
             />
           )}
           <Row
-            glyph="◷"
+            Icon={HistoryIcon}
             label={t("history", "title")}
             delay={220}
+            tap={tap}
             onPress={() => router.push("/history")}
           />
           <Row
-            glyph="⚙"
+            Icon={SettingsIcon}
             label={t("home", "settings")}
             delay={275}
+            tap={tap}
             onPress={() => router.push("/settings")}
           />
         </ScrollView>
@@ -117,19 +139,23 @@ export default function MoreScreen() {
  * and read as "you have no favourites" for as long as the database takes.
  */
 function Row({
-  glyph,
+  Icon,
   gold,
   label,
   count,
   delay,
+  tap,
   onPress,
 }: {
-  glyph: string;
+  /** Drawn, not a character — see MenuIcons for what the characters were doing. */
+  Icon: (props: { color: string; size: number }) => ReactNode;
   /** Favourites only: a star the viewer placed is a different kind of thing. */
   gold?: boolean;
   label: string;
   count?: number | null;
   delay: number;
+  /** Handed down rather than taken here: one audio player for the screen, not six. */
+  tap: () => void;
   onPress: () => void;
 }): ReactNode {
   const tint = gold ? "#F6C445" : Brand.primaryLight;
@@ -145,9 +171,15 @@ function Row({
      * bouncing rather than arriving.
      */
     <Animated.View entering={FadeInDown.delay(delay).duration(300)}>
-    <Focusable onPress={onPress} style={styles.row}>
+    <Focusable
+      onPress={() => {
+        tap();
+        onPress();
+      }}
+      style={styles.row}
+    >
       <View style={[styles.glyphWrap, { backgroundColor: tint + "22", borderColor: tint + "55" }]}>
-        <Text style={[styles.glyph, { color: tint }]}>{glyph}</Text>
+        <Icon color={tint} size={19} />
       </View>
       <Text style={styles.label} numberOfLines={1}>
         {label}
@@ -182,7 +214,6 @@ const styles = themedStyles((C: ThemeColors) =>
       alignItems: "center",
       justifyContent: "center",
     },
-    glyph: { fontSize: 18, ...AndroidTextFix },
     label: {
       flex: 1,
       color: C.text,

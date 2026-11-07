@@ -199,42 +199,29 @@ export function SeriesGlyph({ color, size, focused }: GlyphProps) {
 }
 
 /**
- * Four panes: the sections that did not get a tab of their own.
+ * Three dots. The one glyph that needs no explaining in any language, and
+ * the one that cannot fill in — so it grows instead.
  *
- * It was three dots, and three dots is the wrong sign here. An ellipsis
- * means *overflow* — "there is more of this list than fits" — which is
- * what a toolbar's last button says. This tab is not an overflow of the
- * four beside it; it is a place, holding Favourites, Watch Later,
- * Downloads, History, Search and Settings. A grid of panes says "sections"
- * the way a folder says "files", and it is the sign every television and
- * streaming app already uses for it.
- *
- * It also fixes the one thing the dots could not do. Every other glyph in
- * this bar is an outline that fills in when its tab is selected, because
- * the amount of ink is what the eye reads before it reads the shape. Three
- * dots are solid in both states, so the More tab was the only one that
- * answered a press with nothing but a size change.
+ * It was briefly four panes, on the argument that an ellipsis means
+ * overflow and this tab is a place rather than an overflow. That argument
+ * is tidy and it was not what had been asked for: the request was about
+ * the *list* behind this tab, which is where the marks needed work — see
+ * MenuIcons. The dots stay.
  */
 export function MoreGlyph({ color, size, focused }: GlyphProps) {
-  const pane = {
-    width: size * 0.4,
-    height: size * 0.4,
-    borderRadius: size * 0.1,
-    borderWidth: size * 0.09,
-    borderColor: color,
-    backgroundColor: focused ? color : "transparent",
+  const d = focused ? 0.2 : 0.16;
+  const dot = {
+    width: size * d,
+    height: size * d,
+    borderRadius: (size * d) / 2,
+    backgroundColor: color,
   };
   return (
     <Box size={size}>
-      <View style={{ gap: size * 0.1 }}>
-        <View style={{ flexDirection: "row", gap: size * 0.1 }}>
-          <View style={pane} />
-          <View style={pane} />
-        </View>
-        <View style={{ flexDirection: "row", gap: size * 0.1 }}>
-          <View style={pane} />
-          <View style={pane} />
-        </View>
+      <View style={{ flexDirection: "row", gap: size * 0.11 }}>
+        <View style={dot} />
+        <View style={dot} />
+        <View style={dot} />
       </View>
     </Box>
   );

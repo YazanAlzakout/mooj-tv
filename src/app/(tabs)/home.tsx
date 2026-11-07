@@ -222,31 +222,6 @@ export default function HomeScreen() {
             is how a home screen ends up mostly furniture.
           */}
 
-          {continueWatching.length > 0 && (
-            <Animated.View entering={FadeInDown.delay(110).duration(380)}>
-              <SectionHeader
-                title={t("home", "continueWatching")}
-                action={{ label: t("home", "seeAll"), onPress: () => router.push("/history") }}
-                secondaryAction={{
-                  label: t("home", "clear"),
-                  onPress: () => setConfirmClearHistory(true),
-                  destructive: true,
-                }}
-              />
-              <FlatList
-                {...NO_CLIP}
-                data={continueWatching}
-                keyExtractor={(item) => `${item.contentType}-${item.providerItemId}`}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.rail}
-                renderItem={({ item }) => (
-                  <ContinueWatchingCard entry={item} onPress={() => resumeWatching(item)} />
-                )}
-              />
-            </Animated.View>
-          )}
-
           {newRow.length > 0 && (
             <Animated.View entering={FadeInDown.delay(180).duration(380)}>
               {/* The year is the point of the row, so it is in the heading. */}
@@ -394,6 +369,46 @@ export default function HomeScreen() {
                 contentContainerStyle={styles.rail}
                 renderItem={({ item }) => (
                   <PosterCard item={item} onPress={() => openFeatured(item)} />
+                )}
+              />
+            </Animated.View>
+          )}
+
+          {/*
+            Last, not second.
+
+            A resume row is the fastest way back into something already
+            started, which is the argument for putting it at the top — and
+            it is the wrong argument for this screen. Second place is where
+            the eye lands after the hero, and giving it to a row of things
+            the viewer has already seen means the screen opens on the past.
+            Everything above this offers something new; this is the one row
+            that offers something old, so it closes the screen rather than
+            fronting it. Anyone looking for it knows it is there.
+
+            Its entrance delay goes last with it — the cascade reads top to
+            bottom or it reads as a mistake.
+          */}
+          {continueWatching.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(430).duration(380)}>
+              <SectionHeader
+                title={t("home", "continueWatching")}
+                action={{ label: t("home", "seeAll"), onPress: () => router.push("/history") }}
+                secondaryAction={{
+                  label: t("home", "clear"),
+                  onPress: () => setConfirmClearHistory(true),
+                  destructive: true,
+                }}
+              />
+              <FlatList
+                {...NO_CLIP}
+                data={continueWatching}
+                keyExtractor={(item) => `${item.contentType}-${item.providerItemId}`}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+                renderItem={({ item }) => (
+                  <ContinueWatchingCard entry={item} onPress={() => resumeWatching(item)} />
                 )}
               />
             </Animated.View>
@@ -703,10 +718,16 @@ const styles = themedStyles((C: ThemeColors) =>
   brandText: { flex: 1, gap: 2, marginEnd: Spacing.sm },
   brandName: {
     color: C.text,
-    fontSize: 16,
+    fontSize: 17,
     lineHeight: 24,
     fontFamily: FontFamily.extraBold,
-    letterSpacing: 1.5,
+    /*
+     * Loose tracking is a capitals trick: it opens up a word that has no
+     * ascenders or descenders to give it shape. A mixed-case wordmark has
+     * both, so the same 1.5 simply pulled the letters apart. Half of it,
+     * and a point larger to keep the old optical weight.
+     */
+    letterSpacing: 0.4,
     ...AndroidTextFix,
   },
   welcome: {

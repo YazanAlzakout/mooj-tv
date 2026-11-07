@@ -117,6 +117,23 @@ module.exports = {
     android: {
       package: ANDROID_PACKAGE,
       versionCode: ANDROID_VERSION_CODE,
+      /*
+       * SYSTEM_ALERT_WINDOW — "Display over other apps" — was in the merged
+       * manifest and nothing in this app has ever asked for it. It arrives
+       * from a library's own manifest and merges in silently.
+       *
+       * It is not an ordinary permission. Play lists it under special app
+       * access, Android shows it on its own settings page, and an IPTV
+       * player that can draw over other apps is exactly the shape of thing
+       * a reviewer looks twice at. Nothing here draws a bubble or an
+       * overlay outside its own window.
+       *
+       * `blockedPermissions` is what removes one. `permissions: []` does
+       * not subtract — it only adds — so the list has to be blocked by
+       * name, which @expo/config-plugins turns into a
+       * `tools:node="remove"` entry that survives the merge.
+       */
+      blockedPermissions: ["android.permission.SYSTEM_ALERT_WINDOW"],
       adaptiveIcon: {
         // Matches the published app exactly, icon assets included: this
         // release replaces it on Play, and an updating user should find the

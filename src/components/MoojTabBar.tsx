@@ -1,7 +1,5 @@
-import * as Haptics from "expo-haptics";
-import { setAudioModeAsync, useAudioPlayer } from "expo-audio";
-import { useCallback, useEffect, useState } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 import type { BottomTabBarProps } from "expo-router/js-tabs";
@@ -13,6 +11,7 @@ import {
   MoviesGlyph,
   SeriesGlyph,
 } from "@/components/TabIcons";
+import { useTapFeedback } from "@/core/feedback/useTapFeedback";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themeColors, useThemeRerender } from "@/core/theme/themedStyles";
 import { Brand } from "@/core/theme/tokens";
@@ -75,45 +74,33 @@ export function MoojTabBar({ state, descriptors, navigation, insets }: BottomTab
   const count = state.routes.length;
   const itemWidth = barWidth > 0 ? barWidth / count : 0;
 
-  /*
-   * The click is loaded once and re-fired with seekTo(0), which is the
-   * pattern the SDK 57 docs give. A player per press would allocate a
-   * decoder on the thread that draws the screen, several times a minute.
+  /* The tick and the haptic, shared with the More list and Settings. */
+  const tap = useTapFeedback();
+
+  /**
+   * The width the light was last placed against.
+   *
+   * Without it, rotating the phone made the spotlight travel. The spring
+   * below is driven by `state.index * itemWidth`, and turning the phone
+   * changes `itemWidth` without changing the tab — so the light set off
+   * across the capsule to the same tab's new position, a 420ms slide
+   * nobody asked for, every single rotation. Part of the jolt reported as
+   * "في قفزة بالشلاشة ونطقة مو حلوة".
+   *
+   * A spring is for a tab the viewer pressed. A new geometry is not an
+   * event; the light belongs wherever the layout now puts it, at once.
    */
-  const click = useAudioPlayer(require("../../assets/sounds/tab-tap.m4a"));
-
-
-  useEffect(() => {
-    /*
-     * The level lives in the file, not here.
-     *
-     * Setting `click.volume` would be the obvious way and the compiler
-     * refuses it: anything a hook hands back is frozen, in an effect as
-     * much as in render. So the asset itself is mixed about 10dB under
-     * where it started, which is where it needed to be anyway — a tick
-     * you notice is a tick that is too loud, and this one fires several
-     * times a minute.
-     */
-
-    /*
-     * `mixWithOthers` so an 85ms tick never takes audio focus — without it
-     * Android pauses whatever the viewer was listening to, for a sound
-     * shorter than the gap between two words.
-     *
-     * `playsInSilentMode: false` so a phone set to silent stays silent.
-     * Somebody who has silenced their phone has already answered the
-     * question of whether they want to hear this.
-     */
-    setAudioModeAsync({ interruptionMode: "mixWithOthers", playsInSilentMode: false }).catch(
-      () => {
-        /* An audio mode this app can live without; the tick simply may duck. */
-      }
-    );
-  }, []);
+  const placedAt = useRef(0);
 
   useEffect(() => {
     if (itemWidth === 0) return;
-    slide.value = withSpring(state.index * itemWidth, { duration: 420, dampingRatio: 0.82 });
+    const target = state.index * itemWidth;
+    if (placedAt.current !== itemWidth) {
+      placedAt.current = itemWidth;
+      slide.value = target;
+      return;
+    }
+    slide.value = withSpring(target, { duration: 420, dampingRatio: 0.82 });
     // `slide` is a shared value and never changes identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.index, itemWidth]);
@@ -131,20 +118,14 @@ export function MoojTabBar({ state, descriptors, navigation, insets }: BottomTab
        * navigation that remounts a screen puts it on the far side of that
        * work.
        */
-      click.seekTo(0);
-      click.play();
-      if (Platform.OS === "android") {
-        Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Toggle_On).catch(() => {});
-      } else {
-        Haptics.selectionAsync().catch(() => {});
-      }
+      tap();
 
       const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
       if (!focused && !event.defaultPrevented) {
         navigation.navigate(route.name, route.params);
       }
     },
-    [click, navigation, state.index, state.routes]
+    [tap, navigation, state.index, state.routes]
   );
 
   return (

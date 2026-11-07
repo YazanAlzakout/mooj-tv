@@ -129,6 +129,76 @@ check(
   legal.length + " translation file(s) still carry the previous support address"
 );
 
+/*
+ * Every permission the app will actually ship with, by name.
+ *
+ * A permission is not something anybody adds on purpose. Libraries carry
+ * their own manifests and the merger folds them in without a word, which
+ * is how SYSTEM_ALERT_WINDOW — "Display over other apps", a special access
+ * Play lists separately and reviewers look twice at — ended up in a
+ * release build of this app that never asked for it. It was found by
+ * reading the merged manifest, which is the only place it was ever
+ * visible.
+ *
+ * So the merged manifest is read here and anything outside this list is a
+ * failure. Adding a permission then means adding it to this list too,
+ * deliberately, with a reason — which is the point.
+ */
+const ALLOWED_PERMISSIONS = new Set([
+  /* The whole app is a client for a remote server. */
+  "android.permission.INTERNET",
+  /* expo-video: keeps playback alive when the screen is off or the app is behind another. */
+  "android.permission.FOREGROUND_SERVICE",
+  "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+  /* expo-video / expo-audio: volume and audio focus. */
+  "android.permission.MODIFY_AUDIO_SETTINGS",
+  /* Legacy storage, capped at SDK 32 by the manifest itself; nothing above that gets it. */
+  "android.permission.READ_EXTERNAL_STORAGE",
+  "android.permission.WRITE_EXTERNAL_STORAGE",
+  /* expo-haptics. Harmless, and the tick in the tab bar is worth it. */
+  "android.permission.VIBRATE",
+]);
+
+const manifestPath = "android/app/src/main/AndroidManifest.xml";
+if (!fs.existsSync(manifestPath)) {
+  console.log("\n== the release asks for nothing it does not need ==");
+  check(
+    "the merged manifest was readable",
+    false,
+    manifestPath + " is missing — run a prebuild before trusting this check"
+  );
+} else {
+  const manifest = fs.readFileSync(manifestPath, "utf8");
+  const declared = [];
+  const removed = [];
+  const pattern = /<uses-permission\b([^>]*)>/g;
+  for (let m = pattern.exec(manifest); m !== null; m = pattern.exec(manifest)) {
+    const attrs = m[1];
+    const name = /android:name="([^"]+)"/.exec(attrs);
+    if (!name) continue;
+    /* tools:node="remove" is a subtraction, not a request. */
+    if (/tools:node="remove"/.test(attrs)) removed.push(name[1]);
+    else declared.push(name[1]);
+  }
+
+  console.log("\n== the release asks for nothing it does not need ==");
+  const unexpected = declared.filter((name) => !ALLOWED_PERMISSIONS.has(name));
+  check(
+    "every permission in the merged manifest is one this app needs",
+    unexpected.length === 0,
+    unexpected.join("\n          ") +
+      (unexpected.length
+        ? "\n          (add it to ALLOWED_PERMISSIONS with a reason, or block it in app.config.js)"
+        : "")
+  );
+  check(
+    "the overlay permission is still blocked",
+    removed.includes("android.permission.SYSTEM_ALERT_WINDOW") ||
+      !declared.includes("android.permission.SYSTEM_ALERT_WINDOW"),
+    "SYSTEM_ALERT_WINDOW is being requested again"
+  );
+}
+
 console.log("\n====================================================");
 console.log("  " + (failed === 0 ? "all checks passed" : failed + " FAILED"));
 console.log("====================================================\n");

@@ -136,7 +136,7 @@ export default function LiveCategoriesScreen() {
    * takes width off the grid — and `getItemLayout` has to be told, or
    * it promises rows sized for a narrower list than the one drawn.
    */
-  const phoneRail = windowWidth > windowHeight ? 0 : PHONE_RAIL_WIDTH;
+  const landscape = windowWidth > windowHeight;
   const insets = useSafeAreaInsets();
   /*
    * The rail is subtracted on TV: the grid is not the window, and
@@ -161,12 +161,30 @@ export default function LiveCategoriesScreen() {
    * the row height needs the grid's width, which does not depend on the
    * count. No cycle, but the declaration order has to say so.
    */
+  /*
+   * Declared up here because the grid's width depends on it.
+   *
+   * `phoneRail` used to be taken off the width in every portrait render,
+   * on the assumption that portrait always draws a rail. BrowseLayout's
+   * rule is narrower than that: it draws one only when there is more than
+   * one category to choose between. Where there is not — a provider that
+   * returns no categories, or a viewer who has hidden all of them in
+   * settings, leaving the single All chip — the list is the full window
+   * wide while `getItemLayout` is still promising rows sized for a list
+   * 84dp narrower. That is a 23% understatement, FlatList never measures a
+   * row to catch it, and the error compounds with every row scrolled until
+   * cells are placed a screen away from where they are drawn.
+   *
+   * So the condition here is the same condition BrowseLayout uses, on the
+   * same array it is handed. The two must not be able to disagree.
+   */
+  const [categories, setCategories] = useState<CategoryTab[] | null>(null);
+  const railShown = !isTvBuild && !landscape && (categories?.length ?? 0) > 1;
   const gridWidth =
-    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : phoneRail);
+    windowWidth - insets.left - insets.right - TV_OVERSCAN_X -
+    (isTvBuild ? TV_RAIL_WIDTH : railShown ? PHONE_RAIL_WIDTH : 0);
   const columns = useGridColumns(PORTRAIT_COLUMNS, (c) => rowHeight(gridWidth, c));
   const gridRowHeight = rowHeight(gridWidth, columns);
-
-  const [categories, setCategories] = useState<CategoryTab[] | null>(null);
   const [chosenCategoryId, setActiveCategoryId] = useState<string>(ALL_CATEGORY_ID);
   /**
    * The category actually being shown, which is not always the one chosen.
@@ -267,10 +285,31 @@ export default function LiveCategoriesScreen() {
   /**
    * Updates the local Set immediately and writes in the background — the
    * star has to respond to the tap, not to a database round-trip.
+   *
+   * ## Why this is a `useCallback` with no dependencies
+   *
+   * It is handed to every cell in the grid, and `ChannelCard` is
+   * memoised. A plain function declaration is a new value on every render
+   * of this screen, so the memo's prop compare failed for every mounted
+   * cell every time — on each keystroke in the search field, and on each
+   * star tapped. That defeated the `isFavorite` boolean two lines above,
+   * which exists for exactly this reason, and it is why Movies and Series
+   * wrap their equivalents. Found by review on 2026-11-08.
+   *
+   * The dependency that stood in the way was `favoriteIds`, read to decide
+   * which way the star was going. Taking that decision inside the updater
+   * instead removes the dependency and is more correct besides: the
+   * updater sees the Set React is actually about to replace, not the one
+   * captured when the closure was made.
+   *
+   * `willSave` is read again in the `catch` below, and it is set by then:
+   * a press is a discrete event, so React flushes the updater before the
+   * handler yields, long before a database write can fail.
    */
-  function toggleFavorite(channel: LiveChannel) {
-    const willSave = !favoriteIds.has(channel.providerItemId);
+  const toggleFavorite = useCallback((channel: LiveChannel) => {
+    let willSave = false;
     setFavoriteIds((current) => {
+      willSave = !current.has(channel.providerItemId);
       const next = new Set(current);
       if (willSave) next.add(channel.providerItemId);
       else next.delete(channel.providerItemId);
@@ -293,7 +332,7 @@ export default function LiveCategoriesScreen() {
         return next;
       });
     });
-  }
+  }, []);
 
   /**
    * `useFocusEffect` re-runs `load()` every time this screen regains focus
@@ -471,15 +510,30 @@ export default function LiveCategoriesScreen() {
     if (isTvBuild) setFocusedChannel(channel);
   }, []);
 
+  /*
+   * Stable between renders, and above the early return because a hook
+   * after one is a hook that is not always called — the same reason
+   * `claimTvFocus` sits here.
+   *
+   * `activeCategoryId` stays a real dependency rather than being hidden in
+   * a ref. It is what the player is told to come back to, so a stale one
+   * would send the viewer to the wrong list, and when it changes the grid
+   * is showing different channels anyway: the cells were going to re-render
+   * regardless. What this protects is the two cases where nothing about
+   * the list changed — a keystroke in the search field and a star tapped.
+   */
+  const openChannel = useCallback(
+    (channel: LiveChannel) => {
+      router.push({
+        pathname: "/live/player/[channelId]",
+        params: { channelId: channel.providerItemId, categoryId: activeCategoryId },
+      });
+    },
+    [activeCategoryId]
+  );
+
   if (!session) {
     return null;
-  }
-
-  function openChannel(channel: LiveChannel) {
-    router.push({
-      pathname: "/live/player/[channelId]",
-      params: { channelId: channel.providerItemId, categoryId: activeCategoryId },
-    });
   }
 
   /**

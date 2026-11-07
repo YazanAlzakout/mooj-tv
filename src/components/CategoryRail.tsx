@@ -79,12 +79,33 @@ export function CategoryRail({
      * throws rather than queueing, and on a cold mount that is a race this
      * cannot win. A missed scroll costs a viewer one flick; an unhandled
      * throw costs them the screen.
+     *
+     * And retried, which it was not. "The next change will catch it" is
+     * only true if there is a next change: the case that loses is the
+     * common one — the rail mounts, the remembered category is forty rows
+     * down, the first attempt is refused because nothing is measured yet,
+     * and nothing ever asks again. The viewer is then looking at a rail
+     * whose highlighted chip is off screen. Three attempts, 120ms apart,
+     * cover the first measurement batch and cost nothing when the first
+     * one works.
      */
-    try {
-      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
-    } catch {
-      /* not rendered yet — the next change will catch it */
-    }
+    let attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const centre = () => {
+      try {
+        listRef.current?.scrollToIndex({ index, animated: attempt > 0, viewPosition: 0.5 });
+      } catch {
+        if (attempt >= 2) return;
+        attempt += 1;
+        timer = setTimeout(centre, 120);
+      }
+    };
+
+    centre();
+    return () => {
+      if (timer !== undefined) clearTimeout(timer);
+    };
   }, [index]);
 
   const renderItem = useCallback(
@@ -111,6 +132,14 @@ export function CategoryRail({
        * approximate and on screen beats exact and crashed.
        */
       onScrollToIndexFailed={({ index: i, averageItemLength }) => {
+        /*
+         * `averageItemLength` is 0 before anything has been measured, and
+         * an offset of `i * 0` is the top of the list — which is both
+         * wrong and indistinguishable from success, so the rail would sit
+         * at the top with its chosen chip somewhere below. Ignore it and
+         * let the retry above have its turn.
+         */
+        if (averageItemLength <= 0) return;
         listRef.current?.scrollToOffset({ offset: i * averageItemLength, animated: true });
       }}
     />

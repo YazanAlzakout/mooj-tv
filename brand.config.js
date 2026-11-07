@@ -32,8 +32,13 @@ const BRAND = {
   displayName: "Mooj TV",
   /** The television build's label, kept separate in case the two diverge. */
   displayNameTv: "Mooj TV",
-  /** Drawn as the wordmark on the home screen. Latin, because the logo is. */
-  wordmark: "MOOJ TV",
+  /**
+   * Drawn as the wordmark on the home screen. Latin, because the logo is,
+   * and in the logo's own casing rather than set in capitals: the mark
+   * beside it reads "Mooj TV", and a header shouting MOOJ TV next to it
+   * made two different brands out of one.
+   */
+  wordmark: "Mooj Tv",
 
   /** Expo project slug. Lower-case, hyphenated, never changes after the first build. */
   slug: "mooj-tv",

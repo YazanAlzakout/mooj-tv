@@ -130,7 +130,7 @@ export default function SeriesCategoriesScreen() {
    * takes width off the grid — and `getItemLayout` has to be told, or
    * it promises rows sized for a narrower list than the one drawn.
    */
-  const phoneRail = windowWidth > windowHeight ? 0 : PHONE_RAIL_WIDTH;
+  const landscape = windowWidth > windowHeight;
   const insets = useSafeAreaInsets();
   /*
    * The rail is subtracted on TV: the grid is not the window, and
@@ -148,20 +148,38 @@ export default function SeriesCategoriesScreen() {
     `useSafeAreaInsets` reports that padding. Leaving it out overstated the
     row height by the width of two 96dp margins spread across the columns.
   */
+  /*
+   * Declared up here because the grid's width depends on it.
+   *
+   * `phoneRail` used to be taken off the width in every portrait render,
+   * on the assumption that portrait always draws a rail. BrowseLayout's
+   * rule is narrower than that: it draws one only when there is more than
+   * one category to choose between. Where there is not — a provider that
+   * returns no categories, or a viewer who has hidden all of them in
+   * settings, leaving the single All chip — the list is the full window
+   * wide while `getItemLayout` is still promising rows sized for a list
+   * 84dp narrower. That is a 23% understatement, FlatList never measures a
+   * row to catch it, and the error compounds with every row scrolled until
+   * cells are placed a screen away from where they are drawn.
+   *
+   * So the condition here is the same condition BrowseLayout uses, on the
+   * same array it is handed. The two must not be able to disagree.
+   */
+  const [series, setSeries] = useState<SeriesSummary[] | null>(() => getSeriesList());
+  const [categories, setCategories] = useState<CategoryTab[] | null>(null);
+  const railShown = !isTvBuild && !landscape && (categories?.length ?? 0) > 1;
   const gridWidth =
-    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : phoneRail);
+    windowWidth - insets.left - insets.right - TV_OVERSCAN_X -
+    (isTvBuild ? TV_RAIL_WIDTH : railShown ? PHONE_RAIL_WIDTH : 0);
   /*
    * Width first, then the column count, then the row height — in that
-   * order and not the other way round. The count is now worked out FROM
-   * the row height a given count would produce (see useGridColumns), and
-   * the row height needs the grid's width, which does not depend on the
+   * order and not the other way round. The count is worked out FROM the
+   * row height a given count would produce (see useGridColumns), and the
+   * row height needs the grid's width, which does not depend on the
    * count. No cycle, but the declaration order has to say so.
    */
   const columns = useGridColumns(PORTRAIT_COLUMNS, (c) => rowHeight(gridWidth, c));
   const gridRowHeight = rowHeight(gridWidth, columns);
-
-  const [series, setSeries] = useState<SeriesSummary[] | null>(() => getSeriesList());
-  const [categories, setCategories] = useState<CategoryTab[] | null>(null);
   const [chosenCategoryId, setActiveCategoryId] = useState<string>(ALL_CATEGORY_ID);
   /**
    * The category actually being shown, which is not always the one chosen.
