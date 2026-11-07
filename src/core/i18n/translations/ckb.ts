@@ -225,6 +225,7 @@ const ckb: TranslationShape = {
     watchLater: "دواتر تەماشا بکە",
     settings: "ڕێکخستنەکان",
     downloads: "داگرتنەکان",
+    newIn: "نوێ لە",
     featured: "هەڵبژاردەکان",
     continueWatching: "بەردەوامبوون لە تەماشاکردن",
     seeAll: "بینینی هەموو",

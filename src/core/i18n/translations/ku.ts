@@ -225,6 +225,7 @@ const ku: TranslationShape = {
     watchLater: "Paşê Temaşe Bike",
     settings: "Mîhengên",
     downloads: "Daxistin",
+    newIn: "Nû di",
     featured: "Hilbijartî",
     continueWatching: "Temaşekirinê Berdewam Bike",
     seeAll: "Hemûyan Bibîne",

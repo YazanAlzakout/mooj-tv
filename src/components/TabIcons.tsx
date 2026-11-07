@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { View, type ColorValue } from "react-native";
+import { StyleSheet, View, type ColorValue } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 
 /**
@@ -258,9 +258,36 @@ export function AnimatedTabGlyph({
     transform: [{ scale: 1 + lift.value * 0.07 }, { translateY: -lift.value * 1.5 }],
   }));
 
+  /*
+   * The pill is what makes the bar look like it was drawn this decade.
+   *
+   * A row of glyphs that differ only in tint is the oldest tab bar there
+   * is, and that was the complaint. A shape *behind* the selected one
+   * carries the state at a glance and from the corner of the eye, which a
+   * tint cannot — and it grows in from 0.7 rather than appearing, so the
+   * selection moves between tabs instead of blinking from one to the next.
+   */
+  const pill = useAnimatedStyle(() => ({
+    opacity: lift.value,
+    transform: [{ scale: 0.7 + lift.value * 0.3 }],
+  }));
+
   return (
     <Animated.View style={style}>
+      <Animated.View pointerEvents="none" style={[styles.pill, pill]} />
       <Glyph color={color} size={22} focused={focused} />
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  pill: {
+    position: "absolute",
+    left: -14,
+    right: -14,
+    top: -6,
+    bottom: -6,
+    borderRadius: 999,
+    backgroundColor: "rgba(62,185,235,0.16)",
+  },
+});

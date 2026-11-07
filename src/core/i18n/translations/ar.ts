@@ -220,6 +220,7 @@ const ar: TranslationShape = {
     watchLater: "مشاهدة لاحقًا",
     settings: "الإعدادات",
     downloads: "التنزيلات",
+    newIn: "جديد",
     featured: "مُختارات",
     continueWatching: "متابعة المشاهدة",
     seeAll: "عرض الكل",

@@ -25,8 +25,17 @@ import {
   type WatchProgressEntry,
 } from "@/db/repositories/watchProgressRepository";
 import { clearActiveSession, getActiveSession } from "@/state/activeSessionStore";
-import { getSeriesList } from "@/state/seriesStore";
-import { getVodMovies } from "@/state/vodStore";
+import {
+  featured as pickFeatured,
+  hero as pickHero,
+  newThisYear as pickNewThisYear,
+  currentYear,
+  hasUsableArt,
+  type HomeItem,
+} from "@/core/home/homeRows";
+import { getLibraryItems, type LibraryItem } from "@/db/repositories/libraryRepository";
+import { getAllDownloadTasks, type DownloadTask } from "@/db/repositories/downloadRepository";
+import { downloadsSupported } from "@/domain/downloads/eligibility";
 
 function formatRelativeTime(t: ReturnType<typeof useI18n>["t"], timestamp: number): string {
   const diffMinutes = Math.floor((Date.now() - timestamp) / 60000);
@@ -37,77 +46,13 @@ function formatRelativeTime(t: ReturnType<typeof useI18n>["t"], timestamp: numbe
   return t("common", "daysAgo", { n: Math.floor(diffHours / 24) });
 }
 
-interface FeaturedItem {
-  contentType: "movie" | "series";
-  providerItemId: string;
-  name: string;
-  posterUrl: string;
-  rating: number | null;
-}
-
-const FEATURED_COUNT = 12;
-
 /**
- * Shuffled once per screen focus (never in render — master prompt §17's
- * "no expensive full-data reshuffle on every render"). Only draws from
- * catalogs already cached in memory (getVodMovies/getSeriesList) — Home
- * deliberately never triggers a fresh fetch of the full VOD/series catalog
- * just to populate this shelf, so on a session where Movies/Series haven't
- * been opened yet, Featured is simply empty rather than showing fabricated
- * or eagerly-fetched content.
+ * How many cards a row offers.
+ *
+ * Twelve, because a row is a recommendation and a recommendation that runs
+ * to fifty is a catalogue. The browse tabs are where the catalogue lives.
  */
-function pickFeatured(): FeaturedItem[] {
-  const movies = getVodMovies() ?? [];
-  const series = getSeriesList() ?? [];
-  const total = movies.length + series.length;
-  if (total === 0) return [];
-
-  /*
-   * Draws FEATURED_COUNT distinct random positions instead of copying and
-   * shuffling the catalog. The previous version built ~26,000 objects and
-   * ran a full Fisher-Yates over them to keep 12 — synchronously, inside
-   * `useFocusEffect`, so every single return to Home paid for it during the
-   * navigation transition.
-   *
-   * Indices are drawn across both lists at once, so the mix stays
-   * proportional to their sizes without concatenating them.
-   */
-  const picked = new Set<number>();
-  const wanted = Math.min(FEATURED_COUNT, total);
-  // Bounded: worst case is a catalog barely larger than FEATURED_COUNT, and
-  // the attempt cap keeps even that from spinning.
-  for (let attempts = 0; picked.size < wanted && attempts < wanted * 20; attempts++) {
-    picked.add(Math.floor(Math.random() * total));
-  }
-
-  const out: FeaturedItem[] = [];
-  for (const index of picked) {
-    if (index < movies.length) {
-      const m = movies[index];
-      if (m.posterUrl) {
-        out.push({
-          contentType: "movie",
-          providerItemId: m.providerItemId,
-          name: m.name,
-          posterUrl: m.posterUrl,
-          rating: m.rating,
-        });
-      }
-    } else {
-      const sItem = series[index - movies.length];
-      if (sItem?.posterUrl) {
-        out.push({
-          contentType: "series",
-          providerItemId: sItem.providerItemId,
-          name: sItem.name,
-          posterUrl: sItem.posterUrl,
-          rating: sItem.rating,
-        });
-      }
-    }
-  }
-  return out;
-}
+const ROW_COUNT = 12;
 
 export default function HomeScreen() {
   // Repaints this screen — and everything it renders — when the theme changes.
@@ -115,25 +60,45 @@ export default function HomeScreen() {
   const { t } = useI18n();
   const session = useMemo(() => getActiveSession(), []);
   const [continueWatching, setContinueWatching] = useState<WatchProgressEntry[]>([]);
-  const [featured, setFeatured] = useState<FeaturedItem[]>([]);
-  /*
-   * The lead title and the rail are two slices of one list, memoised
-   * because `data` identity is what tells a FlatList whether anything
-   * changed — a fresh array every render makes it redo work for nothing.
-   */
-  const hero = featured.length > 0 ? featured[0] : null;
-  const railItems = useMemo(() => featured.slice(1), [featured]);
+  const [hero, setHero] = useState<HomeItem | null>(null);
+  const [newRow, setNewRow] = useState<HomeItem[]>([]);
+  const [featuredRow, setFeaturedRow] = useState<HomeItem[]>([]);
+  const [favouriteRow, setFavouriteRow] = useState<LibraryItem[]>([]);
+  const [downloadRow, setDownloadRow] = useState<DownloadTask[]>([]);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+
+  const year = useMemo(() => currentYear(), []);
 
   const refreshContinueWatching = useCallback(() => {
     getRecentWatchProgress(10).then(setContinueWatching);
   }, []);
 
+  /*
+   * Everything the screen shows is rebuilt on focus, not on mount.
+   *
+   * A tab stays mounted while the viewer stars something, downloads
+   * something or finishes an episode three screens away, and a home screen
+   * that only read the database on its first visit would be stale for the
+   * rest of the session — which is the state the rows most worth having are
+   * in most of the time.
+   *
+   * The catalogue rows go through homeRows, which scans the lineup once and
+   * caches against the arrays themselves, so returning here repeatedly
+   * costs a lookup rather than a walk over 26,000 titles.
+   */
   useFocusEffect(
     useCallback(() => {
       refreshContinueWatching();
-      setFeatured(pickFeatured());
+      setHero(pickHero());
+      setNewRow(pickNewThisYear(ROW_COUNT));
+      setFeaturedRow(pickFeatured(ROW_COUNT));
+      getLibraryItems("favorite").then((items) => setFavouriteRow(items.slice(0, ROW_COUNT)));
+      if (downloadsSupported()) {
+        getAllDownloadTasks().then((tasks) =>
+          setDownloadRow(tasks.filter((d) => d.status === "completed").slice(0, ROW_COUNT))
+        );
+      }
     }, [refreshContinueWatching])
   );
 
@@ -169,7 +134,7 @@ export default function HomeScreen() {
     }
   }
 
-  function openFeatured(item: FeaturedItem) {
+  function openFeatured(item: HomeItem) {
     if (item.contentType === "movie") {
       router.push({ pathname: "/movies/details/[movieId]", params: { movieId: item.providerItemId } });
     } else {
@@ -230,61 +195,136 @@ export default function HomeScreen() {
             </Animated.View>
           )}
 
-          {railItems.length > 0 && (
-            /*
-             * The section arrives as one piece — header and rail together.
-             * The cards inside are deliberately left alone; see the note on
-             * FeaturedCard for why a recycling row must not have an
-             * entrance of its own.
-             */
-            <Animated.View entering={FadeInDown.delay(90).duration(360)}>
-              <SectionHeader title={t("home", "featured")} />
+          {/*
+            Rows, each of which disappears when it has nothing to say.
+
+            An empty row is worse than a missing one: it spends a heading, a
+            card-height of screen and a scroll on telling the viewer that
+            there is nothing here. The screen that was here before kept a
+            "Continue watching" heading over an empty box permanently, which
+            is how a home screen ends up mostly furniture.
+          */}
+
+          {continueWatching.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(110).duration(380)}>
+              <SectionHeader
+                title={t("home", "continueWatching")}
+                action={{ label: t("home", "seeAll"), onPress: () => router.push("/history") }}
+                secondaryAction={{
+                  label: t("home", "clear"),
+                  onPress: () => setConfirmClearHistory(true),
+                  destructive: true,
+                }}
+              />
               <FlatList
-        {...NO_CLIP}
-                data={railItems}
+                {...NO_CLIP}
+                data={continueWatching}
                 keyExtractor={(item) => `${item.contentType}-${item.providerItemId}`}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.rail}
-                renderItem={({ item }) => <FeaturedCard item={item} onPress={() => openFeatured(item)} />}
+                renderItem={({ item }) => (
+                  <ContinueWatchingCard entry={item} onPress={() => resumeWatching(item)} />
+                )}
               />
             </Animated.View>
           )}
 
-          <Animated.View entering={FadeInDown.delay(180).duration(360)}>
-          <SectionHeader
-            title={t("home", "continueWatching")}
-            action={
-              continueWatching.length > 0
-                ? { label: t("home", "seeAll"), onPress: () => router.push("/history") }
-                : undefined
-            }
-            secondaryAction={
-              continueWatching.length > 0
-                ? { label: t("home", "clear"), onPress: () => setConfirmClearHistory(true), destructive: true }
-                : undefined
-            }
-          />
-
-          {continueWatching.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyGlyph}>▷</Text>
-              <Text style={styles.emptyCardText}>{t("home", "noWatchHistory")}</Text>
-            </View>
-          ) : (
-            <FlatList
-        {...NO_CLIP}
-              data={continueWatching}
-              keyExtractor={(item) => `${item.contentType}-${item.providerItemId}`}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.rail}
-              renderItem={({ item }) => (
-                <ContinueWatchingCard entry={item} onPress={() => resumeWatching(item)} />
-              )}
-            />
+          {newRow.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(180).duration(380)}>
+              {/* The year is the point of the row, so it is in the heading. */}
+              <SectionHeader title={`${t("home", "newIn")} ${year}`} />
+              <FlatList
+                {...NO_CLIP}
+                data={newRow}
+                keyExtractor={(item) => item.key}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+                renderItem={({ item }) => (
+                  <PosterCard item={item} onPress={() => openFeatured(item)} />
+                )}
+              />
+            </Animated.View>
           )}
-          </Animated.View>
+
+          {favouriteRow.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(250).duration(380)}>
+              <SectionHeader
+                title={t("home", "favorites")}
+                action={{
+                  label: t("home", "seeAll"),
+                  onPress: () =>
+                    router.push({
+                      pathname: "/library/[listType]",
+                      params: { listType: "favorite" },
+                    }),
+                }}
+              />
+              <FlatList
+                {...NO_CLIP}
+                data={favouriteRow}
+                keyExtractor={(item) => `${item.contentType}-${item.providerItemId}`}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+                renderItem={({ item }) => (
+                  <SavedCard
+                    title={item.title}
+                    imageUrl={item.imageUrl}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/library/[listType]",
+                        params: { listType: "favorite" },
+                      })
+                    }
+                  />
+                )}
+              />
+            </Animated.View>
+          )}
+
+          {downloadRow.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(320).duration(380)}>
+              <SectionHeader
+                title={t("home", "downloads")}
+                action={{ label: t("home", "seeAll"), onPress: () => router.push("/downloads") }}
+              />
+              <FlatList
+                {...NO_CLIP}
+                data={downloadRow}
+                keyExtractor={(item) => item.id}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+                renderItem={({ item }) => (
+                  <SavedCard
+                    title={item.title}
+                    imageUrl={item.imageUrl}
+                    onPress={() => router.push("/downloads")}
+                  />
+                )}
+              />
+            </Animated.View>
+          )}
+
+          {featuredRow.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(390).duration(380)}>
+              <SectionHeader title={t("home", "featured")} />
+              <FlatList
+                {...NO_CLIP}
+                data={featuredRow}
+                keyExtractor={(item) => item.key}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+                renderItem={({ item }) => (
+                  <PosterCard item={item} onPress={() => openFeatured(item)} />
+                )}
+              />
+            </Animated.View>
+          )}
+
         </ScrollView>
       </SafeAreaView>
 
@@ -320,6 +360,52 @@ export default function HomeScreen() {
 }
 
 /**
+ * A card for the rows that come out of the database rather than the
+ * catalogue: things the viewer saved or downloaded.
+ *
+ * Those rows carry their own stored image, which can be absent on a row
+ * the viewer built before the artwork was available — so unlike PosterCard
+ * this one does have a fallback, and it has to: dropping a title somebody
+ * explicitly saved, because its picture is missing, would be losing their
+ * work to a cosmetic rule.
+ */
+function SavedCard({
+  title,
+  imageUrl,
+  onPress,
+}: {
+  title: string;
+  imageUrl: string | null;
+  onPress: () => void;
+}) {
+  const [failed, setFailed] = useState(false);
+  const showArt = !failed && hasUsableArt(imageUrl);
+
+  return (
+    <BouncePressable style={styles.featuredCard} onPress={onPress}>
+      <View style={styles.featuredImageWrap}>
+        {showArt ? (
+          <CachedImage
+            uri={imageUrl}
+            style={styles.featuredImage}
+            resizeMode="cover"
+            onError={() => setFailed(true)}
+          />
+        ) : (
+          <View style={styles.featuredFallback} />
+        )}
+        <ArtScrim />
+        <View style={styles.featuredTitleBox}>
+          <Text style={styles.featuredTitle} numberOfLines={2}>
+            {title}
+          </Text>
+        </View>
+      </View>
+    </BouncePressable>
+  );
+}
+
+/**
  * The lead title, and the reason this screen stopped looking like a menu.
  *
  * A home screen whose first element is a row of small cards reads as a
@@ -334,7 +420,7 @@ export default function HomeScreen() {
  * nobody can see at this size, and the comment on CategoryColors records
  * the same decision being taken once before.
  */
-function HeroCard({ item, onPress }: { item: FeaturedItem; onPress: () => void }) {
+function HeroCard({ item, onPress }: { item: HomeItem; onPress: () => void }) {
   const { t } = useI18n();
   const [failed, setFailed] = useState(false);
 
@@ -391,7 +477,16 @@ function HeroCard({ item, onPress }: { item: FeaturedItem; onPress: () => void }
  * those moved to the tab bar and the more screen, so it is now the header
  * and the two section wrappers, each a beat behind the last.
  */
-function FeaturedCard({ item, onPress }: { item: FeaturedItem; onPress: () => void }) {
+/**
+ * One card in a row: a poster, its rating, its name over the art.
+ *
+ * No fallback for a missing picture, because there is no such card here —
+ * homeRows filters anything without usable artwork out before a row is
+ * built. That is the rule for this screen: a browse grid has to show the
+ * whole catalogue, blanks and all, but a recommendation with no picture is
+ * not a recommendation.
+ */
+function PosterCard({ item, onPress }: { item: HomeItem; onPress: () => void }) {
   const [failed, setFailed] = useState(false);
 
   return (
@@ -634,19 +729,6 @@ const styles = themedStyles((C: ThemeColors) =>
   },
   heroPlayGlyph: { color: "#FFFFFF", fontSize: 11, ...AndroidTextFix },
   heroPlayText: { color: "#FFFFFF", fontFamily: FontFamily.semiBold, fontSize: 13, ...AndroidTextFix },
-  emptyCard: {
-    backgroundColor: C.surface,
-    borderColor: C.border,
-    borderWidth: 1,
-    borderRadius: Radii.lg,
-    /* lg, not xxl: an empty state is a note, not a feature. At xxl the
-       "nothing watched yet" card was the tallest thing on the screen. */
-    paddingVertical: Spacing.lg,
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  emptyGlyph: { color: C.fillMedium, fontSize: 40 },
-  emptyCardText: { color: C.textMuted, fontSize: 13, fontFamily: FontFamily.regular },
 
   rail: { gap: Spacing.md, paddingEnd: Spacing.lg },
 
@@ -723,12 +805,6 @@ const styles = themedStyles((C: ThemeColors) =>
     justifyContent: "center",
     padding: Spacing.sm,
     backgroundColor: C.surfaceElevated,
-  },
-  featuredFallbackText: {
-    color: C.textSecondary,
-    fontSize: 11,
-    fontFamily: FontFamily.medium,
-    textAlign: "center",
   },
   ratingBadge: {
     position: "absolute",

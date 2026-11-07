@@ -64,11 +64,17 @@ export default function TabsLayout() {
          * the app uses.
          */
         tabBarStyle: {
+          /*
+           * No hard rule along the top. A 1px line pinned across the screen
+           * is the thing that dated this bar more than anything in it: the
+           * surface is already a shade lighter than the page, which says
+           * "this is a layer" without drawing a border to say it.
+           */
           backgroundColor: C.surface,
-          borderTopColor: C.border,
-          borderTopWidth: 1,
-          height: 58 + insets.bottom,
-          paddingTop: 6,
+          borderTopWidth: 0,
+          elevation: 0,
+          height: 64 + insets.bottom,
+          paddingTop: 10,
           /*
            * The gesture bar on a modern Android phone overlaps the bottom of
            * the window. Without this the labels sit under it and the last

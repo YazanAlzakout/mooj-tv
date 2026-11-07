@@ -224,6 +224,7 @@ const en = {
     watchLater: "Watch Later",
     settings: "Settings",
     downloads: "Downloads",
+    newIn: "New in",
     featured: "Featured",
     continueWatching: "Continue Watching",
     seeAll: "See All",
