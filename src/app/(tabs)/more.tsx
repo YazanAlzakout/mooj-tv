@@ -49,7 +49,8 @@ export default function MoreScreen() {
   return (
     <ScreenBackground>
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-        <ScreenHeader title={t("tabs", "more")} />
+        <ScreenHeader title={t("tabs", "more")}
+        showBack={false} />
 
         <ScrollView
           contentContainerStyle={styles.list}
@@ -57,14 +58,13 @@ export default function MoreScreen() {
         >
           <Row
             glyph="⌕"
-            tint={Brand.primaryLight}
             label={t("home", "search")}
             delay={0}
             onPress={() => router.push("/search")}
           />
           <Row
             glyph="★"
-            tint="#F6C445"
+            gold
             label={t("home", "favorites")}
             delay={55}
             count={favoriteCount}
@@ -74,7 +74,6 @@ export default function MoreScreen() {
           />
           <Row
             glyph="⏱"
-            tint="#8B5CF6"
             label={t("home", "watchLater")}
             delay={110}
             count={watchLaterCount}
@@ -85,7 +84,6 @@ export default function MoreScreen() {
           {downloadsSupported() && (
             <Row
               glyph="⬇"
-              tint="#06B6D4"
               label={t("home", "downloads")}
             delay={165}
               count={downloadsCount}
@@ -94,14 +92,12 @@ export default function MoreScreen() {
           )}
           <Row
             glyph="◷"
-            tint={Brand.primary}
             label={t("history", "title")}
             delay={220}
             onPress={() => router.push("/history")}
           />
           <Row
             glyph="⚙"
-            tint="#94A3B8"
             label={t("home", "settings")}
             delay={275}
             onPress={() => router.push("/settings")}
@@ -122,19 +118,21 @@ export default function MoreScreen() {
  */
 function Row({
   glyph,
-  tint,
+  gold,
   label,
   count,
   delay,
   onPress,
 }: {
   glyph: string;
-  tint: string;
+  /** Favourites only: a star the viewer placed is a different kind of thing. */
+  gold?: boolean;
   label: string;
   count?: number | null;
   delay: number;
   onPress: () => void;
 }): ReactNode {
+  const tint = gold ? "#F6C445" : Brand.primaryLight;
   return (
     /*
      * Each row arrives a beat after the one above it. 55ms is small enough

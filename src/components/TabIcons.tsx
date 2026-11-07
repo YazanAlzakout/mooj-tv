@@ -5,31 +5,37 @@ import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-na
 /**
  * The five glyphs in the bottom tab bar.
  *
- * Drawn from plain views, like the icons on the home screen and for the same
- * reason: there is no monochrome character in Unicode for "a television with
- * two antennas" or "a stack of episodes", the colour emoji that come closest
- * ignore the tint, and pulling an SVG renderer in for five small shapes is
- * not worth the bundle. A handful of bordered boxes costs nothing.
+ * Drawn from plain views, like the icons on the home screen and for the
+ * reason that one gives: there is no monochrome character in Unicode for "a
+ * television with two antennas" or "a stack of episodes", the colour emoji
+ * that come closest ignore the tint, and an SVG renderer for five small
+ * shapes is not worth the bundle.
  *
- * Every glyph takes the tint as a prop rather than reading the theme: the tab
- * bar interpolates the colour between the active and inactive states as the
- * selection moves, and a glyph that fetched its own colour would ignore that
- * and snap.
+ * ## Outline when idle, solid when selected
  *
- * All five are built from `size` alone so the bar can be retuned in one
- * place, and all five occupy the same square box so the labels underneath sit
- * on one line however tall a particular shape happens to be.
+ * The first version drew every glyph as an outline and let the tab bar's
+ * tint do the rest. The verdict on it was that the bar had no life in it,
+ * and the reason is that a colour change alone is the weakest signal a
+ * shape can carry: against a dark ground, a grey outline and a blue outline
+ * are the same drawing. Filling the selected one changes the *amount of
+ * ink*, which the eye picks up before it has read anything — and it is the
+ * convention every tab bar worth copying already uses.
+ *
+ * So each glyph takes `focused` and swaps its own fills. The tint still
+ * animates underneath and the scale nudge still fires; this is the part
+ * that makes the bar legible at a glance rather than merely responsive.
  */
 
 interface GlyphProps {
   /*
    * `ColorValue`, not `string`: the tab bar animates the tint between its
    * active and inactive values and can hand down a platform colour object
-   * rather than a hex string. Narrowing this to `string` would compile
-   * only by throwing that away.
+   * rather than a hex string. Narrowing this to `string` would compile only
+   * by throwing that away.
    */
   color: ColorValue;
   size: number;
+  focused?: boolean;
 }
 
 /** Shared square so five different shapes still line up with each other. */
@@ -41,8 +47,8 @@ function Box({ size, children }: { size: number; children: React.ReactNode }) {
   );
 }
 
-/** A house: a border-drawn roof over an open-topped body. */
-export function HomeGlyph({ color, size }: GlyphProps) {
+/** A house: a border-drawn roof over a body that fills in when selected. */
+export function HomeGlyph({ color, size, focused }: GlyphProps) {
   const w = size * 0.42;
   return (
     <Box size={size}>
@@ -63,14 +69,15 @@ export function HomeGlyph({ color, size }: GlyphProps) {
           borderWidth: size * 0.09,
           borderTopWidth: 0,
           borderColor: color,
+          backgroundColor: focused ? color : "transparent",
         }}
       />
     </Box>
   );
 }
 
-/** A television: two antennas over a screen. */
-export function LiveGlyph({ color, size }: GlyphProps) {
+/** A television: two antennas over a screen that fills in when selected. */
+export function LiveGlyph({ color, size, focused }: GlyphProps) {
   const antenna = {
     position: "absolute" as const,
     width: size * 0.07,
@@ -91,6 +98,7 @@ export function LiveGlyph({ color, size }: GlyphProps) {
           borderWidth: size * 0.09,
           borderColor: color,
           borderRadius: size * 0.12,
+          backgroundColor: focused ? color : "transparent",
         }}
       />
     </Box>
@@ -101,13 +109,17 @@ export function LiveGlyph({ color, size }: GlyphProps) {
  * A strip of film: a frame with a sprocket hole top and bottom on each side.
  *
  * Two holes a side rather than the four a real strip has — at tab-bar size
- * four become a grey smear, and the shape stops reading as film at all.
+ * four become a grey smear and the shape stops reading as film at all.
+ *
+ * When selected the frame fills and the holes invert to the ground colour,
+ * which is what keeps them visible: holes the same colour as a filled frame
+ * would simply disappear.
  */
-export function MoviesGlyph({ color, size }: GlyphProps) {
+export function MoviesGlyph({ color, size, focused }: GlyphProps) {
   const hole = {
     width: size * 0.11,
     height: size * 0.11,
-    backgroundColor: color,
+    backgroundColor: focused ? "#050A14" : color,
     borderRadius: size * 0.03,
   };
   const column = { justifyContent: "space-between" as const, height: size * 0.44 };
@@ -120,6 +132,7 @@ export function MoviesGlyph({ color, size }: GlyphProps) {
           borderWidth: size * 0.09,
           borderColor: color,
           borderRadius: size * 0.1,
+          backgroundColor: focused ? color : "transparent",
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
@@ -143,7 +156,7 @@ export function MoviesGlyph({ color, size }: GlyphProps) {
  * A stack of episodes: three cards seen from the front, each narrower than
  * the one in front of it so the stack reads as depth rather than as a list.
  */
-export function SeriesGlyph({ color, size }: GlyphProps) {
+export function SeriesGlyph({ color, size, focused }: GlyphProps) {
   return (
     <Box size={size}>
       <View style={{ alignItems: "center" }}>
@@ -174,6 +187,7 @@ export function SeriesGlyph({ color, size }: GlyphProps) {
             borderColor: color,
             borderRadius: size * 0.1,
             marginTop: size * 0.06,
+            backgroundColor: focused ? color : "transparent",
           }}
         />
       </View>
@@ -181,17 +195,21 @@ export function SeriesGlyph({ color, size }: GlyphProps) {
   );
 }
 
-/** Three dots. The one glyph that needs no explaining in any language. */
-export function MoreGlyph({ color, size }: GlyphProps) {
+/**
+ * Three dots. The one glyph that needs no explaining in any language, and
+ * the one that cannot fill in — so it grows instead.
+ */
+export function MoreGlyph({ color, size, focused }: GlyphProps) {
+  const d = focused ? 0.2 : 0.16;
   const dot = {
-    width: size * 0.16,
-    height: size * 0.16,
-    borderRadius: size * 0.08,
+    width: size * d,
+    height: size * d,
+    borderRadius: (size * d) / 2,
     backgroundColor: color,
   };
   return (
     <Box size={size}>
-      <View style={{ flexDirection: "row", gap: size * 0.12 }}>
+      <View style={{ flexDirection: "row", gap: size * 0.11 }}>
         <View style={dot} />
         <View style={dot} />
         <View style={dot} />
@@ -201,17 +219,14 @@ export function MoreGlyph({ color, size }: GlyphProps) {
 }
 
 /**
- * The glyph as the tab bar actually renders it: scaled up and lifted a
- * couple of pixels while its tab is the selected one.
+ * The glyph as the tab bar actually renders it: filled while its tab is the
+ * selected one, and scaled up a touch on the way in.
  *
- * The bar already interpolates the tint, so without this the only thing
- * that moves when a viewer changes section is a colour — which reads as a
- * screenshot changing rather than as a thing responding. The spring is
- * small on purpose, and was made smaller after the first build read as
- * overdone: this fires on every tab press, several times a minute, and
- * anything with real travel in it is tiring by the third day. A 7% scale
- * and a pixel and a half of lift is enough to say "that responded" and
- * little enough that nobody will ever describe it.
+ * The spring is small on purpose, and was made smaller after the first
+ * build read as overdone: this fires on every tab press, several times a
+ * minute, and anything with real travel in it is tiring by the third day. A
+ * 7% scale and a pixel and a half of lift is enough to say that something
+ * responded, and little enough that nobody will ever describe it.
  *
  * `{ duration, dampingRatio }` is the Reanimated 4 spring form. The older
  * `{ stiffness, damping }` pair still works, but `restDisplacementThreshold`
@@ -242,7 +257,7 @@ export function AnimatedTabGlyph({
 
   return (
     <Animated.View style={style}>
-      <Glyph color={color} size={22} />
+      <Glyph color={color} size={22} focused={focused} />
     </Animated.View>
   );
 }

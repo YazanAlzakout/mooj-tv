@@ -1,4 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
+import { ArtScrim } from "@/components/ArtScrim";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -349,6 +350,7 @@ export default function MoviesCategoriesScreen() {
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <ScreenHeader
         title={t("moviesCategories", "title")}
+        showBack={false}
         subtitle={`${filteredMovies.length.toLocaleString()} ${t("moviesGrid", "moviesCountSuffix")}`}
         /*
           The television's only way to reload the catalogue. Every other
@@ -562,7 +564,7 @@ const MoviePoster = memo(function MoviePoster({
           native module and the only other place that wanted one solved it
           the same way, with stacked views.
         */}
-        <View style={styles.posterTitleScrim} pointerEvents="none" />
+        <ArtScrim />
         <View style={styles.posterTitleBox}>
           <Text style={styles.posterTitle} numberOfLines={2}>
             {movie.name}
@@ -676,14 +678,6 @@ const styles = themedStyles((C: ThemeColors) =>
     position: "relative",
   },
   posterImage: { width: "100%", height: "100%" },
-  posterTitleScrim: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: "46%",
-    backgroundColor: "rgba(5,10,20,0.72)",
-  },
   posterSkeleton: {
     ...StyleSheet.absoluteFill,
     backgroundColor: C.surfaceElevated,

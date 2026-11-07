@@ -22,9 +22,19 @@ export function ScreenHeader({
   subtitle,
   right,
   onBack,
+  showBack = true,
 }: {
   title: string;
   subtitle?: string;
+  /**
+   * False on a screen that is a tab.
+   *
+   * A back button offers to undo a journey, and a tab is not one: there is
+   * nothing behind it, so pressing it leaves the app or lands somewhere
+   * arbitrary. It also takes the first thing the eye lands on and spends it
+   * on a control that does nothing useful.
+   */
+  showBack?: boolean;
   right?: ReactNode;
   onBack?: () => void;
 }) {
@@ -32,6 +42,7 @@ export function ScreenHeader({
 
   return (
     <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
+      {showBack && (
       <BouncePressable
         style={styles.backButton}
         onPress={onBack ?? (() => router.back())}
@@ -48,6 +59,7 @@ export function ScreenHeader({
         */}
         <Text style={styles.backButtonText}>{"‹"}</Text>
       </BouncePressable>
+      )}
 
       <View style={styles.titleWrap}>
         <Text style={styles.title} numberOfLines={1}>

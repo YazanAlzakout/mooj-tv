@@ -1,4 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
+import { ArtScrim } from "@/components/ArtScrim";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -354,6 +355,7 @@ export default function SeriesCategoriesScreen() {
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <ScreenHeader
         title={t("seriesCategories", "title")}
+        showBack={false}
         subtitle={`${filteredSeries.length.toLocaleString()} ${t("seriesGrid", "seriesCountSuffix")}`}
         /*
           The television's only way to reload the catalogue. Every other
@@ -562,7 +564,7 @@ const SeriesPoster = memo(function SeriesPoster({
           row height, so this is about the title not shifting down a line
           on the cards that happen to have no year.
         */}
-        <View style={styles.posterTitleScrim} pointerEvents="none" />
+        <ArtScrim />
         <View style={styles.posterTitleBox}>
           <Text style={styles.posterTitle} numberOfLines={2}>
             {series.name}
@@ -679,14 +681,6 @@ const styles = themedStyles((C: ThemeColors) =>
     position: "relative",
   },
   posterImage: { width: "100%", height: "100%" },
-  posterTitleScrim: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: "48%",
-    backgroundColor: "rgba(5,10,20,0.72)",
-  },
   posterSkeleton: {
     ...StyleSheet.absoluteFill,
     backgroundColor: C.surfaceElevated,

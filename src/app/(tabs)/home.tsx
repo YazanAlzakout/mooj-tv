@@ -8,6 +8,7 @@ import { CachedImage } from "@/components/CachedImage";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { ArtScrim } from "@/components/ArtScrim";
 import { BouncePressable } from "@/components/BouncePressable";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ScreenBackground } from "@/components/ScreenBackground";
@@ -351,10 +352,8 @@ function HeroCard({ item, onPress }: { item: FeaturedItem; onPress: () => void }
         <View style={[styles.heroImage, styles.heroFallback]} />
       )}
 
-      {/* Bottom-up scrim, so the title has something to sit on whatever the still is. */}
-      <View style={styles.heroScrimSoft} pointerEvents="none" />
-      <View style={styles.heroScrimMid} pointerEvents="none" />
-      <View style={styles.heroScrimDeep} pointerEvents="none" />
+      {/* Bottom-up shade, so the title has something to sit on whatever the still is. */}
+      <ArtScrim />
 
       <View style={styles.heroBody}>
         <View style={styles.heroMeta}>
@@ -486,7 +485,14 @@ const styles = themedStyles((C: ThemeColors) =>
    * looked indented from the edge and the wordmark looked detached from
    * it, even though the box and the text were already adjacent.
    */
-  header: { flexDirection: "row", alignItems: "center", marginStart: -Spacing.xl, marginTop: -Spacing.sm },
+  /*
+   * No negative margins. The ones that were here pulled a wordmark PNG
+   * back into place — that file carried a wide band of transparent padding
+   * and had to be dragged out of it. Mooj's mark is a sphere cropped to its
+   * own edge, so the same pull dragged a 144pt circle off the top-left
+   * corner of the screen and over the status bar.
+   */
+  header: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
   /**
    * The negative vertical margin is against the artwork, not the layout:
    * the PNG is a 499×500 square with the mark floating in the middle, so a
@@ -495,8 +501,8 @@ const styles = themedStyles((C: ThemeColors) =>
    * the visible mark keeps its size, the dead space around it does not
    * push the rest of the screen down.
    */
-  logo: { width: 144, height: 144, marginVertical: -Spacing.xl },
-  brandText: { flex: 1, gap: 2, marginStart: -Spacing.xl, marginEnd: Spacing.sm },
+  logo: { width: 40, height: 40 },
+  brandText: { flex: 1, gap: 2, marginEnd: Spacing.sm },
   brandName: {
     color: C.text,
     fontSize: 16,
@@ -581,9 +587,6 @@ const styles = themedStyles((C: ThemeColors) =>
   },
   heroImage: { ...StyleSheet.absoluteFill, width: "100%", height: "100%" },
   heroFallback: { backgroundColor: C.surfaceElevated },
-  heroScrimSoft: { position: "absolute", left: 0, right: 0, bottom: 0, height: "62%", backgroundColor: "rgba(5,10,20,0.18)" },
-  heroScrimMid: { position: "absolute", left: 0, right: 0, bottom: 0, height: "40%", backgroundColor: "rgba(5,10,20,0.42)" },
-  heroScrimDeep: { position: "absolute", left: 0, right: 0, bottom: 0, height: "22%", backgroundColor: "rgba(5,10,20,0.68)" },
   heroBody: { position: "absolute", left: 0, right: 0, bottom: 0, padding: Spacing.lg, gap: Spacing.xs },
   heroMeta: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
   heroBadge: {

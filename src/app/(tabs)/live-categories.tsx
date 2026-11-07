@@ -1,4 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
+import { ArtScrim } from "@/components/ArtScrim";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -54,16 +55,17 @@ const GRID_PADDING = Spacing.md;
 const COLUMN_GAP = Spacing.sm;
 const CELL_PADDING = Spacing.xs;
 /*
- * Landscape, 16:10, where this used to be very nearly square.
+ * Back to very nearly square, after 16:10 was tried and was wrong.
  *
- * A channel's artwork is a logo, and a logo is a wide mark with air round
- * it — squeezed into a square tile it sits in the middle with empty
- * corners, and twelve of those read as a grid of boxes rather than a lineup
- * of channels. The wide card is the shape the logo was drawn for, and it is
- * the one place in this app where a landscape frame is right: a film poster
- * is portrait and cropping one to this would show a strip of its middle.
+ * The reasoning for the wide card was that a channel logo is a wide mark.
+ * On the real lineup it is not: the logos are square or taller, most on a
+ * white ground, and `contain` inside a 16:10 frame fitted them by height
+ * and left two thirds of every card empty. Twelve cards of mostly nothing.
+ *
+ * This is the one claim in the redesign that was made about the content
+ * without looking at it, and it is the one that was wrong.
  */
-const ART_RATIO = 10 / 16;
+const ART_RATIO = 1 / 1.15;
 const ROW_GAP = Spacing.sm;
 
 /**
@@ -551,6 +553,7 @@ export default function LiveCategoriesScreen() {
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <ScreenHeader
         title={t("liveCategories", "title")}
+        showBack={false}
         subtitle={`${filteredChannels.length.toLocaleString()} ${t("liveChannelList", "channelsCountSuffix")}`}
         /*
           Two controls that exist only on the television, in a slot that
@@ -789,7 +792,7 @@ const ChannelCard = memo(function ChannelCard({
             native module and the two other screens that wanted one solved
             it the same way, with a stacked view.
           */}
-          <View style={styles.cardNameScrim} pointerEvents="none" />
+          <ArtScrim />
           <View style={styles.cardNameBox}>
             <Text style={styles.cardName} numberOfLines={2}>
               {channel.name}
@@ -899,7 +902,7 @@ const styles = themedStyles((C: ThemeColors) =>
   tvHeaderGlyphOn: { color: Brand.primary },
 
   cardArt: {
-    aspectRatio: 16 / 10,
+    aspectRatio: 1.15,
     borderRadius: Radii.lg,
     backgroundColor: isTvBuild ? ArtworkTile.background : C.surface,
     borderColor: isTvBuild ? ArtworkTile.border : C.border,
@@ -912,14 +915,6 @@ const styles = themedStyles((C: ThemeColors) =>
   cardLogo: { width: "88%", height: "88%" },
   cardFallbackText: { color: C.textSecondary, fontSize: 32, fontFamily: FontFamily.extraBold },
   /** Fixed two lines, so every row is exactly `rowHeight()` tall. */
-  cardNameScrim: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: "52%",
-    backgroundColor: "rgba(5,10,20,0.74)",
-  },
   /*
    * Pinned to the bottom of the card with no height of its own, so a
    * one-line and a two-line name give rows of identical height — which is
