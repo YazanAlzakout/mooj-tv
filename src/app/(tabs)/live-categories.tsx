@@ -1,5 +1,4 @@
 import { router, useFocusEffect } from "expo-router";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,9 +13,9 @@ import {
 } from "react-native";
 
 import { BouncePressable } from "@/components/BouncePressable";
-import { CategoryTabs } from "@/components/CategoryTabs";
 import { TV_RAIL_WIDTH } from "@/components/CategorySidebar";
-import { TvBrowseLayout } from "@/components/TvBrowseLayout";
+import { BrowseLayout } from "@/components/TvBrowseLayout";
+import { PHONE_RAIL_WIDTH } from "@/components/CategoryRail";
 import { CachedImage } from "@/components/CachedImage";
 import { Focusable } from "@/components/Focusable";
 import { ScreenBackground, TV_OVERSCAN_X } from "@/components/ScreenBackground";
@@ -54,9 +53,17 @@ const NOTHING: never[] = [];
 const GRID_PADDING = Spacing.md;
 const COLUMN_GAP = Spacing.sm;
 const CELL_PADDING = Spacing.xs;
-const ART_RATIO = 1 / 1.15;
-const NAME_GAP = Spacing.xs;
-const NAME_BOX_HEIGHT = 40;
+/*
+ * Landscape, 16:10, where this used to be very nearly square.
+ *
+ * A channel's artwork is a logo, and a logo is a wide mark with air round
+ * it — squeezed into a square tile it sits in the middle with empty
+ * corners, and twelve of those read as a grid of boxes rather than a lineup
+ * of channels. The wide card is the shape the logo was drawn for, and it is
+ * the one place in this app where a landscape frame is right: a film poster
+ * is portrait and cropping one to this would show a strip of its middle.
+ */
+const ART_RATIO = 10 / 16;
 const ROW_GAP = Spacing.sm;
 
 /**
@@ -71,7 +78,13 @@ const ROW_GAP = Spacing.sm;
 function rowHeight(listWidth: number, columns: number): number {
   const available = listWidth - GRID_PADDING * 2 - COLUMN_GAP * (columns - 1);
   const cardWidth = available / columns - CELL_PADDING * 2;
-  return cardWidth * ART_RATIO + NAME_GAP + NAME_BOX_HEIGHT + ROW_GAP;
+  /*
+   * No name box in this sum any more: the channel name is drawn over the
+   * bottom of the card rather than under it, so a row is exactly a card
+   * plus the gap below it — and a name that wraps to two lines no longer
+   * makes its row taller than its neighbours.
+   */
+  return cardWidth * ART_RATIO + ROW_GAP;
 }
 const SEARCH_DEBOUNCE_MS = 200;
 /** Portrait density; landscape is decided by `useGridColumns`. */
@@ -120,7 +133,7 @@ export default function LiveCategoriesScreen() {
     row height by the width of two 96dp margins spread across the columns.
   */
   const gridWidth =
-    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : 0);
+    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : PHONE_RAIL_WIDTH);
   const gridRowHeight = rowHeight(gridWidth, columns);
 
   const [categories, setCategories] = useState<CategoryTab[] | null>(null);
@@ -599,28 +612,6 @@ export default function LiveCategoriesScreen() {
       */}
       {isTvBuild ? null : (
         <>
-          {categories && categories.length > 1 && (
-            /*
-             * The strip arrives rather than simply being there. A transform
-             * is safe even though this component measures itself: onLayout
-             * reports layout position, which a transform does not move, so
-             * the chip centring still lands on the right chip.
-             *
-             * Nothing below this is animated. The grid is a CategoryPager,
-             * which places its pages by absolute offset and was tuned down
-             * to 0.70% janky frames by taking work out of exactly this
-             * moment. An entrance wrapped round it would put that work
-             * straight back.
-             */
-            <Animated.View entering={FadeInDown.delay(60).duration(320)}>
-            <CategoryTabs
-              categories={categories}
-              activeId={activeCategoryId}
-              onSelect={selectCategory}
-              progress={categoryDrag}
-            />
-            </Animated.View>
-          )}
 
           <TextInput
             style={styles.search}
@@ -634,9 +625,9 @@ export default function LiveCategoriesScreen() {
         </>
       )}
 
-      <TvBrowseLayout categories={categories} activeId={activeCategoryId} onSelect={selectCategory}>
+      <BrowseLayout categories={categories} activeId={activeCategoryId} onSelect={selectCategory}>
         {screenBody}
-      </TvBrowseLayout>
+      </BrowseLayout>
       </SafeAreaView>
 
     </ScreenBackground>
@@ -792,11 +783,18 @@ const ChannelCard = memo(function ChannelCard({
               <Text style={styles.liveBadgeText}>{t("liveChannelList", "liveBadge")}</Text>
             </View>
           )}
-        </View>
-        <View style={styles.cardNameBox}>
-          <Text style={styles.cardName} numberOfLines={2}>
-            {channel.name}
-          </Text>
+          {/*
+            The name, over the artwork rather than beneath it. A flat
+            translucent band, not a gradient: expo-linear-gradient is a
+            native module and the two other screens that wanted one solved
+            it the same way, with a stacked view.
+          */}
+          <View style={styles.cardNameScrim} pointerEvents="none" />
+          <View style={styles.cardNameBox}>
+            <Text style={styles.cardName} numberOfLines={2}>
+              {channel.name}
+            </Text>
+          </View>
         </View>
       </Focusable>
     </View>
@@ -901,7 +899,7 @@ const styles = themedStyles((C: ThemeColors) =>
   tvHeaderGlyphOn: { color: Brand.primary },
 
   cardArt: {
-    aspectRatio: 1.15,
+    aspectRatio: 16 / 10,
     borderRadius: Radii.lg,
     backgroundColor: isTvBuild ? ArtworkTile.background : C.surface,
     borderColor: isTvBuild ? ArtworkTile.border : C.border,
@@ -914,12 +912,33 @@ const styles = themedStyles((C: ThemeColors) =>
   cardLogo: { width: "88%", height: "88%" },
   cardFallbackText: { color: C.textSecondary, fontSize: 32, fontFamily: FontFamily.extraBold },
   /** Fixed two lines, so every row is exactly `rowHeight()` tall. */
-  cardNameBox: { height: NAME_BOX_HEIGHT, marginTop: NAME_GAP, overflow: "hidden" },
+  cardNameScrim: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "52%",
+    backgroundColor: "rgba(5,10,20,0.74)",
+  },
+  /*
+   * Pinned to the bottom of the card with no height of its own, so a
+   * one-line and a two-line name give rows of identical height — which is
+   * the condition getItemLayout needs to promise one height for all of them.
+   */
+  cardNameBox: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: Spacing.sm,
+    paddingBottom: Spacing.sm,
+  },
   cardName: {
-    color: C.text,
-    fontSize: 13,
-    lineHeight: 20,
-    fontFamily: FontFamily.medium,
+    /* White, not the theme ink: this sits on artwork, not on the page. */
+    color: "#FFFFFF",
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: FontFamily.semiBold,
     ...AndroidTextFix,
   },
   favoriteButton: {

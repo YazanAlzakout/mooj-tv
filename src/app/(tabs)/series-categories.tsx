@@ -1,5 +1,4 @@
 import { router, useFocusEffect } from "expo-router";
-import Animated, { FadeInDown } from "react-native-reanimated";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -20,8 +19,8 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import { BouncePressable } from "@/components/BouncePressable";
 import { TV_RAIL_WIDTH } from "@/components/CategorySidebar";
-import { CategoryTabs } from "@/components/CategoryTabs";
-import { TvBrowseLayout } from "@/components/TvBrowseLayout";
+import { BrowseLayout } from "@/components/TvBrowseLayout";
+import { PHONE_RAIL_WIDTH } from "@/components/CategoryRail";
 import { ScreenBackground, TV_OVERSCAN_X } from "@/components/ScreenBackground";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
@@ -47,7 +46,17 @@ const ALL_CATEGORY_ID = "all";
 const NOTHING: never[] = [];
 const SEARCH_DEBOUNCE_MS = 200;
 /** Portrait density; landscape is decided by `useGridColumns`. */
-const PORTRAIT_COLUMNS = 3;
+/*
+ * Two, not the three this started with.
+ *
+ * Three portrait posters across a phone, with the name underneath, is the
+ * shape the app this was cloned from uses — and at that size a poster is a
+ * thumbnail: you read the title, not the artwork. The rail down the side
+ * takes 84dp anyway, so the honest choice was two larger posters with the
+ * name written over them. The artwork becomes the thing you browse by,
+ * which is the whole point of having it.
+ */
+const PORTRAIT_COLUMNS = 2;
 
 /*
  * Cell geometry, kept beside the styles that implement it so the two
@@ -57,8 +66,6 @@ const GRID_PADDING = Spacing.md;
 const COLUMN_GAP = Spacing.sm;
 const CELL_PADDING = Spacing.xs;
 const POSTER_RATIO = 3 / 2;
-const TITLE_GAP = Spacing.xs;
-const TITLE_BOX_HEIGHT = 32;
 /**
  * The year line under the title. It has to be part of the geometry, not an
  * afterthought: it used to render below the fixed title box without being
@@ -67,7 +74,6 @@ const TITLE_BOX_HEIGHT = 32;
  * error compounded row after row until, a few hundred series down, the
  * cells under the finger fell outside the render window and went blank.
  */
-const YEAR_BOX_HEIGHT = 16;
 const ROW_GAP = Spacing.md;
 
 /**
@@ -84,7 +90,14 @@ const ROW_GAP = Spacing.md;
 function rowHeight(listWidth: number, columns: number): number {
   const available = listWidth - GRID_PADDING * 2 - COLUMN_GAP * (columns - 1);
   const posterWidth = available / columns - CELL_PADDING * 2;
-  return posterWidth * POSTER_RATIO + TITLE_GAP + TITLE_BOX_HEIGHT + YEAR_BOX_HEIGHT + ROW_GAP;
+  /*
+   * Neither the title nor the year is in this sum any more: both are drawn
+   * over the bottom of the poster rather than under it, so a row is exactly
+   * a poster plus the gap below it. A one-line title and a two-line title
+   * now produce identical rows, which is the condition getItemLayout needs
+   * in order to promise one height for all of them.
+   */
+  return posterWidth * POSTER_RATIO + ROW_GAP;
 }
 
 interface CategoryTab {
@@ -130,7 +143,7 @@ export default function SeriesCategoriesScreen() {
     row height by the width of two 96dp margins spread across the columns.
   */
   const gridWidth =
-    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : 0);
+    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : PHONE_RAIL_WIDTH);
   const gridRowHeight = rowHeight(gridWidth, columns);
 
   const [series, setSeries] = useState<SeriesSummary[] | null>(() => getSeriesList());
@@ -387,28 +400,6 @@ export default function SeriesCategoriesScreen() {
             `maxWidth` — which is what a mixed Arabic/Latin category name
             needs in order not to be clipped.
           */}
-          {categories && categories.length > 1 && (
-            /*
-             * The strip arrives rather than simply being there. A transform
-             * is safe even though this component measures itself: onLayout
-             * reports layout position, which a transform does not move, so
-             * the chip centring still lands on the right chip.
-             *
-             * Nothing below this is animated. The grid is a CategoryPager,
-             * which places its pages by absolute offset and was tuned down
-             * to 0.70% janky frames by taking work out of exactly this
-             * moment. An entrance wrapped round it would put that work
-             * straight back.
-             */
-            <Animated.View entering={FadeInDown.delay(60).duration(320)}>
-            <CategoryTabs
-              categories={categories}
-              activeId={activeCategoryId}
-              onSelect={setActiveCategoryId}
-              progress={categoryDrag}
-            />
-            </Animated.View>
-          )}
 
           <TextInput
             style={styles.search}
@@ -422,7 +413,7 @@ export default function SeriesCategoriesScreen() {
         </>
       )}
 
-      <TvBrowseLayout categories={categories} activeId={activeCategoryId} onSelect={setActiveCategoryId}>
+      <BrowseLayout categories={categories} activeId={activeCategoryId} onSelect={setActiveCategoryId}>
     {errorMessage && (
       <View style={styles.errorBlock}>
         <Text style={styles.error}>{errorMessage}</Text>
@@ -494,7 +485,7 @@ export default function SeriesCategoriesScreen() {
         )}
       />
     )}
-      </TvBrowseLayout>
+      </BrowseLayout>
       </SafeAreaView>
     </ScreenBackground>
   );
@@ -560,21 +551,26 @@ const SeriesPoster = memo(function SeriesPoster({
             <Text style={styles.ratingBadgeText}>★ {series.rating.toFixed(1)}</Text>
           </View>
         )}
-      </View>
-      <View style={styles.posterTitleBox}>
-        <Text style={styles.posterTitle} numberOfLines={2}>
-          {series.name}
-        </Text>
-      </View>
-      {/*
-        Always rendered, even with no year: an element that appears on some
-        cards and not others makes rows different heights, and `getItemLayout`
-        below promises the list they are all identical.
-      */}
-      <View style={styles.posterYearBox}>
-        <Text style={styles.posterYear} numberOfLines={1}>
-          {series.year ?? ""}
-        </Text>
+        {/*
+          Name and year over the artwork rather than beneath it. The scrim
+          is a flat translucent band, not a gradient: expo-linear-gradient
+          is a native module, and the only other place that wanted one
+          solved it the same way with stacked views.
+
+          The year is still rendered when absent, as it was when it sat
+          below — but for a different reason now. It no longer changes the
+          row height, so this is about the title not shifting down a line
+          on the cards that happen to have no year.
+        */}
+        <View style={styles.posterTitleScrim} pointerEvents="none" />
+        <View style={styles.posterTitleBox}>
+          <Text style={styles.posterTitle} numberOfLines={2}>
+            {series.name}
+          </Text>
+          <Text style={styles.posterYear} numberOfLines={1}>
+            {series.year ?? ""}
+          </Text>
+        </View>
       </View>
     </Focusable>
     </View>
@@ -683,6 +679,14 @@ const styles = themedStyles((C: ThemeColors) =>
     position: "relative",
   },
   posterImage: { width: "100%", height: "100%" },
+  posterTitleScrim: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "48%",
+    backgroundColor: "rgba(5,10,20,0.72)",
+  },
   posterSkeleton: {
     ...StyleSheet.absoluteFill,
     backgroundColor: C.surfaceElevated,
@@ -716,17 +720,29 @@ const styles = themedStyles((C: ThemeColors) =>
    * plain-Arabic one, and a box sized exactly to the nominal height clips
    * the taller case; that has bitten this project three separate times.
    */
-  posterTitleBox: { height: TITLE_BOX_HEIGHT, marginTop: TITLE_GAP, overflow: "hidden" },
+  /*
+   * Pinned to the bottom of the artwork, with no height of its own: a
+   * one-line and a two-line title occupy the same row either way, which is
+   * what lets getItemLayout promise a single height for the whole list.
+   */
+  posterTitleBox: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: Spacing.sm,
+    paddingBottom: Spacing.sm,
+  },
   posterTitle: {
-    color: C.text,
-    fontSize: 11,
-    lineHeight: 15,
-    fontFamily: FontFamily.medium,
+    /* White, not the theme ink: these sit on artwork, not on the page. */
+    color: "#FFFFFF",
+    fontSize: 12,
+    lineHeight: 16,
+    fontFamily: FontFamily.semiBold,
     ...AndroidTextFix,
   },
-  posterYearBox: { height: YEAR_BOX_HEIGHT, justifyContent: "center", overflow: "hidden" },
   posterYear: {
-    color: C.textMuted,
+    color: "rgba(255,255,255,0.72)",
     fontSize: 10,
     lineHeight: 14,
     fontFamily: FontFamily.regular,
