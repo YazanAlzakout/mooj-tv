@@ -106,47 +106,50 @@ export function LiveGlyph({ color, size, focused }: GlyphProps) {
 }
 
 /**
- * A strip of film: a frame with a sprocket hole top and bottom on each side.
+ * A screen with a play mark in it.
  *
- * Two holes a side rather than the four a real strip has — at tab-bar size
- * four become a grey smear and the shape stops reading as film at all.
+ * It was a strip of film: a frame with four sprocket holes in it. Outlined
+ * that read correctly, but filled — which is what the selected tab does
+ * now — four light dots inside a solid rounded rectangle is a die, and
+ * that is what it looked like on the device, sitting in a row of
+ * perfectly legible glyphs.
  *
- * When selected the frame fills and the holes invert to the ground colour,
- * which is what keeps them visible: holes the same colour as a filled frame
- * would simply disappear.
+ * A play mark has no such failure mode in either state, and it cannot be
+ * confused with Live TV beside it, which carries two antennas that this
+ * one does not.
+ *
+ * The triangle is border-drawn: three borders, two of them transparent, is
+ * how React Native produces a solid non-rectangular shape without an SVG
+ * renderer. The same trick draws the roof on the home glyph.
  */
 export function MoviesGlyph({ color, size, focused }: GlyphProps) {
-  const hole = {
-    width: size * 0.11,
-    height: size * 0.11,
-    backgroundColor: focused ? "#050A14" : color,
-    borderRadius: size * 0.03,
-  };
-  const column = { justifyContent: "space-between" as const, height: size * 0.44 };
+  /* On a filled frame the mark has to be cut out of it, not drawn on it. */
+  const mark = focused ? "#050A14" : color;
   return (
     <Box size={size}>
       <View
         style={{
-          width: size * 0.84,
-          height: size * 0.66,
+          width: size * 0.86,
+          height: size * 0.64,
           borderWidth: size * 0.09,
           borderColor: color,
-          borderRadius: size * 0.1,
+          borderRadius: size * 0.12,
           backgroundColor: focused ? color : "transparent",
-          flexDirection: "row",
           alignItems: "center",
-          justifyContent: "space-between",
-          paddingHorizontal: size * 0.06,
+          justifyContent: "center",
         }}
       >
-        <View style={column}>
-          <View style={hole} />
-          <View style={hole} />
-        </View>
-        <View style={column}>
-          <View style={hole} />
-          <View style={hole} />
-        </View>
+        <View
+          style={{
+            marginLeft: size * 0.04,
+            borderTopWidth: size * 0.11,
+            borderBottomWidth: size * 0.11,
+            borderLeftWidth: size * 0.18,
+            borderTopColor: "transparent",
+            borderBottomColor: "transparent",
+            borderLeftColor: mark,
+          }}
+        />
       </View>
     </Box>
   );
