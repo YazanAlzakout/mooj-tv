@@ -5,7 +5,7 @@ import { playerApiUrl } from "./playerApiUrl";
 
 /**
  * Raw shapes verified 2026-09-01 against the real test provider
- * (albasera-tv.net, category 397 and several `get_series_info` samples).
+ * (category 397 and several `get_series_info` samples).
  * Two real quirks found and handled defensively rather than assumed away:
  *
  * 1. `seasons[]` metadata can be an empty array even when `episodes` has

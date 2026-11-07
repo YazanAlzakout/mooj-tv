@@ -40,7 +40,7 @@ const tr: TranslationShape = {
     slide2Body: "Buna ayak uyduracak şekilde tasarlanmış bir oynatıcıyla kanallar arasında anında geçiş yapın.",
     slide3Title: "Sağlayıcınız, verileriniz",
     slide3Body:
-      "ALBASERA yalnızca bağlandığınız sağlayıcının içeriğini oynatır — cihazınızın dışında hiçbir şey saklanmaz veya paylaşılmaz.",
+      "Mooj TV yalnızca bağlandığınız sağlayıcının içeriğini oynatır — cihazınızın dışında hiçbir şey saklanmaz veya paylaşılmaz.",
   },
 
   legal: {
@@ -56,7 +56,7 @@ const tr: TranslationShape = {
       scopeAndAcceptance: {
         heading: "Kabul ve kapsam",
         body: [
-          "Bu şartlar (EULA, Hizmet Şartları ve Telif Hakkı/DMCA Bildirimi dâhil) ALBASERA Player (\"Uygulama\") kullanımınızı düzenler. Uygulamayı indirerek, kurarak, erişerek veya kullanarak bu şartlara bağlı olmayı kabul edersiniz.",
+          "Bu şartlar (EULA, Hizmet Şartları ve Telif Hakkı/DMCA Bildirimi dâhil) Mooj TV (\"Uygulama\") kullanımınızı düzenler. Uygulamayı indirerek, kurarak, erişerek veya kullanarak bu şartlara bağlı olmayı kabul edersiniz.",
           "Kabul etmiyorsanız Uygulamayı kullanmayın.",
         ],
       },

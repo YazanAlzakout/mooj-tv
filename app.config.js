@@ -1,5 +1,13 @@
 const isTV = process.env.EXPO_TV === "1";
 
+/*
+ * Every value that makes this build Mooj TV rather than some other brand.
+ * One object, one file, shared with the runtime through
+ * `src/core/brand/index.ts` — see the note at the top of brand.config.js
+ * for why it is not spread over the places it is used.
+ */
+const BRAND = require("./brand.config.js");
+
 /**
  * **A build that installs beside the published app instead of replacing it.**
  *
@@ -13,7 +21,7 @@ const isTV = process.env.EXPO_TV === "1";
  *
  * The only ways out are to uninstall the store copy — which erases the saved
  * provider, the library and the watch history with it — or to let the test
- * build be a different app. This is the second. Set `ALBASERA_DEV_ID=1` and
+ * build be a different app. This is the second. Set `MOOJ_DEV_ID=1` and
  * the build takes its own id, its own launcher label and its own URL scheme,
  * so both copies live on one phone and the real one is never touched.
  *
@@ -24,55 +32,43 @@ const isTV = process.env.EXPO_TV === "1";
  * optional bookkeeping, it is how the production build is produced at all.
  *
  * Two things do not follow the id, and both are accepted rather than fixed:
- * the dev-client scheme `exp+albasera-player-v2` comes from `slug`, which is
+ * the dev-client scheme `exp+mooj-tv` comes from `slug`, which is
  * tied to the EAS project, so "open in development build" may offer a choice
  * when both copies are installed; and the 1.x provider import
  * (`legacyProviderImport.ts`) reads the *old published app's* SecureStore,
  * which only exists under the production id — that one migration path can
  * only be tested on a build carrying it.
  */
-const isDevId = process.env.ALBASERA_DEV_ID === "1";
+const isDevId = process.env[BRAND.devEnvVar] === "1";
 
 /*
- * The live app id. Resolved 2026-09-04: this release replaces the app
- * already published on Google Play rather than going out as a new listing,
- * and the package id is the app's identity on Play — it cannot be changed
- * after publication, so it has to match the existing one exactly.
+ * The live app id, and the one value here that can never be taken back: a
+ * changed package id after publication is a different app to Play, with its
+ * own listing, its own install base and its own reviews. Chosen 2026-11-07,
+ * while nothing was published and it was still free to choose.
+ *
+ * The value lives in brand.config.js because it is brand identity rather
+ * than build configuration.
  */
-const ANDROID_PACKAGE = isDevId ? "com.albasera.player.dev" : "com.albasera.player";
+const ANDROID_PACKAGE = isDevId ? BRAND.packageId + ".dev" : BRAND.packageId;
 
 /*
- * Must be strictly greater than every versionCode ever uploaded to Play,
- * across all tracks — not just production.
+ * Play orders releases by this number and refuses an upload carrying one it
+ * has already seen — on any track, not only production.
  *
- * Read from Play Console on 2026-09-04: production is on 6, and an Android
- * TV internal-test build had already taken 7, which was the highest in use.
- * Starting 2.0 at 10 clears both with room to spare, so an upload is never
- * rejected over a code claimed by a track that is easy to forget about.
+ * This app has never been published, so it starts at 1 with the whole range
+ * ahead of it. Nothing increments it automatically: the project builds
+ * natively rather than through EAS, so it is raised here by hand for every
+ * upload.
  *
- * Nothing increments this automatically. The published app left it to EAS
- * (`appVersionSource: "remote"` with `autoIncrement`), which kept the number
- * on EAS's servers rather than in the repository; this project builds
- * natively, so it is bumped here by hand for every release.
+ * One rule is carried over from the project this was cloned from, because
+ * it was learned the expensive way: **a free versionCode is read from App
+ * bundle explorer in Play Console, never inferred from the repository.**
+ * There, a number looked unused because no commit mentioned it, and Play
+ * refused the upload — a build had reached a test track and left no trace
+ * in git.
  */
-/*
- * Bumped by two each release so the phone/TV pair never collides with the
- * previous pair. 10/11 are on Play (10 in production, 11 on the Android TV
- * open-testing track). 12/13 were built and sideloaded for testing but
- * never uploaded, so those numbers are still free on Play. 14/15 was built
- * and sideloaded on the test television; 20/21 was the last pair before the
- * television moved to its own repository and its own 200+ range, and this
- * one is 24/25 — so `dumpsys package` can always say which build a device
- * is actually running, which is how a build that had silently never
- * produced an APK at all was caught.
- *
- * 24 rather than 23: on 2026-10-28 Play refused 22 outright, saying that
- * version code 22 had already been used. So the 6 October build did reach
- * a test track after all, and the repository record of what was uploaded
- * cannot be trusted on its own. 23 is the television half of that same
- * refused pair, so the next pair certainly free is 24/25.
- */
-const VERSION_CODE_BASE = 24;
+const VERSION_CODE_BASE = 1;
 
 /*
  * Phone and TV are one app on Play — same listing, same package id, with
@@ -88,45 +84,33 @@ const ANDROID_VERSION_CODE = isTV ? VERSION_CODE_BASE + 1 : VERSION_CODE_BASE;
 module.exports = {
   expo: {
     /*
-     * The launcher label, and deliberately not "… 2": the 2.0 is a version,
-     * not a new identity. This release replaces the published app on the
-     * same package id, so the name its existing users already have on their
-     * home screen is the one that should stay there — a renamed icon reads
-     * as a different app, not as an update.
+     * The launcher label. Both halves come from brand.config.js, so a
+     * further brand needs no edit in this file at all.
      */
     /* A sideload copy says so on the home screen, or the tester cannot tell the two apart. */
     name: isDevId
-      ? isTV
-        ? "AlBasera TV (dev)"
-        : "AlBasera (dev)"
+      ? (isTV ? BRAND.displayNameTv : BRAND.displayName) + " (dev)"
       : isTV
-        ? "AlBasera Player TV"
-        : "AlBasera Player",
-    slug: "albasera-player-v2",
+        ? BRAND.displayNameTv
+        : BRAND.displayName,
+    slug: BRAND.slug,
     /*
-     * The version the store shows, and it must move with every upload.
+     * The version the store shows. It moves with every upload and it is for
+     * people to read — `versionCode` below is the number Play actually
+     * orders releases by.
      *
-     * Play already has a public release called **2.0** (versionCode 10,
-     * published 4 September 2026). Play will happily accept a second upload
-     * carrying the same name, and then the listing shows "2.0" twice with
-     * nothing to tell a customer which one they have — so the name is
-     * raised even though the work in this release is not a new major
-     * version.
-     *
-     * Not to be confused with `versionCode` below, which is the number Play
-     * actually orders releases by. That one is 22 for the phone, above every
-     * code this repository has any record of using.
+     * Nothing is published yet, so this is the first one.
      */
-    version: "2.2",
+    version: "1.0",
     orientation: isTV ? "landscape" : "default",
     icon: "./assets/images/icon.png",
     /*
      * Branched with the id: two installed copies claiming one scheme make
-     * Android stop resolving `albaseraplayer2://` to either of them — it
+     * Android stop resolving `moojtv://` to either of them — it
      * offers a chooser, or picks whichever it likes, so a deep link tested
      * on the sideload build opens the store copy half the time.
      */
-    scheme: isDevId ? "albaseraplayer2dev" : "albaseraplayer2",
+    scheme: isDevId ? BRAND.scheme + "dev" : BRAND.scheme,
     userInterfaceStyle: "automatic",
     newArchEnabled: true,
 
@@ -137,7 +121,7 @@ module.exports = {
         // Matches the published app exactly, icon assets included: this
         // release replaces it on Play, and an updating user should find the
         // same icon in the same place on their home screen.
-        backgroundColor: "#E6F4FE",
+        backgroundColor: BRAND.adaptiveIconBackground,
         foregroundImage: "./assets/images/android-icon-foreground.png",
         backgroundImage: "./assets/images/android-icon-background.png",
         monochromeImage: "./assets/images/android-icon-monochrome.png",
@@ -277,8 +261,23 @@ module.exports = {
        * answer, baked into the manifest.
        */
       isTvBuild: isTV,
-      eas: {
-        projectId: "79a3df7f-90b8-4285-833a-ac8ef62b8683",
+      /*
+       * The runtime half of brand.config.js, baked into the manifest at
+       * build time.
+       *
+       * Read it through src/core/brand/index.ts and never from here
+       * directly: `Constants.expoConfig` can come back null, and a brand
+       * value arriving as `undefined` would be worse than wrong — an
+       * undefined database name opens a different database, and the
+       * viewer's whole library appears to have vanished. That module
+       * carries literal fallbacks for exactly that case, and
+       * tools/verify-brand.js proves the two still agree.
+       */
+      brand: {
+        key: BRAND.key,
+        displayName: BRAND.displayName,
+        wordmark: BRAND.wordmark,
+        databaseName: BRAND.databaseName,
       },
     },
   },

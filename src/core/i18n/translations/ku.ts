@@ -44,7 +44,7 @@ const ku: TranslationShape = {
     slide2Body: "Di navbera kanalan de yekser derbas bibe, bi lîstikvanek ku ji bo vê yekê hatiye çêkirin.",
     slide3Title: "Dabînkerê te, daneyên te",
     slide3Body:
-      "ALBASERA tenê naveroka dabînkerê ku tu pê ve girêdayî yî lêdide — tiştek ji derveyî amûra te nayê tomarkirin an parvekirin.",
+      "Mooj TV tenê naveroka dabînkerê ku tu pê ve girêdayî yî lêdide — tiştek ji derveyî amûra te nayê tomarkirin an parvekirin.",
   },
 
   legal: {
@@ -60,7 +60,7 @@ const ku: TranslationShape = {
       scopeAndAcceptance: {
         heading: "Qebûlkirin û qada şertan",
         body: [
-          "Ev şert (bi nav de EULA, Şertên Xizmetê û Agahdariya Mafê Nivîskar/DMCA) bikaranîna te ya ALBASERA Player (\"Sepan\") rêk dide. Bi daxistin, sazkirin, gihîştin an bikaranînê, tu van şertan qebûl dikî.",
+          "Ev şert (bi nav de EULA, Şertên Xizmetê û Agahdariya Mafê Nivîskar/DMCA) bikaranîna te ya Mooj TV (\"Sepan\") rêk dide. Bi daxistin, sazkirin, gihîştin an bikaranînê, tu van şertan qebûl dikî.",
           "Heke tu qebûl nakî, Sepanê bikar neynî.",
         ],
       },

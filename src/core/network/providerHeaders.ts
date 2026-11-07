@@ -3,7 +3,7 @@
  * calls and the media requests the native player makes.
  *
  * This provider's panel sits behind Cloudflare (confirmed 2026-09-03: a
- * request to `http://albasera-tv.net/` returns 403 with `Server:
+ * request to the panel's own root returns 403 with `Server:
  * cloudflare`). Xtream panels behind a WAF routinely reject the default
  * Android HTTP client user agent (`okhttp/...`, `Dalvik/...`,
  * `ExoPlayerLib/...`) while accepting an ordinary browser one. The

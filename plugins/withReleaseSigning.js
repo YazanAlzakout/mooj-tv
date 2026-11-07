@@ -19,11 +19,24 @@ const { withAppBuildGradle } = require('@expo/config-plugins');
  * signing config, exactly as a stock Expo project does, so a machine
  * without the keystore can still produce a local release build to test.
  */
+/*
+ * Brand-specific on purpose, and this is not cosmetic.
+ *
+ * The machine that builds this app also builds another one, whose own
+ * upload properties live in the same ~/.gradle/gradle.properties. Had these
+ * names been left as that app's, a release build here would have picked up
+ * its key and signed this app with it — silently, with no error, because a
+ * present property is exactly what this plugin looks for. The mistake would
+ * only surface at the Play upload, or worse, not at all.
+ *
+ * So the prefix matches the brand, and two apps on one machine can never
+ * reach for each other's key.
+ */
 const PROPS = {
-  storeFile: 'ALBASERA_UPLOAD_STORE_FILE',
-  storePassword: 'ALBASERA_UPLOAD_STORE_PASSWORD',
-  keyAlias: 'ALBASERA_UPLOAD_KEY_ALIAS',
-  keyPassword: 'ALBASERA_UPLOAD_KEY_PASSWORD',
+  storeFile: 'MOOJ_UPLOAD_STORE_FILE',
+  storePassword: 'MOOJ_UPLOAD_STORE_PASSWORD',
+  keyAlias: 'MOOJ_UPLOAD_KEY_ALIAS',
+  keyPassword: 'MOOJ_UPLOAD_KEY_PASSWORD',
 };
 
 const DEBUG_SIGNING = 'signingConfig signingConfigs.debug';

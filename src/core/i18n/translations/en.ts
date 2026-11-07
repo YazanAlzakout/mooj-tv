@@ -43,7 +43,7 @@ const en = {
     slide2Body: "Zap between channels instantly, with a player designed to keep up.",
     slide3Title: "Your provider, your data",
     slide3Body:
-      "ALBASERA only plays content from the provider you connect — nothing is stored or shared beyond your device.",
+      "Mooj TV only plays content from the provider you connect — nothing is stored or shared beyond your device.",
   },
 
   legal: {
@@ -59,7 +59,7 @@ const en = {
       scopeAndAcceptance: {
         heading: "Acceptance and scope",
         body: [
-          "These terms (including the EULA, Terms of Service, and the Copyright/DMCA Notice) govern your use of ALBASERA Player (the “App”). By downloading, installing, accessing, or using the App, you agree to be bound by these terms.",
+          "These terms (including the EULA, Terms of Service, and the Copyright/DMCA Notice) govern your use of Mooj TV (the “App”). By downloading, installing, accessing, or using the App, you agree to be bound by these terms.",
           "If you do not agree, do not use the App.",
         ],
       },

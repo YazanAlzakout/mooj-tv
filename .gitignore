@@ -57,7 +57,7 @@ modules/*/android/build/
 # tree: a keystore copied to the project root to run a build, a
 # properties file written beside it.
 #
-# Signing itself reads ALBASERA_UPLOAD_STORE_FILE and friends as gradle
+# Signing itself reads MOOJ_UPLOAD_STORE_FILE and friends as gradle
 # project properties supplied from outside the project (see the release
 # signingConfig), which is why android/gradle.properties holds no
 # credentials at all.

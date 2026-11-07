@@ -166,7 +166,7 @@ export default function AddProviderScreen() {
 
         This used to be the server address, which quietly undid the masking
         everywhere else: a viewer who left the name blank ended up with
-        "albasera-tv.net:80" printed as their provider's name in the list
+        the server's own address printed as their provider's name in the list
         and in Settings, in bold, while the field it came from was masked.
       */
       const hostLabel = t("addProvider", "defaultName");

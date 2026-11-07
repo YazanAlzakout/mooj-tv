@@ -5,7 +5,7 @@ import { playerApiUrl } from "./playerApiUrl";
 
 /**
  * Raw shapes verified 2026-09-01 against the real test provider
- * (albasera-tv.net, category 31 "ARABIC VOD" and several `get_vod_info`
+ * (category 31 "ARABIC VOD" and several `get_vod_info`
  * samples) — NOT assumed from generic Xtream documentation. That check
  * also confirmed this provider never populates `genre` or a release
  * date/year on any sampled movie, which is why MovieDetails has no such

@@ -1,5 +1,5 @@
 {
-  "name": "albasera-player-v2",
+  "name": "mooj-tv",
   "main": "expo-router/entry",
   "version": "0.0.1",
   "private": true,
@@ -12,7 +12,7 @@
     "web": "expo start --web",
     "prebuild": "expo prebuild",
     "prebuild:tv": "cross-env EXPO_TV=1 expo prebuild",
-    "prebuild:dev": "cross-env ALBASERA_DEV_ID=1 expo prebuild",
+    "prebuild:dev": "cross-env MOOJ_DEV_ID=1 expo prebuild",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "doctor": "npx expo-doctor",

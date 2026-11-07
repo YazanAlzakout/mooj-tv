@@ -10,7 +10,7 @@ import { playerApiUrl } from "./playerApiUrl";
  * as unix-epoch-second strings).
  *
  * UNVERIFIED against a live populated response: every channel on our real
- * test provider (albasera-tv.net) returns `epg_listings: []`, and its
+ * test provider returns `epg_listings: []`, and its
  * xmltv.php feed has channel entries but zero <programme> elements — see
  * docs/DECISIONS.md. This parser is defensive (drops anything that doesn't
  * look sane rather than throwing or guessing) precisely because it hasn't

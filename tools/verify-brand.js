@@ -1,0 +1,135 @@
+#!/usr/bin/env node
+/**
+ * Proves this build is actually this brand, and not half of another one.
+ *
+ * The project was cloned from a working app with a different name, and the
+ * dangerous part of that is not the obvious strings — it is the ones that
+ * fail silently. Every check below exists because of a specific way this
+ * could go wrong without anybody noticing until far too late.
+ *
+ * Run it before any release build:  node tools/verify-brand.js
+ */
+const fs = require("fs");
+const path = require("path");
+
+const root = path.join(__dirname, "..");
+const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
+
+const BRAND = require(path.join(root, "brand.config.js"));
+
+let failed = 0;
+function check(why, ok, detail) {
+  if (ok) {
+    console.log("  PASS  " + why);
+  } else {
+    failed++;
+    console.log("  FAIL  " + why + (detail ? "\n          " + detail : ""));
+  }
+}
+
+console.log("\n== the brand reaches the running app ==");
+
+/*
+ * src/core/brand/index.ts carries literal fallbacks for the case where
+ * Constants.expoConfig comes back null. A fallback that has drifted from
+ * brand.config.js is the worst kind of bug here: everything looks right
+ * until the one device where the manifest is missing, and that device then
+ * opens a different database and shows an empty library.
+ */
+const runtime = read("src/core/brand/index.ts");
+for (const key of ["key", "displayName", "wordmark", "databaseName"]) {
+  check(
+    "the " + key + " fallback still matches brand.config.js",
+    runtime.includes(`${key}: "${BRAND[key]}"`),
+    "expected " + key + ': "' + BRAND[key] + '" in the FALLBACK block'
+  );
+}
+
+console.log("\n== nothing is signed with another brand's key ==");
+
+/*
+ * This machine holds more than one app's upload properties in the same
+ * ~/.gradle/gradle.properties. The signing plugin activates on the mere
+ * presence of a property name, so a leftover prefix would sign this app
+ * with the other one's key, silently and with no error at all.
+ */
+const signing = read("plugins/withReleaseSigning.js");
+const prefix = BRAND.key.toUpperCase() + "_UPLOAD_";
+check(
+  "the gradle signing properties carry this brand's prefix",
+  signing.includes(prefix + "STORE_FILE") && signing.includes(prefix + "KEY_ALIAS"),
+  "expected " + prefix + "* in plugins/withReleaseSigning.js"
+);
+check(
+  "no other brand's upload property survives in the signing plugin",
+  !/ALBASERA_UPLOAD_/.test(signing)
+);
+
+console.log("\n== the build identity is this brand's ==");
+
+const expo = require(path.join(root, "app.config.js")).expo;
+check("the package id is the one in brand.config.js", expo.android.package === BRAND.packageId,
+      "got " + expo.android.package);
+check("the slug is the one in brand.config.js", expo.slug === BRAND.slug, "got " + expo.slug);
+check("the deep-link scheme is the one in brand.config.js", expo.scheme === BRAND.scheme,
+      "got " + expo.scheme);
+check("the launcher label is the one in brand.config.js", expo.name === BRAND.displayName,
+      "got " + expo.name);
+check("the runtime half is embedded in the manifest",
+      expo.extra && expo.extra.brand && expo.extra.brand.databaseName === BRAND.databaseName);
+
+console.log("\n== no visible trace of the project this was cloned from ==");
+
+/*
+ * Comments may still describe findings made against the original test
+ * provider — that knowledge is worth keeping. What must not survive is the
+ * old brand's name anywhere a viewer could read it.
+ */
+function walk(dir, out) {
+  for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+    const rel = dir + "/" + entry.name;
+    if (entry.isDirectory()) walk(rel, out);
+    else if (/\.(ts|tsx)$/.test(entry.name)) out.push(rel);
+  }
+  return out;
+}
+/*
+ * One file is allowed to contain the string, and only one: the shortcode
+ * table holds the content server's real address, which is a functional
+ * value rather than a brand name — the operator chose to keep the same
+ * server. It never reaches the interface, because add-provider.tsx shows a
+ * neutral label instead; a server address printed as a provider's name
+ * would undo the masking done everywhere else.
+ *
+ * The exemption is the exact literal, not the file, so anything else that
+ * drifts into that file is still caught.
+ */
+const ALLOWED = ['"22": "http://albasera-tv.net:80"'];
+const offenders = walk("src", []).filter((f) => {
+  let text = read(f);
+  for (const literal of ALLOWED) text = text.split(literal).join("");
+  return /albasera|البصيرة/i.test(text);
+});
+check(
+  "no source file names the previous brand",
+  offenders.length === 0,
+  offenders.join("\n          ")
+);
+
+/*
+ * Called out on its own because it is the line an eye slides over: a legal
+ * contact address is read by exactly the people it has to be right for —
+ * someone filing a copyright complaint — and pointing them at another
+ * company's inbox is worse than having no address at all.
+ */
+const legal = walk("src/core/i18n", []).filter((f) => /support@albasera.app/.test(read(f)));
+check(
+  "the legal contact address belongs to this brand",
+  legal.length === 0,
+  legal.length + " translation file(s) still carry the previous support address"
+);
+
+console.log("\n====================================================");
+console.log("  " + (failed === 0 ? "all checks passed" : failed + " FAILED"));
+console.log("====================================================\n");
+process.exit(failed === 0 ? 0 : 1);

@@ -40,7 +40,7 @@ const fr: TranslationShape = {
     slide2Body: "Passez d'une chaîne à l'autre instantanément, avec un lecteur conçu pour suivre le rythme.",
     slide3Title: "Votre fournisseur, vos données",
     slide3Body:
-      "ALBASERA ne diffuse que le contenu du fournisseur auquel vous vous connectez — rien n'est stocké ni partagé au-delà de votre appareil.",
+      "Mooj TV ne diffuse que le contenu du fournisseur auquel vous vous connectez — rien n'est stocké ni partagé au-delà de votre appareil.",
   },
 
   legal: {
@@ -56,7 +56,7 @@ const fr: TranslationShape = {
       scopeAndAcceptance: {
         heading: "Acceptation et champ d'application",
         body: [
-          "Les présentes conditions (y compris l'EULA, les Conditions d'utilisation et l'Avis Droits d'auteur/DMCA) régissent votre utilisation d'ALBASERA Player (l'« Application »). En téléchargeant, installant, accédant à ou utilisant l'Application, vous acceptez d'être lié par ces conditions.",
+          "Les présentes conditions (y compris l'EULA, les Conditions d'utilisation et l'Avis Droits d'auteur/DMCA) régissent votre utilisation d'Mooj TV (l'« Application »). En téléchargeant, installant, accédant à ou utilisant l'Application, vous acceptez d'être lié par ces conditions.",
           "Si vous n'acceptez pas, n'utilisez pas l'Application.",
         ],
       },

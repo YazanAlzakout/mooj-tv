@@ -12,6 +12,7 @@ import { BouncePressable } from "@/components/BouncePressable";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ScreenBackground } from "@/components/ScreenBackground";
 import { SectionHeader } from "@/components/SectionHeader";
+import { BRAND } from "@/core/brand";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { AndroidTextFix, Brand, CategoryColors, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
@@ -246,7 +247,7 @@ export default function HomeScreen() {
               resizeMode="contain"
             />
             <View style={styles.brandText}>
-              <Text style={styles.brandName}>ALBASERA</Text>
+              <Text style={styles.brandName}>{BRAND.wordmark}</Text>
               <Text style={styles.welcome} numberOfLines={2}>
                 {t("home", "welcomeBack")} · {session.provider.name}
               </Text>

@@ -1,9 +1,12 @@
 import { Platform } from "react-native";
 
 /**
- * Shared design tokens. Colors and the accent are carried over from the
- * live ALBASERA brand (see docs/DECISIONS.md) — dark-first, one red accent,
- * no screen-for-screen copying of the old app's layouts.
+ * Shared design tokens: dark-first, one blue accent.
+ *
+ * Every colour below was sampled from the Mooj TV logo itself rather than
+ * chosen by eye, so the app and the artwork cannot drift apart — the deep
+ * navy is the sphere's lower edge, the royal blue is its middle, and the
+ * light blue is the brightest wave.
  */
 
 /**
@@ -33,18 +36,37 @@ export const AndroidTextFix =
     : ({} as const);
 
 export const Brand = {
-  primary: "#E50914",
-  primaryDark: "#B20710",
-  primaryLight: "#FF2D3A",
-  primaryGlow: "rgba(229, 9, 20, 0.35)",
-  primaryMuted: "rgba(229, 9, 20, 0.15)",
-  focus: "#00F2FF",
+  /** The sphere's middle. The accent on every surface. */
+  primary: "#1989C6",
+  /** The sphere's lower edge — pressed states and deep fills. */
+  primaryDark: "#021753",
+  /** The brightest wave. Hover, highlights, the active tab. */
+  primaryLight: "#3EB9EB",
+  primaryGlow: "rgba(25, 137, 198, 0.35)",
+  primaryMuted: "rgba(25, 137, 198, 0.15)",
+  /**
+   * White, and deliberately not a blue.
+   *
+   * The app this was cloned from used a red accent with a cyan focus ring,
+   * which told the two apart at a glance. With a blue brand that no longer
+   * works: a blue ring around a blue-accented card is the one thing a
+   * viewer cannot read quickly, and on a television that is the difference
+   * between knowing where you are and not. So focus is separated by
+   * brightness instead of hue, which stays legible whatever the brand.
+   */
+  focus: "#FFFFFF",
 } as const;
 
 export const Colors = {
-  background: "#0A0A0F",
-  surface: "#12121A",
-  surfaceElevated: "#1C1C28",
+  /*
+   * Near-black, tilted a few degrees towards navy so the ground belongs to
+   * the same family as the logo instead of being a neutral the brand merely
+   * sits on. The darkest pixel sampled from the artwork is #01030F, which
+   * is this within a shade.
+   */
+  background: "#050A14",
+  surface: "#0D1422",
+  surfaceElevated: "#16203A",
   border: "rgba(255,255,255,0.08)",
   text: "#F9FAFB",
   textSecondary: "#9CA3AF",

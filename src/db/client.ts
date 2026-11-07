@@ -1,8 +1,15 @@
 import { openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
 
 import { migrations } from "./migrations";
+import { BRAND } from "@/core/brand";
 
-const DATABASE_NAME = "albasera.db";
+/*
+ * Branded so two brands installed side by side can never read each other's
+ * catalogue. A different package id already gives each app its own private
+ * storage, so this is the second lock rather than the first — but the cost
+ * of being wrong here is the viewer's whole library, so it gets both.
+ */
+const DATABASE_NAME = BRAND.databaseName;
 
 let dbPromise: Promise<SQLiteDatabase> | null = null;
 
