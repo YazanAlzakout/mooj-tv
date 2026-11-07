@@ -164,7 +164,18 @@ module.exports = {
          * notification for a sound that lasts 70 milliseconds.
          */
         "expo-audio",
-        { enableBackgroundPlayback: false },
+        {
+          enableBackgroundPlayback: false,
+          /*
+           * And no microphone. The plugin adds RECORD_AUDIO unless this is
+           * explicitly false — it supports recording as well as playback,
+           * and assumes an app installing it wants both. This one plays a
+           * 70ms click. A player asking for the microphone puts
+           * "Microphone" on its Play listing and invites a question from
+           * review that has no good answer.
+           */
+          recordAudioAndroid: false,
+        },
       ],
       [
         "expo-splash-screen",
