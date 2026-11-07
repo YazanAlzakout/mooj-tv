@@ -70,6 +70,8 @@ export function ArcHero({ height, children }: { height: number; children: React.
     return { radius, span, inset: Math.round((span - width) / 2) };
   }, [height, width]);
 
+  const fallbackRadius = Math.round(Math.min(height * 0.5, width * 0.06));
+
   return (
     <View style={[styles.outer, { height }]}>
       <View
@@ -84,9 +86,14 @@ export function ArcHero({ height, children }: { height: number; children: React.
               }
             : {
                 width: "100%",
-                /* Half the band's height, which is as much curve as a wide short hero can carry. */
-                borderBottomLeftRadius: Math.round(height * 0.5),
-                borderBottomRightRadius: Math.round(height * 0.5),
+                /*
+                 * Measured against the width as well as the height. Half
+                 * the height alone rounds the bottom of an 870-by-180 band
+                 * all the way to its midline, which reads as a lozenge
+                 * rather than a hero; 6% of the width keeps it a corner.
+                 */
+                borderBottomLeftRadius: fallbackRadius,
+                borderBottomRightRadius: fallbackRadius,
               },
         ]}
       >
