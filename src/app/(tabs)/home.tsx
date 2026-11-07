@@ -405,11 +405,16 @@ function FeaturedCard({ item, onPress }: { item: FeaturedItem; onPress: () => vo
               onError={() => setFailed(true)}
             />
           ) : (
-            <View style={styles.featuredFallback}>
-              <Text style={styles.featuredFallbackText} numberOfLines={3}>
-                {item.name}
-              </Text>
-            </View>
+            /*
+              A plain tile, with no text in it.
+              
+              It used to carry the name, because the title then sat under
+              the card and a card with no art was a blank box. The title is
+              over the art now, so the name is already there — and a card
+              whose poster failed was printing it twice, once greyed in the
+              middle and once white at the foot.
+            */
+            <View style={styles.featuredFallback} />
           )}
           {item.rating !== null && (
             <View style={styles.ratingBadge}>

@@ -353,31 +353,41 @@ export default function SeriesCategoriesScreen() {
       {/* No bottom edge: the tab bar below already clears the gesture area,
           and asking for it here too leaves a second empty strip. */}
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-      <ScreenHeader
-        title={t("seriesCategories", "title")}
-        showBack={false}
-        subtitle={`${filteredSeries.length.toLocaleString()} ${t("seriesGrid", "seriesCountSuffix")}`}
-        /*
-          The television's only way to reload the catalogue. Every other
-          refresh path in the app is a pull gesture, which a remote cannot
-          perform — so a provider adding titles was invisible until the
-          provider was removed and re-added. `isTvBuild`-gated, so the
-          phone header is unchanged and keeps the pull.
-        */
-        right={
-          isTvBuild ? (
-            <Focusable
-              onPress={handleRefresh}
-              disabled={refreshing}
-              style={styles.tvHeaderButton}
-              round
-              hitSlop={10}
-            >
-              <Text style={styles.tvHeaderGlyph}>{refreshing ? "⋯" : "⟳"}</Text>
-            </Focusable>
-          ) : undefined
-        }
-      />
+      {/*
+        Television only. On a phone this said the same word the tab under
+        it already says, and spent a title row, a count row and their
+        padding doing it — about 150dp of the screen before the first
+        poster. The count moved beside the search field, which is the one
+        place it is actually useful: it answers how much is left after
+        what you just typed.
+      */}
+      {isTvBuild && (
+        <ScreenHeader
+          title={t("seriesCategories", "title")}
+          showBack={false}
+          subtitle={`${filteredSeries.length.toLocaleString()} ${t("seriesGrid", "seriesCountSuffix")}`}
+          /*
+            The television's only way to reload the catalogue. Every other
+            refresh path in the app is a pull gesture, which a remote cannot
+            perform — so a provider adding titles was invisible until the
+            provider was removed and re-added. `isTvBuild`-gated, so the
+            phone header is unchanged and keeps the pull.
+          */
+          right={
+            isTvBuild ? (
+              <Focusable
+                onPress={handleRefresh}
+                disabled={refreshing}
+                style={styles.tvHeaderButton}
+                round
+                hitSlop={10}
+              >
+                <Text style={styles.tvHeaderGlyph}>{refreshing ? "⋯" : "⟳"}</Text>
+              </Focusable>
+            ) : undefined
+          }
+        />
+      )}
 
       {/*
         Phone only. On a television these two are replaced by the
@@ -403,6 +413,7 @@ export default function SeriesCategoriesScreen() {
             needs in order not to be clipped.
           */}
 
+          <View style={styles.searchRow}>
           <TextInput
             style={styles.search}
             placeholder={t("seriesGrid", "searchPlaceholder")}
@@ -412,6 +423,8 @@ export default function SeriesCategoriesScreen() {
             value={searchInput}
             onChangeText={setSearchInput}
           />
+          <Text style={styles.searchCount}>{filteredSeries.length.toLocaleString()}</Text>
+          </View>
         </>
       )}
 
@@ -630,9 +643,22 @@ const styles = themedStyles((C: ThemeColors) =>
    * stroke to break, the whole shape is one filled region.
    */
 
-  search: {
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  searchCount: {
+    color: C.textMuted,
+    fontSize: 12,
+    fontFamily: FontFamily.semiBold,
+    ...AndroidTextFix,
+  },
+  search: {
+    flex: 1,
     backgroundColor: C.surface,
     borderColor: C.border,
     borderWidth: 1,

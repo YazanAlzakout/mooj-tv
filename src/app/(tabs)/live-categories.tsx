@@ -551,60 +551,70 @@ export default function LiveCategoriesScreen() {
       {/* No bottom edge: the tab bar below already clears the gesture area,
           and asking for it here too leaves a second empty strip. */}
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-      <ScreenHeader
-        title={t("liveCategories", "title")}
-        showBack={false}
-        subtitle={`${filteredChannels.length.toLocaleString()} ${t("liveChannelList", "channelsCountSuffix")}`}
-        /*
-          Two controls that exist only on the television, in a slot that
-          existed and was used by nothing.
+      {/*
+        Television only. On a phone this said the same word the tab under
+        it already says, and spent a title row, a count row and their
+        padding doing it — about 150dp of the screen before the first
+        poster. The count moved beside the search field, which is the one
+        place it is actually useful: it answers how much is left after
+        what you just typed.
+      */}
+      {isTvBuild && (
+        <ScreenHeader
+          title={t("liveCategories", "title")}
+          showBack={false}
+          subtitle={`${filteredChannels.length.toLocaleString()} ${t("liveChannelList", "channelsCountSuffix")}`}
+          /*
+            Two controls that exist only on the television, in a slot that
+            existed and was used by nothing.
 
-          They replace two things a remote could not do at all. **Refresh**:
-          every path that reloads the catalogue was behind a
-          `RefreshControl`, which needs a pull — so a provider could add
-          channels and the only way to see them was to remove the provider
-          and add it again. **Favourite**: see `focusedChannel`.
+            They replace two things a remote could not do at all. **Refresh**:
+            every path that reloads the catalogue was behind a
+            `RefreshControl`, which needs a pull — so a provider could add
+            channels and the only way to see them was to remove the provider
+            and add it again. **Favourite**: see `focusedChannel`.
 
-          Both are `isTvBuild`-gated, so the phone header is byte-for-byte
-          what it was: on a phone the pull gesture and the per-cell star are
-          the right controls and both still work.
-        */
-        right={
-          isTvBuild ? (
-            <View style={styles.tvHeaderActions}>
-              <Focusable
-                onPress={() => focusedChannel && toggleFavorite(focusedChannel)}
-                disabled={focusedChannel === null}
-                style={styles.tvHeaderButton}
-                round
-                hitSlop={10}
-              >
-                <Text
-                  style={[
-                    styles.tvHeaderGlyph,
-                    focusedChannel !== null &&
-                      favoriteIds.has(focusedChannel.providerItemId) &&
-                      styles.tvHeaderGlyphOn,
-                  ]}
+            Both are `isTvBuild`-gated, so the phone header is byte-for-byte
+            what it was: on a phone the pull gesture and the per-cell star are
+            the right controls and both still work.
+          */
+          right={
+            isTvBuild ? (
+              <View style={styles.tvHeaderActions}>
+                <Focusable
+                  onPress={() => focusedChannel && toggleFavorite(focusedChannel)}
+                  disabled={focusedChannel === null}
+                  style={styles.tvHeaderButton}
+                  round
+                  hitSlop={10}
                 >
-                  {focusedChannel !== null && favoriteIds.has(focusedChannel.providerItemId)
-                    ? "★"
-                    : "☆"}
-                </Text>
-              </Focusable>
-              <Focusable
-                onPress={handleRefresh}
-                disabled={refreshing}
-                style={styles.tvHeaderButton}
-                round
-                hitSlop={10}
-              >
-                <Text style={styles.tvHeaderGlyph}>{refreshing ? "⋯" : "⟳"}</Text>
-              </Focusable>
-            </View>
-          ) : undefined
-        }
-      />
+                  <Text
+                    style={[
+                      styles.tvHeaderGlyph,
+                      focusedChannel !== null &&
+                        favoriteIds.has(focusedChannel.providerItemId) &&
+                        styles.tvHeaderGlyphOn,
+                    ]}
+                  >
+                    {focusedChannel !== null && favoriteIds.has(focusedChannel.providerItemId)
+                      ? "★"
+                      : "☆"}
+                  </Text>
+                </Focusable>
+                <Focusable
+                  onPress={handleRefresh}
+                  disabled={refreshing}
+                  style={styles.tvHeaderButton}
+                  round
+                  hitSlop={10}
+                >
+                  <Text style={styles.tvHeaderGlyph}>{refreshing ? "⋯" : "⟳"}</Text>
+                </Focusable>
+              </View>
+            ) : undefined
+          }
+        />
+      )}
 
       {/*
         Two shapes for the same content. On a phone the categories are a
@@ -616,6 +626,7 @@ export default function LiveCategoriesScreen() {
       {isTvBuild ? null : (
         <>
 
+          <View style={styles.searchRow}>
           <TextInput
             style={styles.search}
             placeholder={t("liveChannelList", "searchPlaceholder")}
@@ -625,6 +636,8 @@ export default function LiveCategoriesScreen() {
             value={searchInput}
             onChangeText={setSearchInput}
           />
+          <Text style={styles.searchCount}>{filteredChannels.length.toLocaleString()}</Text>
+          </View>
         </>
       )}
 
@@ -819,9 +832,22 @@ const styles = themedStyles((C: ThemeColors) =>
    * that, never accommodate it.
    */
 
-  search: {
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
     marginHorizontal: Spacing.lg,
     marginBottom: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  searchCount: {
+    color: C.textMuted,
+    fontSize: 12,
+    fontFamily: FontFamily.semiBold,
+    ...AndroidTextFix,
+  },
+  search: {
+    flex: 1,
     backgroundColor: C.surface,
     borderColor: C.border,
     borderWidth: 1,

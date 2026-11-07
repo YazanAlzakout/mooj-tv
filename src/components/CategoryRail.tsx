@@ -140,7 +140,13 @@ const Chip = ({
     onPress={() => onSelect(item.id)}
     accessibilityLabel={item.name}
   >
-    <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={2}>
+    {/*
+      Three lines, not two. At 84dp a name like "ARABIC VOD NEW" wraps past
+      two and was being cut to "ARABIC VOD NEW…", which is the half that
+      tells you nothing — every category in that provider starts the same
+      way and differs at the end.
+    */}
+    <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={3}>
       {item.name}
     </Text>
   </BouncePressable>
