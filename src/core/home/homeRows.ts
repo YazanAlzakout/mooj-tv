@@ -86,6 +86,9 @@ export function currentYear(): string {
 interface Scan {
   newThisYear: HomeItem[];
   withArt: HomeItem[];
+  topRated: HomeItem[];
+  movies: HomeItem[];
+  series: HomeItem[];
 }
 
 let cacheKey: readonly [unknown, unknown] | null = null;
@@ -103,6 +106,16 @@ function scan(): Scan {
   const year = currentYear();
   const newThisYear: HomeItem[] = [];
   const withArt: HomeItem[] = [];
+  const movieItems: HomeItem[] = [];
+  const seriesItems: HomeItem[] = [];
+  /*
+   * Rated separately and sorted at the end rather than kept in order as we
+   * go: inserting into a sorted array is quadratic, and the catalogue is
+   * large enough for that to be felt. Capped before sorting for the same
+   * reason — the top of a list of 300 is the top of the catalogue, and
+   * nobody scrolls a recommendation row past twelve.
+   */
+  const rated: HomeItem[] = [];
 
   for (const m of movies) {
     if (!hasUsableArt(m.posterUrl)) continue;
@@ -117,6 +130,8 @@ function scan(): Scan {
     };
     if (item.year === year && newThisYear.length < SCAN_LIMIT) newThisYear.push(item);
     if (withArt.length < SCAN_LIMIT) withArt.push(item);
+    if (movieItems.length < SCAN_LIMIT) movieItems.push(item);
+    if (item.rating !== null && rated.length < SCAN_LIMIT) rated.push(item);
   }
 
   for (const s of series) {
@@ -132,10 +147,20 @@ function scan(): Scan {
     };
     if (item.year === year && newThisYear.length < SCAN_LIMIT) newThisYear.push(item);
     if (withArt.length < SCAN_LIMIT) withArt.push(item);
+    if (seriesItems.length < SCAN_LIMIT) seriesItems.push(item);
+    if (item.rating !== null && rated.length < SCAN_LIMIT) rated.push(item);
   }
 
+  rated.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+
   cacheKey = [movies, series];
-  cached = { newThisYear, withArt };
+  cached = {
+    newThisYear,
+    withArt,
+    topRated: rated,
+    movies: movieItems,
+    series: seriesItems,
+  };
   return cached;
 }
 
@@ -155,6 +180,28 @@ export function newThisYear(limit: number): HomeItem[] {
 /** A changing selection across the catalogue, for the rows with no other rule. */
 export function featured(limit: number): HomeItem[] {
   return pickSpread(scan().withArt, limit);
+}
+
+/**
+ * The best-reviewed titles, in order, and **not** spread.
+ *
+ * Every other row here varies on purpose, so the screen is not the same
+ * screen twice. This one must not: a row headed "top rated" whose contents
+ * change between visits is not a ranking, it is a shuffle wearing a
+ * ranking's name.
+ */
+export function topRated(limit: number): HomeItem[] {
+  return scan().topRated.slice(0, limit);
+}
+
+/** Films only, for a viewer who already knows which of the two they want. */
+export function moviesOnly(limit: number): HomeItem[] {
+  return pickSpread(scan().movies, limit);
+}
+
+/** Series only, for the same reason. */
+export function seriesOnly(limit: number): HomeItem[] {
+  return pickSpread(scan().series, limit);
 }
 
 /**

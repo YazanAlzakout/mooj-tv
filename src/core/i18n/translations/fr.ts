@@ -221,6 +221,7 @@ const fr: TranslationShape = {
     watchLater: "À regarder plus tard",
     settings: "Paramètres",
     downloads: "Téléchargements",
+    topRated: "Les mieux notés",
     newIn: "Nouveautés",
     featured: "En vedette",
     continueWatching: "Continuer à regarder",

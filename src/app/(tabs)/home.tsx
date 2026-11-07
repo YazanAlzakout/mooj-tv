@@ -28,7 +28,10 @@ import { clearActiveSession, getActiveSession } from "@/state/activeSessionStore
 import {
   featured as pickFeatured,
   hero as pickHero,
+  moviesOnly as pickMovies,
   newThisYear as pickNewThisYear,
+  seriesOnly as pickSeries,
+  topRated as pickTopRated,
   currentYear,
   hasUsableArt,
   type HomeItem,
@@ -63,6 +66,9 @@ export default function HomeScreen() {
   const [hero, setHero] = useState<HomeItem | null>(null);
   const [newRow, setNewRow] = useState<HomeItem[]>([]);
   const [featuredRow, setFeaturedRow] = useState<HomeItem[]>([]);
+  const [topRow, setTopRow] = useState<HomeItem[]>([]);
+  const [movieRow, setMovieRow] = useState<HomeItem[]>([]);
+  const [seriesRow, setSeriesRow] = useState<HomeItem[]>([]);
   const [favouriteRow, setFavouriteRow] = useState<LibraryItem[]>([]);
   const [downloadRow, setDownloadRow] = useState<DownloadTask[]>([]);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
@@ -93,6 +99,9 @@ export default function HomeScreen() {
       setHero(pickHero());
       setNewRow(pickNewThisYear(ROW_COUNT));
       setFeaturedRow(pickFeatured(ROW_COUNT));
+      setTopRow(pickTopRated(ROW_COUNT));
+      setMovieRow(pickMovies(ROW_COUNT));
+      setSeriesRow(pickSeries(ROW_COUNT));
       getLibraryItems("favorite").then((items) => setFavouriteRow(items.slice(0, ROW_COUNT)));
       if (downloadsSupported()) {
         getAllDownloadTasks().then((tasks) =>
@@ -237,6 +246,63 @@ export default function HomeScreen() {
               <FlatList
                 {...NO_CLIP}
                 data={newRow}
+                keyExtractor={(item) => item.key}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+                renderItem={({ item }) => (
+                  <PosterCard item={item} onPress={() => openFeatured(item)} />
+                )}
+              />
+            </Animated.View>
+          )}
+
+          {topRow.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(215).duration(380)}>
+              <SectionHeader title={t("home", "topRated")} />
+              <FlatList
+                {...NO_CLIP}
+                data={topRow}
+                keyExtractor={(item) => item.key}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+                renderItem={({ item }) => (
+                  <PosterCard item={item} onPress={() => openFeatured(item)} />
+                )}
+              />
+            </Animated.View>
+          )}
+
+          {movieRow.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(250).duration(380)}>
+              <SectionHeader
+                title={t("home", "movies")}
+                action={{ label: t("home", "seeAll"), onPress: () => router.push("/movies-categories") }}
+              />
+              <FlatList
+                {...NO_CLIP}
+                data={movieRow}
+                keyExtractor={(item) => item.key}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.rail}
+                renderItem={({ item }) => (
+                  <PosterCard item={item} onPress={() => openFeatured(item)} />
+                )}
+              />
+            </Animated.View>
+          )}
+
+          {seriesRow.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(285).duration(380)}>
+              <SectionHeader
+                title={t("home", "series")}
+                action={{ label: t("home", "seeAll"), onPress: () => router.push("/series-categories") }}
+              />
+              <FlatList
+                {...NO_CLIP}
+                data={seriesRow}
                 keyExtractor={(item) => item.key}
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -642,15 +708,23 @@ const styles = themedStyles((C: ThemeColors) =>
    * session, and looking identical to Search made it easy to hit without
    * noticing.
    */
+  /*
+   * Quieter than it was. This disconnects the provider — it empties the
+   * library, the history and the lineup — and it was drawn as a filled
+   * accent circle in the second most prominent position on the screen,
+   * which is where a primary action goes, not a destructive one.
+   */
   disconnectButton: {
-    width: 40,
-    height: 40,
+    width: 34,
+    height: 34,
     borderRadius: Radii.pill,
-    backgroundColor: Brand.primaryMuted,
+    backgroundColor: "transparent",
+    borderWidth: 1,
+    borderColor: C.border,
     alignItems: "center",
     justifyContent: "center",
   },
-  disconnectButtonText: { color: Brand.primaryLight, fontSize: 16, fontFamily: FontFamily.bold },
+  disconnectButtonText: { color: C.textMuted, fontSize: 14, fontFamily: FontFamily.medium },
 
 
 
@@ -686,7 +760,14 @@ const styles = themedStyles((C: ThemeColors) =>
 
   hero: {
     width: "100%",
-    aspectRatio: 16 / 10,
+    /*
+     * 4:3, not 16:10. The lead title is the one picture on the screen that
+     * is allowed to be a picture rather than a thumbnail, and at 16:10 a
+     * poster — which is portrait — was being cropped to a letterbox strip
+     * of its middle. Taller gives back the part of the frame the artwork
+     * was composed around, and gives the screen something to open on.
+     */
+    aspectRatio: 4 / 3,
     borderRadius: Radii.xl,
     overflow: "hidden",
     /* No marginBottom: scrollContent already puts a gap between its

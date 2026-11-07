@@ -221,6 +221,7 @@ const tr: TranslationShape = {
     watchLater: "Sonra İzle",
     settings: "Ayarlar",
     downloads: "İndirilenler",
+    topRated: "En yüksek puanlı",
     newIn: "Yeni",
     featured: "Öne Çıkanlar",
     continueWatching: "İzlemeye Devam Et",
