@@ -141,8 +141,12 @@ function Row({
      * that the list still reads as one object settling rather than six
      * things queueing, and the whole cascade is over in a third of a
      * second — before anyone could have decided what to tap.
+     *
+     * A plain timing, not a spring. The spring that was here first
+     * overshot on six rows at once and the screen looked like it was
+     * bouncing rather than arriving.
      */
-    <Animated.View entering={FadeInDown.delay(delay).duration(340).springify().damping(16)}>
+    <Animated.View entering={FadeInDown.delay(delay).duration(300)}>
     <Focusable onPress={onPress} style={styles.row}>
       <View style={[styles.glyphWrap, { backgroundColor: tint + "22", borderColor: tint + "55" }]}>
         <Text style={[styles.glyph, { color: tint }]}>{glyph}</Text>

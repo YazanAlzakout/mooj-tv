@@ -67,8 +67,8 @@ export const darkColors: ThemeColors = {
   scrim: "rgba(0,0,0,0.6)",
   onAccent: "#FFFFFF",
 
-  glowOuter: "rgba(229,9,20,0.07)",
-  glowInner: "rgba(229,9,20,0.15)",
+  glowOuter: "rgba(25,137,198,0.07)",
+  glowInner: "rgba(25,137,198,0.14)",
 
   scrimArtworkSoft: "rgba(10,10,15,0.35)",
   scrimArtworkStrong: "rgba(10,10,15,0.7)",
@@ -105,8 +105,8 @@ export const lightColors: ThemeColors = {
   scrim: "rgba(0,0,0,0.4)",
   onAccent: "#FFFFFF",
 
-  glowOuter: "rgba(229,9,20,0.05)",
-  glowInner: "rgba(229,9,20,0.08)",
+  glowOuter: "rgba(25,137,198,0.05)",
+  glowInner: "rgba(25,137,198,0.08)",
 
   scrimArtworkSoft: "rgba(255,255,255,0.45)",
   scrimArtworkStrong: "rgba(255,255,255,0.85)",

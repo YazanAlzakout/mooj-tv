@@ -115,6 +115,13 @@ export default function HomeScreen() {
   const session = useMemo(() => getActiveSession(), []);
   const [continueWatching, setContinueWatching] = useState<WatchProgressEntry[]>([]);
   const [featured, setFeatured] = useState<FeaturedItem[]>([]);
+  /*
+   * The lead title and the rail are two slices of one list, memoised
+   * because `data` identity is what tells a FlatList whether anything
+   * changed — a fresh array every render makes it redo work for nothing.
+   */
+  const hero = featured.length > 0 ? featured[0] : null;
+  const railItems = useMemo(() => featured.slice(1), [featured]);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
@@ -216,18 +223,24 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
 
-          {featured.length > 0 && (
+          {hero && (
+            <Animated.View entering={FadeInDown.delay(40).duration(420)}>
+              <HeroCard item={hero} onPress={() => openFeatured(hero)} />
+            </Animated.View>
+          )}
+
+          {railItems.length > 0 && (
             /*
              * The section arrives as one piece — header and rail together.
              * The cards inside are deliberately left alone; see the note on
              * FeaturedCard for why a recycling row must not have an
              * entrance of its own.
              */
-            <Animated.View entering={FadeInDown.delay(90).duration(420).springify().damping(17)}>
+            <Animated.View entering={FadeInDown.delay(90).duration(360)}>
               <SectionHeader title={t("home", "featured")} />
               <FlatList
         {...NO_CLIP}
-                data={featured}
+                data={railItems}
                 keyExtractor={(item) => `${item.contentType}-${item.providerItemId}`}
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -237,7 +250,7 @@ export default function HomeScreen() {
             </Animated.View>
           )}
 
-          <Animated.View entering={FadeInDown.delay(180).duration(420).springify().damping(17)}>
+          <Animated.View entering={FadeInDown.delay(180).duration(360)}>
           <SectionHeader
             title={t("home", "continueWatching")}
             action={
@@ -302,6 +315,69 @@ export default function HomeScreen() {
       />
 
     </ScreenBackground>
+  );
+}
+
+/**
+ * The lead title, and the reason this screen stopped looking like a menu.
+ *
+ * A home screen whose first element is a row of small cards reads as a
+ * directory — everything the same size means nothing is being recommended.
+ * One large still with a title over it is an editorial choice: it says
+ * *this one*, and the rail underneath becomes "and these too" rather than
+ * a list that happens to start somewhere.
+ *
+ * The scrim is three stacked translucent views rather than a gradient.
+ * `expo-linear-gradient` is a native module and this is the only place in
+ * the app that would need it; three bands with rising alpha produce a step
+ * nobody can see at this size, and the comment on CategoryColors records
+ * the same decision being taken once before.
+ */
+function HeroCard({ item, onPress }: { item: FeaturedItem; onPress: () => void }) {
+  const { t } = useI18n();
+  const [failed, setFailed] = useState(false);
+
+  return (
+    <BouncePressable style={styles.hero} onPress={onPress}>
+      {!failed ? (
+        <CachedImage
+          uri={item.posterUrl}
+          style={styles.heroImage}
+          resizeMode="cover"
+          priority="high"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <View style={[styles.heroImage, styles.heroFallback]} />
+      )}
+
+      {/* Bottom-up scrim, so the title has something to sit on whatever the still is. */}
+      <View style={styles.heroScrimSoft} pointerEvents="none" />
+      <View style={styles.heroScrimMid} pointerEvents="none" />
+      <View style={styles.heroScrimDeep} pointerEvents="none" />
+
+      <View style={styles.heroBody}>
+        <View style={styles.heroMeta}>
+          <View style={styles.heroBadge}>
+            <Text style={styles.heroBadgeText}>
+              {item.contentType === "movie" ? t("home", "movies") : t("home", "series")}
+            </Text>
+          </View>
+          {item.rating !== null && (
+            <Text style={styles.heroRating}>★ {item.rating.toFixed(1)}</Text>
+          )}
+        </View>
+
+        <Text style={styles.heroTitle} numberOfLines={2}>
+          {item.name}
+        </Text>
+
+        <View style={styles.heroPlay}>
+          <Text style={styles.heroPlayGlyph}>▶</Text>
+          <Text style={styles.heroPlayText}>{t("movieDetails", "play")}</Text>
+        </View>
+      </View>
+    </BouncePressable>
   );
 }
 
@@ -493,6 +569,53 @@ const styles = themedStyles((C: ThemeColors) =>
    * which is the part that has to be readable at a glance.
    */
 
+  hero: {
+    width: "100%",
+    aspectRatio: 16 / 10,
+    borderRadius: Radii.xl,
+    overflow: "hidden",
+    marginBottom: Spacing.lg,
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  heroImage: { ...StyleSheet.absoluteFill, width: "100%", height: "100%" },
+  heroFallback: { backgroundColor: C.surfaceElevated },
+  heroScrimSoft: { position: "absolute", left: 0, right: 0, bottom: 0, height: "62%", backgroundColor: "rgba(5,10,20,0.18)" },
+  heroScrimMid: { position: "absolute", left: 0, right: 0, bottom: 0, height: "40%", backgroundColor: "rgba(5,10,20,0.42)" },
+  heroScrimDeep: { position: "absolute", left: 0, right: 0, bottom: 0, height: "22%", backgroundColor: "rgba(5,10,20,0.68)" },
+  heroBody: { position: "absolute", left: 0, right: 0, bottom: 0, padding: Spacing.lg, gap: Spacing.xs },
+  heroMeta: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  heroBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 3,
+    borderRadius: Radii.sm,
+    backgroundColor: Brand.primary,
+  },
+  heroBadgeText: { color: "#02121F", fontFamily: FontFamily.bold, fontSize: 10.5, ...AndroidTextFix },
+  heroRating: { color: "#F6C445", fontFamily: FontFamily.semiBold, fontSize: 12, ...AndroidTextFix },
+  heroTitle: {
+    color: "#FFFFFF",
+    fontFamily: FontFamily.bold,
+    fontSize: 22,
+    lineHeight: 30,
+    ...AndroidTextFix,
+  },
+  heroPlay: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    alignSelf: "flex-start",
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 7,
+    borderRadius: Radii.md,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
+  heroPlayGlyph: { color: "#FFFFFF", fontSize: 11, ...AndroidTextFix },
+  heroPlayText: { color: "#FFFFFF", fontFamily: FontFamily.semiBold, fontSize: 13, ...AndroidTextFix },
   emptyCard: {
     backgroundColor: C.surface,
     borderColor: C.border,

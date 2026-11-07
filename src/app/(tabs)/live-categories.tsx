@@ -612,7 +612,7 @@ export default function LiveCategoriesScreen() {
              * moment. An entrance wrapped round it would put that work
              * straight back.
              */
-            <Animated.View entering={FadeInDown.delay(60).duration(380).springify().damping(18)}>
+            <Animated.View entering={FadeInDown.delay(60).duration(320)}>
             <CategoryTabs
               categories={categories}
               activeId={activeCategoryId}

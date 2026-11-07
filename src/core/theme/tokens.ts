@@ -55,6 +55,25 @@ export const Brand = {
    * brightness instead of hue, which stays legible whatever the brand.
    */
   focus: "#FFFFFF",
+
+  /*
+   * The backdrop's drifting bands (see WaveBands).
+   *
+   * Written with their alpha rather than taken from the solid tints above,
+   * because these are the one place in the app where a colour exists only
+   * to be barely seen: `primaryDark` is opaque, and a band painted with it
+   * would be a navy stripe across the screen rather than a swell behind it.
+   *
+   * Tokens, not literals in the component. The glow circles on this same
+   * backdrop were literals, and they stayed the previous brand's red
+   * through a whole palette change on sixteen screens without anyone
+   * noticing.
+   */
+  wave: {
+    deep: "rgba(2, 23, 83, 0.55)",
+    mid: "rgba(25, 137, 198, 0.10)",
+    soft: "rgba(62, 185, 235, 0.07)",
+  },
 } as const;
 
 export const Colors = {

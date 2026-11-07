@@ -207,8 +207,11 @@ export function MoreGlyph({ color, size }: GlyphProps) {
  * The bar already interpolates the tint, so without this the only thing
  * that moves when a viewer changes section is a colour — which reads as a
  * screenshot changing rather than as a thing responding. The spring is
- * small on purpose: this fires on every tab press, several times a minute,
- * and anything with real travel in it becomes tiring by the third day.
+ * small on purpose, and was made smaller after the first build read as
+ * overdone: this fires on every tab press, several times a minute, and
+ * anything with real travel in it is tiring by the third day. A 7% scale
+ * and a pixel and a half of lift is enough to say "that responded" and
+ * little enough that nobody will ever describe it.
  *
  * `{ duration, dampingRatio }` is the Reanimated 4 spring form. The older
  * `{ stiffness, damping }` pair still works, but `restDisplacementThreshold`
@@ -228,13 +231,13 @@ export function AnimatedTabGlyph({
   const lift = useSharedValue(focused ? 1 : 0);
 
   useEffect(() => {
-    lift.value = withSpring(focused ? 1 : 0, { duration: 340, dampingRatio: 0.68 });
+    lift.value = withSpring(focused ? 1 : 0, { duration: 260, dampingRatio: 0.9 });
     // `lift` is a shared value and never changes identity; `focused` is the input.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focused]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + lift.value * 0.15 }, { translateY: -lift.value * 2 }],
+    transform: [{ scale: 1 + lift.value * 0.07 }, { translateY: -lift.value * 1.5 }],
   }));
 
   return (

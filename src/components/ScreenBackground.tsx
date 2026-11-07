@@ -7,7 +7,7 @@ import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles } from "@/core/theme/themedStyles";
 import { TVSafeArea } from "@/core/theme/tokens";
 
-import { FloatingParticles } from "./FloatingParticles";
+import { WaveBands } from "./WaveBands";
 
 /**
  * The horizontal room `tvOverscan` takes out of every screen this component
@@ -27,7 +27,7 @@ import { FloatingParticles } from "./FloatingParticles";
 export const TV_OVERSCAN_X = isTvBuild ? TVSafeArea.horizontal * 2 : 0;
 
 /**
- * The shared screen backdrop: base color, a soft red glow bleeding in from
+ * The shared screen backdrop: base color, a soft blue glow bleeding in from
  * the top (a stacked pair of large translucent circles — the same depth
  * the old app got from a gradient, without `expo-linear-gradient`), and
  * optionally the drifting particles. Wrap a screen's `SafeAreaView` in it
@@ -47,7 +47,7 @@ export function ScreenBackground({ children, particles = false }: { children: Re
     <View style={[styles.root, isTvBuild && styles.tvOverscan]}>
       <View style={styles.glowOuter} pointerEvents="none" />
       <View style={styles.glowInner} pointerEvents="none" />
-      {particles && !isTvBuild && <FloatingParticles count={8} />}
+      {particles && !isTvBuild && <WaveBands />}
       {children}
     </View>
   );
