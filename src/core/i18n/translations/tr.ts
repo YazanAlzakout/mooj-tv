@@ -153,7 +153,7 @@ const tr: TranslationShape = {
       },
       contact: {
         heading: "İletişim",
-        body: ["Yasal talepler (telif bildirimleri dâhil) için iletişim:", "E-posta: support@albasera.app"],
+        body: ["Yasal talepler (telif bildirimleri dâhil) için iletişim:", "E-posta: support@mooj-player.com"],
       },
     },
   },
@@ -400,7 +400,7 @@ const tr: TranslationShape = {
       "Yeni bir sürüm yayınlandı ve bu sürüm artık çalışamıyor. Devam etmek için uygulamayı güncelleyin.",
     updateNow: "Şimdi güncelle",
     availableTitle: "Yeni bir güncelleme var",
-    availableBody: "Albasera'nın iyileştirmeler ve düzeltmeler içeren daha yeni bir sürümü çıktı. Şimdi güncelleyin.",
+    availableBody: "Mooj TV'nin iyileştirmeler ve düzeltmeler içeren daha yeni bir sürümü çıktı. Şimdi güncelleyin.",
     later: "Daha sonra",
   },
   settings: {

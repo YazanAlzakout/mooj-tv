@@ -157,7 +157,7 @@ const ckb: TranslationShape = {
       },
       contact: {
         heading: "پەیوەندی",
-        body: ["بۆ پرسیارە یاساییەکان (لەوانە ئاگاداری مافی لەبەرگرتنەوە)، پەیوەندی بکە:", "Email: support@albasera.app"],
+        body: ["بۆ پرسیارە یاساییەکان (لەوانە ئاگاداری مافی لەبەرگرتنەوە)، پەیوەندی بکە:", "Email: support@mooj-player.com"],
       },
     },
   },

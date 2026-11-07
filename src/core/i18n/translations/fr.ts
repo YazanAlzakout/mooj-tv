@@ -153,7 +153,7 @@ const fr: TranslationShape = {
       },
       contact: {
         heading: "Contact",
-        body: ["Pour les demandes légales (y compris les notifications de droit d'auteur), contactez :", "Email : support@albasera.app"],
+        body: ["Pour les demandes légales (y compris les notifications de droit d'auteur), contactez :", "Email : support@mooj-player.com"],
       },
     },
   },
@@ -400,7 +400,7 @@ const fr: TranslationShape = {
       "Une nouvelle version est disponible et celle-ci ne peut plus fonctionner. Mettez l'application à jour pour continuer.",
     updateNow: "Mettre à jour",
     availableTitle: "Une mise à jour est disponible",
-    availableBody: "Une version plus récente d'Albasera est disponible, avec des améliorations et des corrections.",
+    availableBody: "Une version plus récente de Mooj TV est disponible, avec des améliorations et des corrections.",
     later: "Plus tard",
   },
   settings: {

@@ -156,7 +156,7 @@ const en = {
       },
       contact: {
         heading: "Contact",
-        body: ["For legal inquiries (including copyright notices), contact:", "Email: support@albasera.app"],
+        body: ["For legal inquiries (including copyright notices), contact:", "Email: support@mooj-player.com"],
       },
     },
   },
@@ -403,7 +403,7 @@ const en = {
       "A newer version has been released and this one can no longer run. Update the app to continue.",
     updateNow: "Update now",
     availableTitle: "A new update is available",
-    availableBody: "A newer version of Albasera is out, with improvements and fixes. Update now to get it.",
+    availableBody: "A newer version of Mooj TV is out, with improvements and fixes. Update now to get it.",
     later: "Later",
   },
   settings: {

@@ -104,7 +104,7 @@ function walk(dir, out) {
  * The exemption is the exact literal, not the file, so anything else that
  * drifts into that file is still caught.
  */
-const ALLOWED = ['"22": "http://albasera-tv.net:80"'];
+const ALLOWED = ['"33": "http://albasera-tv.net:80"'];
 const offenders = walk("src", []).filter((f) => {
   let text = read(f);
   for (const literal of ALLOWED) text = text.split(literal).join("");

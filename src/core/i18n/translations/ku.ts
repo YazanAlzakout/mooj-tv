@@ -157,7 +157,7 @@ const ku: TranslationShape = {
       },
       contact: {
         heading: "Têkilî",
-        body: ["Ji bo pirsên yasayî (di nav de agahdariyên mafê nivîskar), têkilî bike:", "Email: support@albasera.app"],
+        body: ["Ji bo pirsên yasayî (di nav de agahdariyên mafê nivîskar), têkilî bike:", "Email: support@mooj-player.com"],
       },
     },
   },
@@ -404,7 +404,7 @@ const ku: TranslationShape = {
       "Guhertoyeke nû hat weşandin û ev guherto êdî nikare bixebite. Ji bo berdewamkirinê sepanê nû bike.",
     updateNow: "Niha nû bike",
     availableTitle: "Nûkirineke nû heye",
-    availableBody: "Guhertoyeke nûtir a Albasera derket, bi baştirkirin û serrastkirinan. Niha nû bike.",
+    availableBody: "Guhertoyeke nûtir a Mooj TV derket, bi baştirkirin û serrastkirinan. Niha nû bike.",
     later: "Paşê",
   },
   settings: {

@@ -62,7 +62,7 @@ export const SERVER_SHORTCODES: Record<string, string> = {
    * records — nothing downstream that compares two base URLs as strings
    * can see them as two different servers.
    */
-  "22": "http://albasera-tv.net:80",
+  "33": "http://albasera-tv.net:80",
 };
 
 /**
@@ -70,14 +70,14 @@ export const SERVER_SHORTCODES: Record<string, string> = {
  * untouched when it is not one.
  *
  * Matching is exact after trimming, which is deliberately strict: a real
- * address is never `22`, so there is no input a viewer could reasonably
+ * address is never `33`, so there is no input a viewer could reasonably
  * mean as a URL that this would swallow. Nothing is guessed and no prefixes
  * are matched — a typo produces the ordinary "couldn't reach the server"
  * error rather than silently connecting somewhere unintended.
  *
- * Note the *absence* of a code that is easy to stumble onto. `1` was the
- * first value used here and was removed when the second code was chosen
- * (2026-09-15) rather than kept alongside it: single digits are the first
+ * Note the *absence* of a code that is easy to stumble onto. The table this
+ * was carried over from began with `1` and dropped it as soon as a second
+ * code existed, rather than keeping both: single digits are the first
  * thing anyone poking at a numeric field tries, so leaving one in place
  * would have undone the only property this whole arrangement provides —
  * that the address is reached by people who were told it, and by nobody

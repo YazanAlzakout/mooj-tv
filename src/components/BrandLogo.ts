@@ -1,36 +1,34 @@
 import type { ImageSourcePropType } from "react-native";
 
-import { getActiveTheme } from "@/core/theme/themedStyles";
-
-const NIGHT = require("../../assets/images/logo-night.png") as ImageSourcePropType;
-const DAY = require("../../assets/images/logo.png") as ImageSourcePropType;
+const MARK = require("../../assets/images/logo.png") as ImageSourcePropType;
 
 /**
- * The wordmark, in the ink that shows against the current theme.
+ * The brand mark.
  *
- * `logo-night.png` is drawn in white for a dark background; `logo.png` is
- * the same mark in near-black for a light one. Every screen used to hard-
- * code the night version, which meant a white logo on a white page the
- * moment light mode existed.
+ * There used to be two files here — a near-black wordmark for light
+ * backgrounds and a white one for dark — because the previous brand's mark
+ * was lettering, and lettering has to be drawn in an ink that contrasts
+ * with whatever is behind it. A single file would have been a white word on
+ * a white page the moment light mode existed.
  *
- * A plain function rather than a component: these are `<Image>` and
- * `<Animated.Image>` call sites with their own styles and entrance
- * animations, and only the `source` differs between them. Reading the
- * active theme here is safe during render — it is a module variable, and
- * the whole tree is rebuilt when it changes.
+ * Mooj's mark is not lettering. It is a self-lit sphere with its own
+ * gradient and its own dark edge, so it holds against a light page and a
+ * dark one without being redrawn — and the name beside it on the home
+ * screen is live text taking the theme's own ink (see BRAND.wordmark),
+ * which is better than a picture of a word at any size.
+ *
+ * So: one asset, and the two functions below kept as they were. Call sites
+ * do not need to know that the answer stopped depending on the theme, and
+ * a brand whose mark *is* lettering can restore the split here alone.
  */
 export function brandLogoSource(): ImageSourcePropType {
-  return getActiveTheme() === "light" ? DAY : NIGHT;
+  return MARK;
 }
 
 /**
- * The white wordmark, whatever the theme is.
- *
- * For surfaces that are black regardless of the app's palette — the video
- * players and the message drawn over a stopped stream. `brandLogoSource()`
- * would hand those the near-black mark in light mode, which is invisible
- * there.
+ * The mark for surfaces that are black whatever the app's palette is — the
+ * video players, and the message drawn over a stopped stream.
  */
 export function brandLogoOnDark(): ImageSourcePropType {
-  return NIGHT;
+  return MARK;
 }
