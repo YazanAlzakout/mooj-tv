@@ -151,6 +151,22 @@ module.exports = {
       "expo-sqlite",
       "expo-localization",
       [
+        /*
+         * The tab bar plays a short click. Nothing else in this app records
+         * or plays audio outside the video players, which carry their own.
+         *
+         * `enableBackgroundPlayback` is switched off, and that is the whole
+         * reason this is configured by hand rather than left as the bare
+         * string the installer suggests: the default is **true**, which adds
+         * a media foreground service and its notification to the manifest.
+         * A player that holds a foreground service it never uses is asking
+         * Play to explain why, and asking the viewer to look at a
+         * notification for a sound that lasts 70 milliseconds.
+         */
+        "expo-audio",
+        { enableBackgroundPlayback: false },
+      ],
+      [
         "expo-splash-screen",
         {
           image: "./assets/images/splash-icon.png",
