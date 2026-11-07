@@ -26,12 +26,26 @@ import type { FlatList, NativeScrollEvent, NativeSyntheticEvent } from "react-na
  * new ref every render would drag the viewer back to their old position on
  * every single render.
  *
- * ## Shape
+ * ## Shape, and why turning the phone is not a change of shape
  *
- * As in `useCategoryScroll`, a remembered offset only means anything for the
- * layout that produced it, so a change of `shape` — the column count, the
- * search term — forgets every position rather than replaying pixels into a
+ * A remembered offset only means anything for the layout that produced it,
+ * so a change of `shape` — the search term, which changes what is in the
+ * list at all — forgets every position rather than replaying pixels into a
  * grid they were never measured in.
+ *
+ * Rotating the phone used to count as that, and it should not have. The
+ * list is the same list; only the geometry under it moved. Throwing the
+ * offsets away sent every grid back to its first row the moment the phone
+ * turned, and turning it back sent it there again — which is most of what
+ * was reported as "في قفزة بالشلاشة" after a rotation.
+ *
+ * An offset can be carried across instead, because it is a disguised row
+ * number. Divide by the row height it was taken at to get the row, times
+ * the old column count for the item at the top of the screen, and that
+ * item is the thing the viewer was actually looking at. Put it back where
+ * the new geometry would place it and they keep their place through the
+ * turn — not to the pixel, since four across cannot show the same rows as
+ * three, but to the title they were reading.
  */
 
 export interface CategoryPageScroll {
@@ -45,7 +59,16 @@ export interface CategoryPage<T> {
   scroll: CategoryPageScroll;
 }
 
-export function useCategoryPages<T>(shape?: string | number) {
+export interface CategoryPageGeometry {
+  /** What invalidates a position outright: the search term, the data itself. */
+  shape: string | number;
+  columns: number;
+  /** The height `getItemLayout` is promising for one row, at this column count. */
+  rowHeight: number;
+}
+
+export function useCategoryPages<T>(geometry: CategoryPageGeometry) {
+  const { shape, columns, rowHeight } = geometry;
   const offsets = useRef(new Map<string, number>());
   const lists = useRef(new Map<string, FlatList<T> | null>());
   const heights = useRef(new Map<string, number>());
@@ -53,13 +76,39 @@ export function useCategoryPages<T>(shape?: string | number) {
   const restored = useRef(new Set<string>());
   const cache = useRef(new Map<string, CategoryPage<T>>());
 
-  const shapeRef = useRef(shape);
+  const lastGeometry = useRef({ shape, columns, rowHeight });
   useEffect(() => {
-    if (shapeRef.current === shape) return;
-    shapeRef.current = shape;
-    offsets.current.clear();
+    const was = lastGeometry.current;
+    if (was.shape === shape && was.columns === columns && was.rowHeight === rowHeight) return;
+
+    if (was.shape !== shape) {
+      /* A different list. Nothing remembered about the old one applies. */
+      offsets.current.clear();
+    } else if (was.rowHeight > 0 && rowHeight > 0 && columns > 0) {
+      /*
+       * The same list in a new geometry — see the note above. Each offset
+       * is translated through the item that was at the top of the screen.
+       */
+      for (const [id, offset] of offsets.current) {
+        if (offset <= 0) continue;
+        const topItem = Math.floor(offset / was.rowHeight) * was.columns;
+        offsets.current.set(id, Math.floor(topItem / columns) * rowHeight);
+      }
+    } else {
+      /* A geometry we cannot translate through; forget rather than guess. */
+      offsets.current.clear();
+    }
+
+    lastGeometry.current = { shape, columns, rowHeight };
+    /*
+     * Every mounted list is now owed a fresh restore. Rotation remounts
+     * them anyway (FlatList cannot change `numColumns` in place), and the
+     * new one reports a height of zero before it has measured — so the
+     * put-back that matters is the one `onContentSizeChange` triggers,
+     * which lands after this effect and reads the translated offsets.
+     */
     restored.current.clear();
-  }, [shape]);
+  }, [shape, columns, rowHeight]);
 
   const restore = useCallback((id: string) => {
     if (restored.current.has(id)) return;

@@ -72,16 +72,47 @@ export function BrowseLayout({
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
 
-  if (isTvBuild) {
-    return (
-      <View style={styles.body}>
-        {hasRail && categories && (
-          <CategorySidebar categories={categories} activeId={activeId} onSelect={onSelect} />
-        )}
-        <View style={styles.content}>{children}</View>
-      </View>
-    );
-  }
+  /*
+   * One tree, three arrangements — and the keys are the whole point.
+   *
+   * This used to `return` a different tree per platform and orientation.
+   * They looked interchangeable, and they were not: in portrait the first
+   * child was the content and in landscape it was the strip, so turning
+   * the phone handed React a different element type at child zero and it
+   * did the only thing it can with that — tore the whole subtree down and
+   * built a new one. The grid lost its place, every screen replayed its
+   * entrance, and what the viewer felt was the jolt reported as
+   * "في قفزة بالشلاشة ونطقة مو حلوة".
+   *
+   * Keyed children fix it. React matches `content` to `content` no matter
+   * which end of the list it sits at, so the grid below is the same mounted
+   * component before and after the turn; only the rail is rebuilt, which is
+   * a few dozen chips and a different component anyway.
+   *
+   * `row-reverse` is what lets the order stay fixed. The rail belongs on
+   * the right of a phone held upright and on the left of a television, and
+   * writing it first in both and reversing the row is how it gets there
+   * without the array itself changing shape.
+   */
+  const rail = !hasRail || !categories ? null : isTvBuild ? (
+    <CategorySidebar key="rail" categories={categories} activeId={activeId} onSelect={onSelect} />
+  ) : landscape ? (
+    <CategoryTabs
+      key="rail"
+      categories={categories}
+      activeId={activeId}
+      onSelect={onSelect}
+      progress={progress}
+    />
+  ) : (
+    <CategoryRail key="rail" categories={categories} activeId={activeId} onSelect={onSelect} />
+  );
+
+  const content = (
+    <View key="content" style={styles.content}>
+      {children}
+    </View>
+  );
 
   /*
    * Turned sideways, the categories go back on top.
@@ -97,35 +128,12 @@ export function BrowseLayout({
    * moves it with the finger — which is the one thing the column cannot
    * do, a vertical rail following a horizontal drag reading as a glitch.
    */
-  if (landscape) {
-    return (
-      <View style={styles.bodyColumn}>
-        {hasRail && categories && (
-          <CategoryTabs
-            categories={categories}
-            activeId={activeId}
-            onSelect={onSelect}
-            progress={progress}
-          />
-        )}
-        <View style={styles.content}>{children}</View>
-      </View>
-    );
-  }
+  const direction = isTvBuild ? "row" : landscape ? "column" : "row-reverse";
 
-  return (
-    <View style={styles.body}>
-      {/* Content first, rail second: inside a `row` this puts the rail on the right. */}
-      <View style={styles.content}>{children}</View>
-      {hasRail && categories && (
-        <CategoryRail categories={categories} activeId={activeId} onSelect={onSelect} />
-      )}
-    </View>
-  );
+  return <View style={[styles.body, { flexDirection: direction }]}>{[rail, content]}</View>;
 }
 
 const styles = StyleSheet.create({
-  body: { flex: 1, flexDirection: "row" },
-  bodyColumn: { flex: 1 },
+  body: { flex: 1 },
   content: { flex: 1 },
 });

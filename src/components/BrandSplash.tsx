@@ -44,9 +44,17 @@ export function BrandSplash({ onFinish }: { onFinish: () => void }) {
     p.loop = false;
     /*
      * Unmuted, deliberately, and this is the one decision here a viewer
-     * will have an opinion about. The clip carries a calm four-second bed
-     * written for it; muted, the file would be shipping an audio track
-     * nobody could ever hear, which is what the previous build did.
+     * will have an opinion about — they have already had one.
+     *
+     * The clip arrived carrying a flat 4.7-second drone: -22.4 LUFS with a
+     * loudness range of 1.0 LU, which is to say it did not move at all for
+     * its whole length, and almost all of its energy sat where a phone
+     * speaker can only pass on rumble. The verdict was that it sounded
+     * like a car. That track has been replaced with a bed written to the
+     * animation — an airy swell while the orb forms, three soft chimes on
+     * the glint, the wordmark and the settle, over a detuned pad that
+     * fades out before the end — at -30 LUFS and with nothing below
+     * 290 Hz. Seven and a half decibels quieter, and it breathes.
      *
      * Android honours the ringer: on a phone set to silent this plays
      * nothing, which is the behaviour most people expect from an app that

@@ -4,6 +4,7 @@ import { FlatList, ScrollView, StyleSheet, Text, View, useWindowDimensions } fro
 
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { Focusable } from "@/components/Focusable";
+import { ArcHero } from "@/components/ArcHero";
 import { CachedImage } from "@/components/CachedImage";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -234,7 +235,7 @@ function SeriesHeader({
 
   return (
     <View>
-      <View style={[styles.heroWrap, { height: heroHeight }]}>
+      <ArcHero height={heroHeight}>
         {heroUri && !heroFailed ? (
           <CachedImage
             uri={heroUri}
@@ -247,24 +248,25 @@ function SeriesHeader({
             <Text style={styles.heroFallbackText}>{details.name}</Text>
           </View>
         )}
-              {/*
-                  No scrim over the artwork.
+        {/*
+            No scrim over the artwork, and no straight edge under it
+            either.
 
-                  Three flat rectangles used to sit here, stacked at
-                  bottom: 120 / 60 / 0, standing in for a gradient the app
-                  has no dependency for. Flat layers have hard edges, so
-                  what they actually drew over the poster was two black
-                  horizontal lines across the picture — visible in a
-                  framebuffer scan on 2026-09-16 as luminance steps at the
-                  exact rows where the rectangles met, and reported as
-                  "الخطوط موجودة على صورة البوستر".
+            Three flat rectangles used to sit here, stacked at bottom:
+            120 / 60 / 0, standing in for a gradient the app has no
+            dependency for. Flat layers have hard edges, so what they
+            actually drew over the poster was two black horizontal lines
+            across the picture — visible in a framebuffer scan on
+            2026-09-16 as luminance steps at the exact rows where the
+            rectangles met, and reported as "الخطوط موجودة على صورة
+            البوستر".
 
-                  The viewer's instruction is that there are to be no black
-                  gradients anywhere (see the note in the live player). The
-                  artwork simply ends where the page begins; a clean edge
-                  reads better than a stepped fade and costs nothing.
-              */}
-      </View>
+            The instruction is that there are to be no black gradients
+            anywhere (see the note in the live player), and that stands.
+            What the picture ends in instead is a shape rather than a
+            cut — see ArcHero.
+        */}
+      </ArcHero>
 
       <View style={styles.body}>
         <Animated.Text entering={FadeInDown.duration(420).delay(60)} style={styles.title}>
@@ -543,7 +545,6 @@ const styles = themedStyles((C: ThemeColors) =>
   skeletonWrap: { paddingBottom: Spacing.xxl },
   skeletonBody: { padding: Spacing.lg, gap: Spacing.md },
 
-  heroWrap: { width: "100%", backgroundColor: C.surface, position: "relative" },
   heroFallback: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center", padding: Spacing.xl },
   heroFallbackText: { color: C.textSecondary, fontSize: 18, fontFamily: FontFamily.bold, textAlign: "center" },
 

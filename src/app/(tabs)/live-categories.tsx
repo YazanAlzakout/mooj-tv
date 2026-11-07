@@ -1,5 +1,4 @@
 import { router, useFocusEffect } from "expo-router";
-import { ArtScrim } from "@/components/ArtScrim";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -67,6 +66,18 @@ const CELL_PADDING = Spacing.xs;
  */
 const ART_RATIO = 1 / 1.15;
 const ROW_GAP = Spacing.sm;
+/*
+ * The name block under the artwork, to the pixel.
+ *
+ * Two lines at a fixed line height plus the gap above them, whether the
+ * name uses both lines or one — `getItemLayout` promises a single row
+ * height for the whole lineup and has no way to measure a short name.
+ * These are the numbers `cardNameBox` and `cardName` are built from;
+ * changing one without the other is the bug this file has had once.
+ */
+const NAME_LINE_HEIGHT = 16;
+const NAME_LINES = 2;
+const NAME_BLOCK = NAME_LINE_HEIGHT * NAME_LINES + Spacing.xs;
 
 /**
  * The exact height of one grid row.
@@ -81,12 +92,16 @@ function rowHeight(listWidth: number, columns: number): number {
   const available = listWidth - GRID_PADDING * 2 - COLUMN_GAP * (columns - 1);
   const cardWidth = available / columns - CELL_PADDING * 2;
   /*
-   * No name box in this sum any more: the channel name is drawn over the
-   * bottom of the card rather than under it, so a row is exactly a card
-   * plus the gap below it — and a name that wraps to two lines no longer
-   * makes its row taller than its neighbours.
+   * Card, then the name block, then the gap below the row.
+   *
+   * The name was drawn over the artwork for a while, which kept this sum
+   * to two terms — but it needed a dark wash under it to stay readable
+   * over a white logo, and that wash across every channel mark is what
+   * was asked to go. Under the card the name needs nothing behind it and
+   * the logo is seen whole. The cost is this third term, and it is a
+   * constant: a one-line name and a two-line one both occupy NAME_BLOCK.
    */
-  return cardWidth * ART_RATIO + ROW_GAP;
+  return cardWidth * ART_RATIO + NAME_BLOCK + ROW_GAP;
 }
 const SEARCH_DEBOUNCE_MS = 200;
 /** Portrait density; landscape is decided by `useGridColumns`. */
@@ -221,7 +236,7 @@ export default function LiveCategoriesScreen() {
     three lists are mounted at once now, and a page keeps its place even
     after the window has moved past it and unmounted it.
   */
-  const pages = useCategoryPages<LiveChannel>(`${columns}|${search}`);
+  const pages = useCategoryPages<LiveChannel>({ shape: search, columns, rowHeight: gridRowHeight });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /*
@@ -736,7 +751,12 @@ const ChannelCard = memo(function ChannelCard({
   const press = useCallback(() => onPress(channel), [onPress, channel]);
   const focus = useCallback(() => onTvFocus(channel), [onTvFocus, channel]);
   const star = useCallback(() => onToggleFavorite(channel), [onToggleFavorite, channel]);
-  const { t } = useI18n();
+  /*
+   * No `useI18n` here any more. The one translated string this cell drew
+   * was the LIVE pill, and with that gone the subscription was costing a
+   * context read per card — on the "All" tab, per card in the provider's
+   * entire lineup — to render nothing.
+   */
   /*
    * Starts already-failed when this logo's host has proved dead earlier in
    * the session, so the cell draws its letter immediately instead of
@@ -816,31 +836,23 @@ const ChannelCard = memo(function ChannelCard({
             </Pressable>
           )}
 
-          {/*
-            Phone only, on the same reasoning as the star above: two more
-            native views per card, on a screen where every single item is a
-            live channel and the header already says so. It labels nothing
-            it distinguishes. On a phone it stays — the grid there is
-            reached from a tab bar where the context is less obvious, and a
-            phone is not the device counting view-tree rebuilds.
-          */}
-          {!isTvBuild && (
-            <View style={styles.liveBadge}>
-              <Text style={styles.liveBadgeText}>{t("liveChannelList", "liveBadge")}</Text>
-            </View>
-          )}
-          {/*
-            The name, over the artwork rather than beneath it. A flat
-            translucent band, not a gradient: expo-linear-gradient is a
-            native module and the two other screens that wanted one solved
-            it the same way, with a stacked view.
-          */}
-          <ArtScrim />
-          <View style={styles.cardNameBox}>
-            <Text style={styles.cardName} numberOfLines={2}>
-              {channel.name}
-            </Text>
-          </View>
+        </View>
+
+        {/*
+          The name sits under the artwork now, and the two things that used
+          to sit on top of it — a LIVE pill and the dark wash that kept
+          white text readable over a white logo — are both gone.
+
+          The pill labelled nothing it distinguished: every item on this
+          screen is a live channel. The wash was the price of putting text
+          on the picture, and here the picture is a mark on a white ground,
+          so the wash fell across the mark itself. Neither was worth what
+          it took from the artwork.
+        */}
+        <View style={styles.cardNameBox}>
+          <Text style={styles.cardName} numberOfLines={NAME_LINES}>
+            {channel.name}
+          </Text>
         </View>
       </Focusable>
     </View>
@@ -976,19 +988,22 @@ const styles = themedStyles((C: ThemeColors) =>
    * one-line and a two-line name give rows of identical height — which is
    * the condition getItemLayout needs to promise one height for all of them.
    */
+  /*
+   * A fixed height, not a minimum: see NAME_BLOCK. The row height promised
+   * to getItemLayout is the same for a channel called "MBC" and one called
+   * "AL JAZEERA DOCUMENTARY HD", so this box has to be too.
+   */
   cardNameBox: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: Spacing.sm,
-    paddingBottom: Spacing.sm,
+    height: NAME_LINE_HEIGHT * NAME_LINES,
+    marginTop: Spacing.xs,
+    paddingHorizontal: Spacing.xs,
   },
   cardName: {
-    /* White, not the theme ink: this sits on artwork, not on the page. */
-    color: "#FFFFFF",
+    /* On the page now rather than on artwork, so it takes the page's ink. */
+    color: C.textSecondary,
     fontSize: 12,
-    lineHeight: 16,
+    lineHeight: NAME_LINE_HEIGHT,
+    textAlign: "center",
     fontFamily: FontFamily.semiBold,
     ...AndroidTextFix,
   },
@@ -1005,16 +1020,5 @@ const styles = themedStyles((C: ThemeColors) =>
   },
   favoriteButtonText: { color: "rgba(255,255,255,0.8)", fontSize: 14 },
   favoriteButtonTextActive: { color: "#FFD700" },
-  liveBadge: {
-    position: "absolute",
-    top: Spacing.xs,
-    end: Spacing.xs,
-    backgroundColor: Brand.primaryMuted,
-    borderRadius: Radii.pill,
-    paddingHorizontal: Spacing.xs,
-    paddingVertical: 2,
-  },
-  liveBadgeText: { color: Brand.primaryLight, fontSize: 9, fontFamily: FontFamily.bold },
-
   })
 );

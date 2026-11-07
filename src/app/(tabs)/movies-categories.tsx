@@ -206,7 +206,7 @@ export default function MoviesCategoriesScreen() {
     three lists are mounted at once now, and a page keeps its place even
     after the window has moved past it and unmounted it.
   */
-  const pages = useCategoryPages<MovieSummary>(`${columns}|${search}`);
+  const pages = useCategoryPages<MovieSummary>({ shape: search, columns, rowHeight: gridRowHeight });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasDataRef = useRef(false);
 
