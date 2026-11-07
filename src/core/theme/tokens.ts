@@ -70,9 +70,22 @@ export const Brand = {
    * noticing.
    */
   wave: {
-    deep: "rgba(2, 23, 83, 0.55)",
-    mid: "rgba(25, 137, 198, 0.10)",
-    soft: "rgba(62, 185, 235, 0.07)",
+    /*
+     * An order of magnitude fainter than the first attempt, after seeing it
+     * on a device.
+     *
+     * A band is a very long rounded rectangle, which means its top and
+     * bottom edges are straight across almost all of their width. At
+     * 0.55 alpha that edge is a visible horizontal line drawn across the
+     * screen, and three of them read as banding in the panel rather than
+     * as anything deliberate. The shape cannot be softened without a blur
+     * this project has no way to draw, so the only lever is the alpha:
+     * below about 0.06 the edge stops being findable and what is left is
+     * the depth the bands were there for.
+     */
+    deep: "rgba(25, 137, 198, 0.055)",
+    mid: "rgba(25, 137, 198, 0.04)",
+    soft: "rgba(62, 185, 235, 0.03)",
   },
 } as const;
 

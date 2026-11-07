@@ -416,10 +416,19 @@ function FeaturedCard({ item, onPress }: { item: FeaturedItem; onPress: () => vo
               <Text style={styles.ratingBadgeText}>★ {item.rating.toFixed(1)}</Text>
             </View>
           )}
+          {/*
+            Over the artwork, as on the browse grids. With the name
+            underneath, a two-line title made its card taller than its
+            neighbours and the row went ragged; over the art every card in
+            the rail is exactly a poster.
+          */}
+          <ArtScrim />
+          <View style={styles.featuredTitleBox}>
+            <Text style={styles.featuredTitle} numberOfLines={2}>
+              {item.name}
+            </Text>
+          </View>
         </View>
-        <Text style={styles.cardTitle} numberOfLines={2}>
-          {item.name}
-        </Text>
       </BouncePressable>
   );
 }
@@ -580,7 +589,8 @@ const styles = themedStyles((C: ThemeColors) =>
     aspectRatio: 16 / 10,
     borderRadius: Radii.xl,
     overflow: "hidden",
-    marginBottom: Spacing.lg,
+    /* No marginBottom: scrollContent already puts a gap between its
+       children, and the two together left a visible hole under the hero. */
     backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.border,
@@ -624,7 +634,9 @@ const styles = themedStyles((C: ThemeColors) =>
     borderColor: C.border,
     borderWidth: 1,
     borderRadius: Radii.lg,
-    paddingVertical: Spacing.xxl,
+    /* lg, not xxl: an empty state is a note, not a feature. At xxl the
+       "nothing watched yet" card was the tallest thing on the screen. */
+    paddingVertical: Spacing.lg,
     alignItems: "center",
     gap: Spacing.sm,
   },
@@ -676,6 +688,21 @@ const styles = themedStyles((C: ThemeColors) =>
   continueProgressFill: { height: "100%", backgroundColor: Brand.primary },
 
   featuredCard: { width: 116 },
+  featuredTitleBox: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: Spacing.xs,
+    paddingBottom: Spacing.xs,
+  },
+  featuredTitle: {
+    color: "#FFFFFF",
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontFamily: FontFamily.semiBold,
+    ...AndroidTextFix,
+  },
   featuredImageWrap: {
     width: 116,
     aspectRatio: 2 / 3,
