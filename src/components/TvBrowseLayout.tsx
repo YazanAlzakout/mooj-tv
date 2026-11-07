@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, useWindowDimensions } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 
 import { CategoryRail } from "@/components/CategoryRail";
 import { CategorySidebar } from "@/components/CategorySidebar";
-import type { CategoryTabItem } from "@/components/CategoryTabs";
+import { CategoryTabs, type CategoryTabItem } from "@/components/CategoryTabs";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 
 /**
@@ -56,21 +57,56 @@ export function BrowseLayout({
   categories,
   activeId,
   onSelect,
+  progress,
   children,
 }: {
   /** Null while still loading — the rail simply does not appear yet. */
   categories: CategoryTabItem[] | null;
   activeId: string;
   onSelect: (id: string) => void;
+  /** The pager's drag, which the horizontal strip travels with. */
+  progress?: SharedValue<number>;
   children: ReactNode;
 }) {
   const hasRail = Boolean(categories && categories.length > 1);
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
 
   if (isTvBuild) {
     return (
       <View style={styles.body}>
         {hasRail && categories && (
           <CategorySidebar categories={categories} activeId={activeId} onSelect={onSelect} />
+        )}
+        <View style={styles.content}>{children}</View>
+      </View>
+    );
+  }
+
+  /*
+   * Turned sideways, the categories go back on top.
+   *
+   * The column is the right shape for a phone held upright, where height
+   * is what there is plenty of. Laid on its side the window is 2400 by
+   * 1080: a column down the edge of a 1080pt-tall screen shows four
+   * categories where the portrait one showed eight, and it does it while
+   * narrowing a grid that was already short of rows. The horizontal strip
+   * costs one band of the scarce dimension and gives the artwork the rest.
+   *
+   * It is also the strip the pager already drives, so a sideways drag
+   * moves it with the finger — which is the one thing the column cannot
+   * do, a vertical rail following a horizontal drag reading as a glitch.
+   */
+  if (landscape) {
+    return (
+      <View style={styles.bodyColumn}>
+        {hasRail && categories && (
+          <CategoryTabs
+            categories={categories}
+            activeId={activeId}
+            onSelect={onSelect}
+            progress={progress}
+          />
         )}
         <View style={styles.content}>{children}</View>
       </View>
@@ -90,5 +126,6 @@ export function BrowseLayout({
 
 const styles = StyleSheet.create({
   body: { flex: 1, flexDirection: "row" },
+  bodyColumn: { flex: 1 },
   content: { flex: 1 },
 });

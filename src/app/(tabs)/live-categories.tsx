@@ -116,7 +116,13 @@ export default function LiveCategoriesScreen() {
   const { t } = useI18n();
   const session = getActiveSession();
   const columns = useGridColumns(PORTRAIT_COLUMNS);
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  /*
+   * Turned sideways the categories move to a strip on top, so nothing
+   * takes width off the grid — and `getItemLayout` has to be told, or
+   * it promises rows sized for a narrower list than the one drawn.
+   */
+  const phoneRail = windowWidth > windowHeight ? 0 : PHONE_RAIL_WIDTH;
   const insets = useSafeAreaInsets();
   /*
    * The rail is subtracted on TV: the grid is not the window, and
@@ -135,7 +141,7 @@ export default function LiveCategoriesScreen() {
     row height by the width of two 96dp margins spread across the columns.
   */
   const gridWidth =
-    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : PHONE_RAIL_WIDTH);
+    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : phoneRail);
   const gridRowHeight = rowHeight(gridWidth, columns);
 
   const [categories, setCategories] = useState<CategoryTab[] | null>(null);
@@ -303,16 +309,35 @@ export default function LiveCategoriesScreen() {
    * launch on this provider), the default lands on the first real category
    * instead of "All Channels" — see the module doc comment above for why
    * "All" is no longer the thing a viewer sees by default.
+   *
+   * ## The flag is raised after the decision, not before it
+   *
+   * It used to be set the moment the stored state came back, whether or
+   * not there was anything to apply — and the categories load separately.
+   * When the database answered first, which it usually does because it is
+   * local and the categories are a request, the fallback branch found
+   * `categories` still null, did nothing, and the flag kept it from ever
+   * being tried again. The screen then sat on "All": eleven thousand
+   * channels in one list, on open, which is the one thing this default
+   * exists to avoid. It showed up on the device and not in any reasoning
+   * about the code, because the race only resolves that way with a warm
+   * database and a cold network.
+   *
+   * So nothing is marked applied until something has actually been
+   * applied. The effect re-runs when the categories arrive, and settles
+   * the first time it has both halves.
    */
   useEffect(() => {
     if (lastCategoryApplied) return;
     getLiveTvState().then((state) => {
-      setLastCategoryApplied(true);
       if (state.lastCategoryId) {
+        setLastCategoryApplied(true);
         setActiveCategoryId(state.lastCategoryId);
       } else if (categories && categories.length > 1) {
+        setLastCategoryApplied(true);
         setActiveCategoryId(categories[1].id);
       }
+      /* Neither yet: leave the flag down so the next categories change retries. */
     });
   }, [lastCategoryApplied, categories]);
 
@@ -641,7 +666,12 @@ export default function LiveCategoriesScreen() {
         </>
       )}
 
-      <BrowseLayout categories={categories} activeId={activeCategoryId} onSelect={selectCategory}>
+      <BrowseLayout
+        categories={categories}
+        activeId={activeCategoryId}
+        onSelect={selectCategory}
+        progress={categoryDrag}
+      >
         {screenBody}
       </BrowseLayout>
       </SafeAreaView>

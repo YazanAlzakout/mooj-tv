@@ -82,7 +82,19 @@ export function MoojTabBar({ state, descriptors, navigation, insets }: BottomTab
    */
   const click = useAudioPlayer(require("../../assets/sounds/tab-tap.m4a"));
 
+
   useEffect(() => {
+    /*
+     * The level lives in the file, not here.
+     *
+     * Setting `click.volume` would be the obvious way and the compiler
+     * refuses it: anything a hook hands back is frozen, in an effect as
+     * much as in render. So the asset itself is mixed about 10dB under
+     * where it started, which is where it needed to be anyway — a tick
+     * you notice is a tick that is too loud, and this one fires several
+     * times a minute.
+     */
+
     /*
      * `mixWithOthers` so an 85ms tick never takes audio focus — without it
      * Android pauses whatever the viewer was listening to, for a sound

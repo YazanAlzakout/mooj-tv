@@ -1,6 +1,14 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FlatList, Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  FlatList,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
 
 import { NO_CLIP } from "@/core/layout/listWindow";
 
@@ -489,9 +497,24 @@ function SavedCard({
 function HeroCard({ item, onPress }: { item: HomeItem; onPress: () => void }) {
   const { t } = useI18n();
   const [failed, setFailed] = useState(false);
+  const { width, height } = useWindowDimensions();
+
+  /*
+   * A ceiling on the height, which only ever bites in landscape.
+   *
+   * The card is full width at 4:3, and on a phone turned sideways that is
+   * 1800pt of hero on a 1080pt screen: it swallowed the window, pushed
+   * every row off the bottom, and clipped its own title and play control
+   * out of view. Portrait is unaffected — 4:3 of a phone's width is about
+   * a third of its height, well under this.
+   *
+   * 42%, which leaves the header, a row and the bar with room. The image
+   * is `cover`, so a capped card crops rather than distorts.
+   */
+  const maxHeight = Math.round(height * (width > height ? 0.42 : 0.6));
 
   return (
-    <BouncePressable style={styles.hero} onPress={onPress}>
+    <BouncePressable style={[styles.hero, { maxHeight }]} onPress={onPress}>
       {!failed ? (
         <CachedImage
           uri={item.posterUrl}

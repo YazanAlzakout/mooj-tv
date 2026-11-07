@@ -117,7 +117,13 @@ export default function MoviesCategoriesScreen() {
      * narrower than the screen — and `getItemLayout` would then promise
      * taller rows than are actually drawn.
      */
-    const { width: windowWidth } = useWindowDimensions();
+    const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  /*
+   * Turned sideways the categories move to a strip on top, so nothing
+   * takes width off the grid — and `getItemLayout` has to be told, or
+   * it promises rows sized for a narrower list than the one drawn.
+   */
+  const phoneRail = windowWidth > windowHeight ? 0 : PHONE_RAIL_WIDTH;
   const insets = useSafeAreaInsets();
   /*
    * The rail is subtracted on TV: the grid is not the window, and
@@ -136,7 +142,7 @@ export default function MoviesCategoriesScreen() {
     row height by the width of two 96dp margins spread across the columns.
   */
   const gridWidth =
-    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : PHONE_RAIL_WIDTH);
+    windowWidth - insets.left - insets.right - TV_OVERSCAN_X - (isTvBuild ? TV_RAIL_WIDTH : phoneRail);
   const gridRowHeight = rowHeight(gridWidth, columns);
 
   const [movies, setMovies] = useState<MovieSummary[] | null>(() => getVodMovies());
@@ -423,7 +429,12 @@ export default function MoviesCategoriesScreen() {
         </>
       )}
 
-      <BrowseLayout categories={categories} activeId={activeCategoryId} onSelect={setActiveCategoryId}>
+      <BrowseLayout
+        categories={categories}
+        activeId={activeCategoryId}
+        onSelect={setActiveCategoryId}
+        progress={categoryDrag}
+      >
     {errorMessage && (
       <View style={styles.errorBlock}>
         <Text style={styles.error}>{errorMessage}</Text>
