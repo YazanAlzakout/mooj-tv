@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { ArcHero } from "@/components/ArcHero";
+import { demoDetail } from "@/core/demo/demoMode";
 import { BackButton } from "@/components/BackButton";
 import { CachedImage } from "@/components/CachedImage";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
@@ -54,7 +55,7 @@ export default function MovieDetailsScreen() {
     getVodDetails(session.config, movieId).then(
       (result) => {
         if (!cancelled) {
-          setDetails(result);
+          setDetails(demoDetail(result));
           setErrorMessage(null);
         }
       },

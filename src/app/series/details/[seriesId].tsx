@@ -5,6 +5,7 @@ import { FlatList, ScrollView, StyleSheet, Text, View, useWindowDimensions } fro
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { Focusable } from "@/components/Focusable";
 import { ArcHero } from "@/components/ArcHero";
+import { demoDetail } from "@/core/demo/demoMode";
 import { BackButton } from "@/components/BackButton";
 import { CachedImage } from "@/components/CachedImage";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
@@ -76,7 +77,7 @@ export default function SeriesDetailsScreen() {
     getSeriesDetails(session.config, seriesId).then(
       (result) => {
         if (cancelled) return;
-        setDetails(result);
+        setDetails(demoDetail(result));
         setSelectedSeason(result.seasons[0]?.seasonNumber ?? null);
         setErrorMessage(null);
       },

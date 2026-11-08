@@ -67,20 +67,32 @@ export function demoSeriesName(seed: string, index: number): string {
   return `Series ${String(index + 1).padStart(2, "0")}`;
 }
 
+const CATEGORY_NAMES = [
+  "Entertainment",
+  "News",
+  "Sport",
+  "Documentary",
+  "Kids",
+  "Music",
+  "Drama",
+  "Comedy",
+  "Classics",
+  "World",
+];
+
+/**
+ * A name per category, and never the same one twice.
+ *
+ * A real provider carries ninety categories and this list holds ten, so
+ * the first version cycled — and a screenshot of the rail showed
+ * "Entertainment, News, Sport ... Entertainment, News, Sport" one scroll
+ * apart, which reads as a bug in the app rather than as placeholder data.
+ * Past the first pass the pass number is appended.
+ */
 export function demoCategoryName(index: number): string {
-  const names = [
-    "Entertainment",
-    "News",
-    "Sport",
-    "Documentary",
-    "Kids",
-    "Music",
-    "Drama",
-    "Comedy",
-    "Classics",
-    "World",
-  ];
-  return names[index % names.length];
+  const name = CATEGORY_NAMES[index % CATEGORY_NAMES.length];
+  const pass = Math.floor(index / CATEGORY_NAMES.length);
+  return pass === 0 ? name : `${name} ${pass + 1}`;
 }
 
 /**
@@ -104,4 +116,75 @@ const PAIRS: [string, string][] = [
 /** The two colours a given item's generated artwork uses. */
 export function demoArtColors(seed: string): [string, string] {
   return PAIRS[hashIndex(seed, PAIRS.length)];
+}
+
+/**
+ * The shape of one piece of generated artwork.
+ *
+ * Colour alone was not enough. Every tile drew the same two bands at the
+ * same angle, so a grid of them read as one image repeated in eight
+ * tints — which looks like a rendering fault, not like a catalogue. Angle,
+ * height and offset now vary with the seed as well, which is enough for
+ * no two neighbours to look related.
+ *
+ * Everything is derived from the seed rather than from a random number:
+ * a title must keep the same artwork between the grid, the detail screen
+ * and the home row, or scrolling the app would look like it was shuffling
+ * its own pictures.
+ */
+export function demoArtShape(seed: string): {
+  angleA: string;
+  angleB: string;
+  /* `${number}%` rather than plain strings: React Native types a percentage
+     dimension as that template literal, and a widened string will not fit. */
+  topA: `${number}%`;
+  topB: `${number}%`;
+  heightA: `${number}%`;
+  heightB: `${number}%`;
+} {
+  const a = hashIndex(seed + "a", 7);
+  const b = hashIndex(seed + "b", 5);
+  return {
+    angleA: `${-26 + a * 9}deg`,
+    angleB: `${4 + b * 7}deg`,
+    topA: `${14 + a * 5}%`,
+    topB: `${38 + b * 7}%`,
+    heightA: `${34 + a * 4}%`,
+    heightB: `${22 + b * 5}%`,
+  };
+}
+
+/**
+ * The same substitution, for a screen that fetches its own data.
+ *
+ * The grids read their titles from the catalogue stores, which is where
+ * the swap above happens — but a detail screen asks the provider directly
+ * for one title, so nothing on the way in had replaced it and the real
+ * poster and the real name arrived on screen. Generic, so one function
+ * serves both the film and the series screens.
+ *
+ * The plot, the cast and the director are cleared rather than invented.
+ * Writing a synopsis would put a sentence on a store listing that
+ * describes a film nobody made.
+ */
+export function demoDetail<
+  T extends {
+    name: string;
+    posterUrl: string | null;
+    providerItemId: string;
+    plot?: string | null;
+    cast?: string | null;
+    director?: string | null;
+  },
+>(item: T): T {
+  if (!DEMO_CONTENT) return item;
+  const n = (hashIndex(item.providerItemId, 90) + 1).toString().padStart(2, "0");
+  return {
+    ...item,
+    name: `Feature ${n} (2026)`,
+    posterUrl: DEMO_ART_PREFIX + item.providerItemId,
+    ...(item.plot !== undefined ? { plot: null } : {}),
+    ...(item.cast !== undefined ? { cast: null } : {}),
+    ...(item.director !== undefined ? { director: null } : {}),
+  };
 }

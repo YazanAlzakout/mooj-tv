@@ -1,7 +1,7 @@
 import { Image, type ImageContentFit, type ImageStyle } from "expo-image";
 import { View, type ImageResizeMode, type StyleProp } from "react-native";
 
-import { DEMO_ART_PREFIX, DEMO_CONTENT, demoArtColors } from "@/core/demo/demoMode";
+import { DEMO_ART_PREFIX, DEMO_CONTENT, demoArtColors, demoArtShape } from "@/core/demo/demoMode";
 
 import { artworkIsKnownBad, noteImageFailed } from "@/core/media/deadImageHosts";
 import { knownLocalUri } from "@/core/media/imageCache";
@@ -59,6 +59,7 @@ export function CachedImage({
    */
   if (DEMO_CONTENT && uri.startsWith(DEMO_ART_PREFIX)) {
     const [deep, bright] = demoArtColors(uri);
+    const shape = demoArtShape(uri);
     return (
       <View style={[style, { backgroundColor: deep, overflow: "hidden" }]}>
         <View
@@ -66,12 +67,12 @@ export function CachedImage({
             position: "absolute",
             left: "-30%",
             right: "-30%",
-            top: "26%",
-            height: "46%",
+            top: shape.topA,
+            height: shape.heightA,
             backgroundColor: bright,
-            opacity: 0.55,
+            opacity: 0.5,
             borderRadius: 999,
-            transform: [{ rotate: "-14deg" }],
+            transform: [{ rotate: shape.angleA }],
           }}
         />
         <View
@@ -79,12 +80,12 @@ export function CachedImage({
             position: "absolute",
             left: "-20%",
             right: "-20%",
-            top: "44%",
-            height: "30%",
+            top: shape.topB,
+            height: shape.heightB,
             backgroundColor: bright,
-            opacity: 0.35,
+            opacity: 0.3,
             borderRadius: 999,
-            transform: [{ rotate: "9deg" }],
+            transform: [{ rotate: shape.angleB }],
           }}
         />
       </View>
