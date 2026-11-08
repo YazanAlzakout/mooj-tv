@@ -1,14 +1,12 @@
-import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn } from "react-native-reanimated";
 
-import { useI18n } from "@/core/i18n/I18nContext";
-import { FontFamily, Radii, Spacing } from "@/core/theme/tokens";
+import { FontFamily, Spacing } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles } from "@/core/theme/themedStyles";
 
-import { BouncePressable } from "./BouncePressable";
+import { BackButton } from "./BackButton";
 
 /**
  * Shared screen header: circular back button, centered title with optional
@@ -38,28 +36,17 @@ export function ScreenHeader({
   right?: ReactNode;
   onBack?: () => void;
 }) {
-  const { t } = useI18n();
-
   return (
     <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
-      {showBack && (
-      <BouncePressable
-        style={styles.backButton}
-        onPress={onBack ?? (() => router.back())}
-        accessibilityLabel={t("common", "back")}
-        accessibilityRole="button"
-      >
-        {/*
-          Chosen from the interface language, not left to the platform.
-          A lone "‹" is a direction-neutral character, and Android resolves
-          a neutral-only string against the *device* locale — so an Arabic
-          interface on an English-locale phone drew a right-edge back button
-          pointing left. Kurdish Sorani is almost never a device locale, so
-          for those users it was wrong every time.
-        */}
-        <Text style={styles.backButtonText}>{"‹"}</Text>
-      </BouncePressable>
-      )}
+      {/*
+        The chevron is drawn rather than typed — see BackButton. That also
+        settles an old problem this file used to carry a note about: a lone
+        "‹" is a direction-neutral character, and Android resolved it
+        against the *device* locale, so an Arabic interface on an
+        English-locale phone could draw the arrow pointing the wrong way.
+        A shape made of borders points where it is built to point.
+      */}
+      {showBack && <BackButton onPress={onBack} />}
 
       <View style={styles.titleWrap}>
         <Text style={styles.title} numberOfLines={1}>
@@ -87,17 +74,6 @@ const styles = themedStyles((C: ThemeColors) =>
     paddingTop: Spacing.md,
     paddingBottom: Spacing.sm,
   },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: Radii.pill,
-    backgroundColor: C.fillSubtle,
-    borderColor: C.border,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backButtonText: { color: C.text, fontSize: 22, fontFamily: FontFamily.bold, marginTop: -3 },
   titleWrap: { flex: 1, alignItems: "center" },
   title: { color: C.text, fontSize: 17, fontFamily: FontFamily.extraBold },
   subtitle: { color: C.textMuted, fontSize: 11, fontFamily: FontFamily.regular, marginTop: 1 },

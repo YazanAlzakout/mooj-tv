@@ -66,8 +66,32 @@ const LAMP_WIDTH = 22;
 const LAMP_HEIGHT = 3;
 
 export function MoojTabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
-  useThemeRerender();
+  const theme = useThemeRerender();
   const C = themeColors();
+
+  /**
+   * The light the spotlight is made of, and the ink of the tab it falls on.
+   *
+   * Both were `#FFFFFF`, written when the only theme anyone looked at was
+   * the dark one. On the light theme the bar is #F3F4F6, so the selected
+   * glyph was white on near-white and the lamp and cone were invisible:
+   * the whole assembly collapsed to the one blue bar at the foot. Reported
+   * as "باللايت مود بطل شكلن حلو".
+   *
+   * A light source cannot be lighter than its ground, so on a light bar it
+   * stops being white and becomes the brand blue. That is also what every
+   * light-mode tab bar does with its selected item, so nothing here is
+   * unusual once the colour is right.
+   *
+   * The cut-out inside the movies glyph stays dark on both themes: it is a
+   * hole in a filled shape, and both white and brand blue are light enough
+   * to hold one.
+   */
+  const dark = theme === "dark";
+  const glow = dark ? "#FFFFFF" : Brand.primary;
+  const coneWide = dark ? "rgba(62,185,235,0.09)" : "rgba(25,137,198,0.10)";
+  const coneCore = dark ? "rgba(255,255,255,0.07)" : "rgba(25,137,198,0.07)";
+  const pool = dark ? Brand.primaryLight : Brand.primary;
 
   const [barWidth, setBarWidth] = useState(0);
   const slide = useSharedValue(0);
@@ -153,12 +177,12 @@ export function MoojTabBar({ state, descriptors, navigation, insets }: BottomTab
             style={[styles.beamSlot, { width: itemWidth }, beamStyle]}
           >
             {/* The lamp on the top edge. */}
-            <View style={styles.lamp} />
+            <View style={[styles.lamp, { backgroundColor: glow }]} />
             {/* The cone: wide and faint under narrow and brighter. */}
-            <View style={styles.coneWide} />
-            <View style={styles.coneCore} />
+            <View style={[styles.coneWide, { borderBottomColor: coneWide }]} />
+            <View style={[styles.coneCore, { borderBottomColor: coneCore }]} />
             {/* Where the light lands. */}
-            <View style={styles.pool} />
+            <View style={[styles.pool, { backgroundColor: pool }]} />
           </Animated.View>
         )}
 
@@ -175,11 +199,7 @@ export function MoojTabBar({ state, descriptors, navigation, insets }: BottomTab
               accessibilityState={focused ? { selected: true } : {}}
               accessibilityLabel={options.title ?? route.name}
             >
-              <Glyph
-                color={focused ? "#FFFFFF" : C.textMuted}
-                size={23}
-                focused={focused}
-              />
+              <Glyph color={focused ? glow : C.textMuted} size={23} focused={focused} />
             </Pressable>
           );
         })}
@@ -202,11 +222,15 @@ const styles = StyleSheet.create({
 
   beamSlot: { position: "absolute", top: 0, bottom: 0, left: 0, alignItems: "center" },
 
+  /*
+   * Geometry only, from here down. Every colour in the spotlight depends on
+   * which theme is up, and a stylesheet cannot ask — see the note in the
+   * component.
+   */
   lamp: {
     width: LAMP_WIDTH,
     height: LAMP_HEIGHT,
     borderRadius: LAMP_HEIGHT,
-    backgroundColor: "#FFFFFF",
   },
   /*
    * Trapezoids. `width` is the top edge; the transparent side borders widen
@@ -222,7 +246,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: BAR_HEIGHT - LAMP_HEIGHT * 2,
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
-    borderBottomColor: "rgba(62,185,235,0.09)",
   },
   coneCore: {
     position: "absolute",
@@ -233,7 +256,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: BAR_HEIGHT - LAMP_HEIGHT * 2,
     borderLeftColor: "transparent",
     borderRightColor: "transparent",
-    borderBottomColor: "rgba(255,255,255,0.07)",
   },
   pool: {
     position: "absolute",
@@ -241,7 +263,6 @@ const styles = StyleSheet.create({
     width: 30,
     height: LAMP_HEIGHT,
     borderRadius: LAMP_HEIGHT,
-    backgroundColor: Brand.primaryLight,
   },
 });
 

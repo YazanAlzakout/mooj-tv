@@ -96,8 +96,17 @@ export function themeColors(): ThemeColors {
  * up the new palette on its own. What it cannot do is notice that the theme
  * changed, because the active theme lives outside React.
  *
- * Calling this once in a screen is enough for that whole screen: everything
- * it renders — rows, cells, modals, shared components — re-renders with it.
+ * Calling this once in a screen covers everything that screen re-renders
+ * with it — but **not a `memo`'d child**. A memo compares props, a theme
+ * change touches none of them, and the child bails out still holding the
+ * old palette's stylesheet. That is not theoretical: it left the artwork
+ * tiles in all three browse grids painted with the dark theme's surface on
+ * a white page, which a screenshot measured as #12121A on #FFFFFF.
+ *
+ * So a memoised component needs one of two things: its own call to this,
+ * or a key that changes with the theme. The three grids take the key (they
+ * already remount on a column change, and their scroll position is
+ * restored); the category chips take the subscription.
  *
  * This replaced remounting the tree on a keyed Fragment. That worked, but
  * the key sat above the navigator and the intro flag, so changing the theme

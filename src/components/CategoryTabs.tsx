@@ -20,7 +20,7 @@ import { NO_CLIP } from "@/core/layout/listWindow";
 import { BouncePressable } from "@/components/BouncePressable";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
-import { themedStyles } from "@/core/theme/themedStyles";
+import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
 
 export interface CategoryTabItem {
   id: string;
@@ -151,6 +151,15 @@ function MeasuredCell({
  * `memo(function …)` rather than an arrow: `react/display-name` wants a
  * named function here.
  */
+/*
+ * Subscribed to the theme individually, unlike the grid cells.
+ *
+ * A memoised child does not re-render when its parent does, so a theme
+ * change leaves it painted in the old palette — see the note on the grid
+ * lists' `key`. Those rebuild the whole list instead; a strip of chips has
+ * no key to hang that on and is small enough that one subscription each is
+ * cheaper than the alternative.
+ */
 const Chip = memo(function Chip({
   id,
   name,
@@ -165,6 +174,7 @@ const Chip = memo(function Chip({
   /** Takes the id, so the chip is handed one stable function rather than a new closure. */
   onSelect: (id: string) => void;
 }) {
+  useThemeRerender();
   const press = useCallback(() => onSelect(id), [onSelect, id]);
   return (
     <BouncePressable

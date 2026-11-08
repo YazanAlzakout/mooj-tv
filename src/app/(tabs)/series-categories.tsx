@@ -130,7 +130,7 @@ interface CategoryTab {
  */
 export default function SeriesCategoriesScreen() {
   // Repaints this screen — and everything it renders — when the theme changes.
-  useThemeRerender();
+  const theme = useThemeRerender();
   const { t } = useI18n();
   const session = getActiveSession();
   /*
@@ -521,7 +521,20 @@ export default function SeriesCategoriesScreen() {
         {...pages(pageCategoryId).scroll}
         data={itemsFor(pageCategoryId)}
         keyExtractor={(item) => item.providerItemId}
-        key={columns}
+        /*
+          The theme is in this key, and it has to be.
+          `useThemeRerender` above re-renders the screen, and the screen
+          re-reads its stylesheet — but every cell in this list is
+          `memo`'d on props that a theme change does not touch, so the
+          cells bail out and keep the palette they were built with. On a
+          light page that left the artwork tiles painted #12121A, the dark
+          theme's surface, which is measurable in a screenshot and was.
+
+          A theme flip is a fair moment to rebuild a list: it is rare, and
+          `useCategoryPages` puts the scroll position back because the
+          `shape` it keys on has not changed.
+        */
+        key={`${columns}|${theme}`}
         numColumns={columns}
         contentContainerStyle={styles.grid}
         columnWrapperStyle={styles.gridRow}

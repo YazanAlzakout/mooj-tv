@@ -127,7 +127,7 @@ interface CategoryTab {
  */
 export default function LiveCategoriesScreen() {
   // Repaints this screen — and everything it renders — when the theme changes.
-  useThemeRerender();
+  const theme = useThemeRerender();
   const { t } = useI18n();
   const session = getActiveSession();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -600,7 +600,20 @@ export default function LiveCategoriesScreen() {
         {...pages(pageCategoryId).scroll}
         data={pageChannels}
         keyExtractor={(item) => item.providerItemId}
-        key={columns}
+        /*
+          The theme is in this key, and it has to be.
+          `useThemeRerender` above re-renders the screen, and the screen
+          re-reads its stylesheet — but every cell in this list is
+          `memo`'d on props that a theme change does not touch, so the
+          cells bail out and keep the palette they were built with. On a
+          light page that left the artwork tiles painted #12121A, the dark
+          theme's surface, which is measurable in a screenshot and was.
+
+          A theme flip is a fair moment to rebuild a list: it is rare, and
+          `useCategoryPages` puts the scroll position back because the
+          `shape` it keys on has not changed.
+        */
+        key={`${columns}|${theme}`}
         numColumns={columns}
         contentContainerStyle={styles.grid}
         columnWrapperStyle={styles.gridRow}
@@ -890,7 +903,12 @@ const ChannelCard = memo(function ChannelCard({
             in the player. Touch is unaffected: the phone still has it.
           */}
           {!isTvBuild && (
-            <Pressable onPress={star} hitSlop={8} focusable={false} style={styles.favoriteButton}>
+            <Pressable
+              onPress={star}
+              hitSlop={10}
+              focusable={false}
+              style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]}
+            >
               <Text style={[styles.favoriteButtonText, isFavorite && styles.favoriteButtonTextActive]}>
                 {isFavorite ? "★" : "☆"}
               </Text>
@@ -1068,18 +1086,33 @@ const styles = themedStyles((C: ThemeColors) =>
     fontFamily: FontFamily.semiBold,
     ...AndroidTextFix,
   },
+  /*
+   * Lighter than it was, because of where it has to sit.
+   *
+   * A 26dp disc at 50% black, dropped on the corner of a channel logo that
+   * is usually a mark on a white ground, reads as a hole punched in the
+   * artwork — it was the heaviest thing on the card and it was not the
+   * point of the card. Smaller, softer, and set hard into the corner so it
+   * overlaps the `contain`-fitted logo as little as the geometry allows.
+   *
+   * It keeps a ground rather than floating: the star has to be legible
+   * over a white logo and over a black one, and nothing without its own
+   * backing is legible over both.
+   */
   favoriteButton: {
     position: "absolute",
-    top: Spacing.xs,
-    start: Spacing.xs,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    top: 3,
+    start: 3,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.32)",
     alignItems: "center",
     justifyContent: "center",
   },
-  favoriteButtonText: { color: "rgba(255,255,255,0.8)", fontSize: 14 },
-  favoriteButtonTextActive: { color: "#FFD700" },
+  favoriteButtonText: { color: "rgba(255,255,255,0.72)", fontSize: 12 },
+  /* Once it means something, it is allowed to be seen: full gold, full disc. */
+  favoriteButtonActive: { backgroundColor: "rgba(0,0,0,0.5)" },
+  favoriteButtonTextActive: { color: "#FFD700", fontSize: 13 },
   })
 );

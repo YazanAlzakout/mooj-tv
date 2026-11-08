@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Focusable } from "@/components/Focusable";
 import { BouncePressable } from "@/components/BouncePressable";
+import { FavoriteIcon, HistoryIcon, WatchLaterIcon } from "@/components/MenuIcons";
 import { useTapFeedback } from "@/core/feedback/useTapFeedback";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ScreenBackground } from "@/components/ScreenBackground";
@@ -255,65 +256,6 @@ export default function SettingsScreen() {
       <ScreenHeader title={t("settings", "title")} />
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {session && (
-          <View>
-            <View style={styles.accountCard}>
-              <View style={styles.accountBanner}>
-                <View style={styles.accountBannerLeft}>
-                  <View
-                    style={[
-                      styles.statusDot,
-                      { backgroundColor: accountInfo?.status === "Active" ? themeColors().success : themeColors().error },
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.statusText,
-                      { color: accountInfo?.status === "Active" ? themeColors().success : themeColors().error },
-                    ]}
-                  >
-                    {accountInfo?.status ?? "—"}
-                  </Text>
-                </View>
-                <Text style={styles.accountProviderName} numberOfLines={1}>
-                  {session.provider.name}
-                </Text>
-              </View>
-              <View style={styles.chipsRow}>
-                <AccountChip
-                  label={t("settings", "expiresOn")}
-                  value={
-                    accountInfo?.expiresAt != null
-                      ? formatDate(accountInfo.expiresAt)
-                      : t("settings", "neverExpires")
-                  }
-                  tint={Brand.primary}
-                />
-                <AccountChip
-                  label={t("settings", "connections")}
-                  value={
-                    accountInfo?.maxConnections != null
-                      ? `${accountInfo.activeConnections ?? "—"}/${accountInfo.maxConnections}`
-                      : "—"
-                  }
-                  tint="#8B5CF6"
-                />
-                <AccountChip
-                  label={t("settings", "outputFormats")}
-                  value={accountInfo?.allowedOutputFormats[0]?.toUpperCase() ?? "—"}
-                  tint="#06B6D4"
-                />
-              </View>
-            </View>
-          </View>
-        )}
-
-        <SectionHeader title={t("settings", "yourActivity")} />
-        <View style={styles.statsRow}>
-          <StatCard glyph="◷" tint="#06B6D4" count={stats.history} label={t("history", "title")} />
-          <StatCard glyph="★" tint="#EC4899" count={stats.favorites} label={t("home", "favorites")} />
-          <StatCard glyph="+" tint="#F59E0B" count={stats.watchLater} label={t("home", "watchLater")} />
-        </View>
 
         <SectionLabel>{t("settings", "appearance")}</SectionLabel>
         <Row label={t("settings", "language")} value={localeLabel(locale)} onPress={() => setLanguagePickerOpen(true)} />
@@ -521,40 +463,102 @@ export default function SettingsScreen() {
               little any of this masking is worth on a cleartext panel.
             */}
             <InfoRow label={t("settings", "username")} value={session.config.username} />
-            {accountInfo && (
-              <>
-                {accountInfo.status && (
-                  <InfoRow label={t("settings", "accountStatus")} value={accountInfo.status} />
-                )}
-                <InfoRow
-                  label={t("settings", "expiresOn")}
-                  value={
-                    accountInfo.expiresAt !== null
-                      ? formatDate(accountInfo.expiresAt)
-                      : t("settings", "neverExpires")
-                  }
-                />
-                {accountInfo.maxConnections !== null && (
-                  <InfoRow
-                    label={t("settings", "connections")}
-                    value={`${accountInfo.activeConnections ?? "—"} / ${accountInfo.maxConnections}`}
-                  />
-                )}
-                {accountInfo.allowedOutputFormats.length > 0 && (
-                  <InfoRow
-                    label={t("settings", "outputFormats")}
-                    value={accountInfo.allowedOutputFormats.join(", ")}
-                  />
-                )}
-                {accountInfo.serverTimezone && (
-                  <InfoRow label={t("settings", "serverTimezone")} value={accountInfo.serverTimezone} />
-                )}
-              </>
+            {/*
+              Status, expiry, connections and the output formats are *not*
+              repeated here. The card lower down this page already carries
+              all four, in larger type, and a page that states the same
+              four facts twice makes a reader check whether they disagree.
+              What stays here is what that card does not say: which
+              provider, which server, which login, and the server's clock —
+              the things you would read out to support.
+            */}
+            {accountInfo?.serverTimezone && (
+              <InfoRow label={t("settings", "serverTimezone")} value={accountInfo.serverTimezone} />
             )}
           </View>
         )}
         <Row label={t("settings", "manageProviders")} onPress={() => router.push("/providers")} />
         <Row label={t("settings", "disconnect")} onPress={disconnect} destructive />
+
+        {/*
+          The status card and the activity counts, at the foot.
+
+          They were the first two things on this page, and neither is a
+          setting: one says when the line expires and how many of its
+          connections are in use, the other counts what the viewer has
+          watched and saved. Both are read, not changed — so between them
+          they pushed every switch on the page down by a screen and a
+          half, and the first thing anyone opening Settings had to do was
+          scroll past information they had not come for.
+
+          Everything above this line is adjustable. Everything from here
+          down is something to look at.
+        */}
+        {session && (
+          <View>
+            <View style={styles.accountCard}>
+              <View style={styles.accountBanner}>
+                <View style={styles.accountBannerLeft}>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      { backgroundColor: accountInfo?.status === "Active" ? themeColors().success : themeColors().error },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusText,
+                      { color: accountInfo?.status === "Active" ? themeColors().success : themeColors().error },
+                    ]}
+                  >
+                    {accountInfo?.status ?? "—"}
+                  </Text>
+                </View>
+                <Text style={styles.accountProviderName} numberOfLines={1}>
+                  {session.provider.name}
+                </Text>
+              </View>
+              <View style={styles.chipsRow}>
+                <AccountChip
+                  label={t("settings", "expiresOn")}
+                  value={
+                    accountInfo?.expiresAt != null
+                      ? formatDate(accountInfo.expiresAt)
+                      : t("settings", "neverExpires")
+                  }
+                  tint={Brand.primary}
+                />
+                <AccountChip
+                  label={t("settings", "connections")}
+                  value={
+                    accountInfo?.maxConnections != null
+                      ? `${accountInfo.activeConnections ?? "—"}/${accountInfo.maxConnections}`
+                      : "—"
+                  }
+                  tint="#8B5CF6"
+                />
+                <AccountChip
+                  label={t("settings", "outputFormats")}
+                  value={accountInfo?.allowedOutputFormats[0]?.toUpperCase() ?? "—"}
+                  tint="#06B6D4"
+                />
+              </View>
+            </View>
+          </View>
+        )}
+
+        <SectionHeader title={t("settings", "yourActivity")} />
+        <View style={styles.statsRow}>
+          {/*
+            The same drawn marks the More list uses. These were "◷", "★"
+            and a plus sign: one rare glyph, one that renders as colour
+            emoji on some Android builds, and one that is simply a plus.
+            Three different weights pretending to be a set.
+          */}
+          <StatCard Icon={HistoryIcon} tint="#06B6D4" count={stats.history} label={t("history", "title")} />
+          <StatCard Icon={FavoriteIcon} tint="#EC4899" count={stats.favorites} label={t("home", "favorites")} />
+          <StatCard Icon={WatchLaterIcon} tint="#F59E0B" count={stats.watchLater} label={t("home", "watchLater")} />
+        </View>
 
         <SectionLabel>{t("settings", "about")}</SectionLabel>
         <View style={styles.infoCard}>
@@ -648,11 +652,21 @@ function AccountChip({ label, value, tint }: { label: string; value: string; tin
   );
 }
 
-function StatCard({ glyph, tint, count, label }: { glyph: string; tint: string; count: number; label: string }) {
+function StatCard({
+  Icon,
+  tint,
+  count,
+  label,
+}: {
+  Icon: (props: { color: string; size: number }) => React.ReactNode;
+  tint: string;
+  count: number;
+  label: string;
+}) {
   return (
     <View style={styles.statCard}>
       <View style={[styles.statIconWrap, { backgroundColor: `${tint}22` }]}>
-        <Text style={[styles.statGlyph, { color: tint }]}>{glyph}</Text>
+        <Icon color={tint} size={19} />
       </View>
       <Text style={styles.statCount}>{count}</Text>
       <Text style={styles.statLabel} numberOfLines={1}>
@@ -683,10 +697,20 @@ function LanguagePickerModal({
   onSelect: (code: LocaleCode) => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.modalBackdrop} focusable={false} onPress={onClose}>
         <Pressable style={styles.modalSheet} focusable={false} onPress={(e) => e.stopPropagation()}>
+          {/*
+            A heading, which this sheet did not have.
+
+            The one in onboarding does, and a list of six words with no
+            title is a list of six words: it opens over the page it was
+            called from and nothing on it says what choosing does. One
+            line fixes that.
+          */}
+          <Text style={styles.modalTitle}>{t("settings", "language")}</Text>
           {LOCALES.map((l) => (
             <Focusable
               key={l.code}
@@ -985,6 +1009,15 @@ const styles = themedStyles((C: ThemeColors) =>
     borderTopLeftRadius: Radii.xl,
     borderTopRightRadius: Radii.xl,
     padding: Spacing.lg,
+  },
+  modalTitle: {
+    color: C.text,
+    fontSize: 15,
+    fontFamily: FontFamily.bold,
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
+    ...AndroidTextFix,
   },
   modalOptionRow: { paddingVertical: Spacing.md },
   modalOptionText: { color: C.textSecondary, fontSize: 15, fontFamily: FontFamily.medium },

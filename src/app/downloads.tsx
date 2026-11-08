@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FlatList, StyleSheet, Text, View } from "react-native";
 
 import { NO_CLIP } from "@/core/layout/listWindow";
@@ -30,6 +30,27 @@ export default function DownloadsScreen() {
   useThemeRerender();
   const { t } = useI18n();
   const [tasks, setTasks] = useState<DownloadTask[] | null>(null);
+
+  /**
+   * What is happening first, then what is waiting, then what is done.
+   *
+   * The repository hands these back newest-first, which on this screen put
+   * a row marked "Queued" above the one that was actually transferring —
+   * seen on a device on 2026-11-08, and it reads as though the app has the
+   * order wrong. Within a status band the newest-first order is kept, so a
+   * download started a minute ago is still above one from last week.
+   */
+  const ordered = useMemo(() => {
+    const rank: Record<DownloadStatus, number> = {
+      downloading: 0,
+      paused: 1,
+      queued: 2,
+      failed: 3,
+      completed: 4,
+      canceled: 5,
+    };
+    return tasks === null ? null : [...tasks].sort((a, b) => rank[a.status] - rank[b.status]);
+  }, [tasks]);
   const [pendingDelete, setPendingDelete] = useState<DownloadTask | null>(null);
 
   const load = useCallback(() => {
@@ -92,10 +113,10 @@ export default function DownloadsScreen() {
           </View>
         )}
 
-        {tasks && tasks.length > 0 && (
+        {ordered && ordered.length > 0 && (
           <FlatList
         {...NO_CLIP}
-            data={tasks}
+            data={ordered}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}

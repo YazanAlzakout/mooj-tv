@@ -289,6 +289,23 @@ export async function startDownload(item: NewDownloadInput): Promise<void> {
 export async function pauseDownload(id: string): Promise<void> {
   const task = activeTasks.get(id);
   if (!task) return;
+
+  /*
+   * Out of `activeTasks` first, and that order is the whole fix.
+   *
+   * `pauseAsync()` resolves the pending `downloadAsync()` with null, which
+   * runs `runDownload`'s `finally` and pumps the queue — and that happened
+   * while this function was still awaiting, so the slot still looked taken
+   * and the pump returned empty-handed. Nothing asked again, so the next
+   * download sat at "Queued" until something else finished. Watched happen
+   * on a device on 2026-11-08: paused one transfer, the one behind it never
+   * started.
+   *
+   * Removing the task before awaiting makes the slot free at the moment the
+   * pump looks. The task object is still held locally, so the pause itself
+   * is unaffected.
+   */
+  activeTasks.delete(id);
   await task.pauseAsync();
   /*
    * `savable()` includes the request URL, which for this provider carries
@@ -298,8 +315,15 @@ export async function pauseDownload(id: string): Promise<void> {
    * makes resuming possible.
    */
   const { url: _discardedCredentialUrl, ...state } = task.savable();
-  activeTasks.delete(id);
   await updateDownloadStatus(id, "paused", { resumeState: JSON.stringify(state) });
+
+  /*
+   * And pump explicitly, because the `finally` that would have done it has
+   * already run by now — see above. `pumpQueue` is idempotent and bails
+   * when there is no slot or nothing waiting, so calling it twice costs a
+   * comparison.
+   */
+  void pumpQueue();
 }
 
 export async function resumeDownload(record: DownloadTaskRecord): Promise<void> {
@@ -327,6 +351,15 @@ export async function cancelDownload(id: string): Promise<void> {
   }
   clearDownloadProgress(id);
   await deleteAndCleanupFile(id);
+  /*
+   * Explicitly, for the reason given in `pauseDownload`: the `finally`
+   * inside `runDownload` fires on the rejection, which can land before the
+   * row above is actually gone — and a pump that reads the queue too early
+   * finds the cancelled row still in it. Cancelling a transfer must start
+   * whatever was waiting behind it; it did not, on the device, on
+   * 2026-11-08.
+   */
+  void pumpQueue();
 }
 
 export async function deleteDownload(id: string): Promise<void> {
@@ -337,6 +370,7 @@ export async function deleteDownload(id: string): Promise<void> {
   }
   clearDownloadProgress(id);
   await deleteAndCleanupFile(id);
+  void pumpQueue();
 }
 
 async function deleteAndCleanupFile(id: string): Promise<void> {

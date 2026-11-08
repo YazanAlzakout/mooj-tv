@@ -5,6 +5,7 @@ import { FlatList, ScrollView, StyleSheet, Text, View, useWindowDimensions } fro
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { Focusable } from "@/components/Focusable";
 import { ArcHero } from "@/components/ArcHero";
+import { BackButton } from "@/components/BackButton";
 import { CachedImage } from "@/components/CachedImage";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -140,9 +141,14 @@ export default function SeriesDetailsScreen() {
   return (
     <ScreenBackground>
       <SafeAreaView style={styles.safeArea} edges={["left", "right"]}>
-        <BouncePressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>‹</Text>
-        </BouncePressable>
+        {/*
+          `floating`: this one sits on the artwork rather than on the page,
+          so it keeps a dark ground and a white mark. A hairline ring on an
+          unknown photograph is not legible.
+        */}
+        <View style={styles.backButton}>
+          <BackButton floating />
+        </View>
 
         {(noInternetMessage || errorMessage) && (
           <View style={styles.centered}>
@@ -524,23 +530,17 @@ const styles = themedStyles((C: ThemeColors) =>
   },
   retryButtonText: { color: C.text, fontFamily: FontFamily.bold },
 
+  /*
+   * Placement only. The disc, its border and the mark inside it all live
+   * in BackButton now, which is also where the note about needing a dark
+   * ground over unknown artwork went.
+   */
   backButton: {
     position: "absolute",
     top: Spacing.xl,
     start: Spacing.lg,
     zIndex: 10,
-    width: 38,
-    height: 38,
-    borderRadius: Radii.pill,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    borderColor: "rgba(255,255,255,0.18)",
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
   },
-  /* On a black bubble over the artwork, so white in both themes — `C.text`
-     here rendered a near-black arrow on a near-black circle in light mode. */
-  backButtonText: { color: "#FFFFFF", fontSize: 22, fontFamily: FontFamily.bold, marginTop: -3 },
 
   skeletonWrap: { paddingBottom: Spacing.xxl },
   skeletonBody: { padding: Spacing.lg, gap: Spacing.md },
