@@ -73,7 +73,23 @@ const BRAND = {
    * dark enough for its own gradient to read, so this is the deepest navy
    * sampled from the artwork rather than a flat white.
    */
-  adaptiveIconBackground: "#021753",
+  /**
+   * White, behind the launcher icon.
+   *
+   * It was the brand's deep navy, with a navy image on top of it, and on a
+   * launcher the result was a dark plate with a small sphere floating in
+   * the middle of it — the mark covers about 58% of the icon canvas and
+   * the mask reveals around 90%, so a thick navy frame showed all the way
+   * round.
+   *
+   * Android cannot simply be told to make it transparent: an adaptive icon
+   * has to have a background layer, and a launcher handed a transparent
+   * one substitutes a plate of its own choosing. White is the answer the
+   * drawer on this device is already full of — the mark sits on it the way
+   * Gmail, Maps, Photos and Drive sit on theirs — and a blue sphere on
+   * white is the mark at its most legible.
+   */
+  adaptiveIconBackground: "#FFFFFF",
 };
 
 module.exports = BRAND;

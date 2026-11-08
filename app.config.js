@@ -138,9 +138,17 @@ module.exports = {
         // Matches the published app exactly, icon assets included: this
         // release replaces it on Play, and an updating user should find the
         // same icon in the same place on their home screen.
+        /*
+         * A colour, and no background image.
+         *
+         * `backgroundImage` wins over `backgroundColor` when both are
+         * given, so the navy plate was being drawn from a 2048px file and
+         * the colour beside it did nothing. Dropping the file lets the
+         * colour decide, which is what makes this one line in
+         * brand.config.js the whole answer for a rebrand.
+         */
         backgroundColor: BRAND.adaptiveIconBackground,
         foregroundImage: "./assets/images/android-icon-foreground.png",
-        backgroundImage: "./assets/images/android-icon-background.png",
         monochromeImage: "./assets/images/android-icon-monochrome.png",
       },
       predictiveBackGestureEnabled: false,
