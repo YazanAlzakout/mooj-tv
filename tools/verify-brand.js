@@ -147,9 +147,14 @@ check(
 const ALLOWED_PERMISSIONS = new Set([
   /* The whole app is a client for a remote server. */
   "android.permission.INTERNET",
+  /* The offline banner and the retry logic both ask whether there is a network. */
+  "android.permission.ACCESS_NETWORK_STATE",
+  "android.permission.ACCESS_WIFI_STATE",
   /* expo-video: keeps playback alive when the screen is off or the app is behind another. */
   "android.permission.FOREGROUND_SERVICE",
   "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+  /* Playback must not be cut short by the device sleeping mid-film. */
+  "android.permission.WAKE_LOCK",
   /* expo-video / expo-audio: volume and audio focus. */
   "android.permission.MODIFY_AUDIO_SETTINGS",
   /* Legacy storage, capped at SDK 32 by the manifest itself; nothing above that gets it. */
@@ -157,9 +162,35 @@ const ALLOWED_PERMISSIONS = new Set([
   "android.permission.WRITE_EXTERNAL_STORAGE",
   /* expo-haptics. Harmless, and the tick in the tab bar is worth it. */
   "android.permission.VIBRATE",
+  /*
+   * expo-secure-store declares these so a keystore entry *can* be put
+   * behind a fingerprint. This app stores provider credentials without
+   * that option, so nothing ever prompts — but the permission ships with
+   * the library and removing it would break the module.
+   */
+  "android.permission.USE_BIOMETRIC",
+  "android.permission.USE_FINGERPRINT",
+  /* Generated per package by androidx; a private signature permission, not a capability. */
+  BRAND.packageId + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
 ]);
 
-const manifestPath = "android/app/src/main/AndroidManifest.xml";
+/*
+ * The merged manifest, not the source one, when a build has produced it.
+ *
+ * The source manifest holds what this project writes. What ships is that
+ * plus every library's own, folded in at build time — which on the last
+ * release was five more permissions than the source file showed, none of
+ * them written by anyone here. Checking the source file alone would have
+ * said "all clear" about a manifest it had not read.
+ *
+ * Falls back to the source manifest so this check still says something
+ * useful before the first build of a working tree; the line printed names
+ * which one it read, so a PASS can never be mistaken for the stronger
+ * claim.
+ */
+const MERGED = "android/app/build/intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml";
+const SOURCE = "android/app/src/main/AndroidManifest.xml";
+const manifestPath = fs.existsSync(MERGED) ? MERGED : SOURCE;
 if (!fs.existsSync(manifestPath)) {
   console.log("\n== the release asks for nothing it does not need ==");
   check(
@@ -182,6 +213,7 @@ if (!fs.existsSync(manifestPath)) {
   }
 
   console.log("\n== the release asks for nothing it does not need ==");
+  console.log("        read: " + (manifestPath === MERGED ? "the merged release manifest" : "the source manifest only — build first for the full list"));
   const unexpected = declared.filter((name) => !ALLOWED_PERMISSIONS.has(name));
   check(
     "every permission in the merged manifest is one this app needs",

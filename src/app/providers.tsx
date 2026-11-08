@@ -292,19 +292,27 @@ const styles = themedStyles((C: ThemeColors) =>
 
   brand: { alignItems: "center", paddingTop: Spacing.md, paddingBottom: Spacing.lg, gap: Spacing.sm },
   /**
-   * The mark sits in its own soft rounded plate rather than floating on the
-   * backdrop — it gives the logo a defined edge on a dark, particle-lit
-   * background instead of letting it dissolve into it.
+   * No plate behind the mark.
+   *
+   * There was one: a 200dp rounded square filled with `fillSubtle`, so the
+   * logo would have "a defined edge on a dark, particle-lit background
+   * instead of letting it dissolve into it". That was written for the
+   * previous brand, whose mark was lettering — thin white strokes that
+   * genuinely do dissolve into a dark page and need something behind them.
+   *
+   * Mooj's mark is a self-lit sphere with its own gradient and its own
+   * dark rim. It has the edge the plate was there to give it, so all the
+   * plate did was put a visibly lighter square behind a circle, which is
+   * what it looks like on a device: a mistake. The wrapper stays for the
+   * sizing and the landscape case; only the fill goes.
    */
   logoWrap: {
     width: 200,
     height: 200,
-    borderRadius: Radii.xl,
-    backgroundColor: C.fillSubtle,
     alignItems: "center",
     justifyContent: "center",
   },
-  /** Landscape has roughly half the height — the plate shrinks so the list still gets room. */
+  /** Landscape has roughly half the height — the mark shrinks so the list still gets room. */
   logoWrapLandscape: { width: 120, height: 120 },
   logo: { width: 190, height: 190 },
   logoLandscape: { width: 112, height: 112 },
