@@ -1,3 +1,4 @@
+import { DEMO_ART_PREFIX, DEMO_CONTENT, demoMovieName } from "@/core/demo/demoMode";
 import type { MovieSummary } from "@/domain/vod/types";
 import type { XtreamProviderConfig } from "@/domain/provider/types";
 import { getAllVodStreams } from "@/providers/xtream/vodAdapter";
@@ -14,6 +15,20 @@ import { getAllVodStreams } from "@/providers/xtream/vodAdapter";
 let movies: MovieSummary[] | null = null;
 
 export function getVodMovies(): MovieSummary[] | null {
+  /*
+   * Store-listing capture only. `DEMO_CONTENT` is false on main, so this
+   * branch is dead in every build that ships; see core/demo/demoMode.ts for
+   * why it exists. It replaces every title and its poster so the app can be photographed
+   * running on a catalogue that belongs to nobody.
+   */
+  if (DEMO_CONTENT && movies) {
+    return movies.map((m, i) => ({
+      ...m,
+      name: demoMovieName(m.providerItemId, i),
+      posterUrl: DEMO_ART_PREFIX + m.providerItemId,
+      rating: i % 3 === 0 ? 8 + (i % 20) / 10 : null,
+    }));
+  }
   return movies;
 }
 

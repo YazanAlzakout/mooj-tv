@@ -1,3 +1,4 @@
+import { DEMO_ART_PREFIX, DEMO_CONTENT, demoChannelName } from "@/core/demo/demoMode";
 import type { LiveChannel, Provider, XtreamProviderConfig } from "@/domain/provider/types";
 import type { XtreamAccountInfo } from "@/providers/xtream/xtreamAdapter";
 import { resetSearchIndex } from "@/state/searchIndexStore";
@@ -47,6 +48,34 @@ export function setActiveSession(next: ActiveSession): void {
 }
 
 export function getActiveSession(): ActiveSession | null {
+  /*
+   * Store-listing capture only; dead in every shipping build. Every
+   * channel gets an invented name, generated artwork and one of ten
+   * invented categories, so the app can be photographed running on a
+   * lineup that belongs to nobody. See core/demo/demoMode.ts.
+   *
+   * Applied here rather than at the fetch, because this is what every
+   * screen reads: the grid, the player, the search index and the category
+   * rail all come through this one accessor, so one branch covers them.
+   */
+  if (DEMO_CONTENT && session) {
+    return {
+      ...session,
+      provider: { ...session.provider, name: "My Provider" },
+      channels: session.channels.map((c, i) => ({
+        ...c,
+        name: demoChannelName(c.providerItemId, i),
+        /*
+         * `categoryId` is deliberately left alone. The category rail is
+         * built from the ids actually present on the channels, so moving
+         * them would empty every category but "All". The names are
+         * replaced where the categories themselves are read — see
+         * state/categoryQueries.ts.
+         */
+        logoUrl: DEMO_ART_PREFIX + c.providerItemId,
+      })),
+    };
+  }
   return session;
 }
 

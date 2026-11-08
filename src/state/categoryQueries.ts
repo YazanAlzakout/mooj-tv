@@ -1,3 +1,4 @@
+import { DEMO_CONTENT, demoCategoryName } from "@/core/demo/demoMode";
 import { readCatalog, writeCatalog, type CatalogKind } from "@/db/repositories/catalogCacheRepository";
 import type { XtreamProviderConfig } from "@/domain/provider/types";
 import { getLiveCategories } from "@/providers/xtream/xtreamAdapter";
@@ -27,11 +28,25 @@ async function cachedCategories(
   fetcher: () => Promise<CategoryRow[]>
 ): Promise<CategoryRow[]> {
   const stored = await readCatalog<CategoryRow[]>(providerId, kind);
-  if (stored && stored.data.length > 0) return stored.data;
+  if (stored && stored.data.length > 0) return demo(stored.data);
 
   const fetched = await fetcher();
   await writeCatalog(providerId, kind, fetched);
-  return fetched;
+  return demo(fetched);
+}
+
+/**
+ * Store-listing capture only; dead in every shipping build.
+ *
+ * The **ids are kept** and only the names are replaced, which is the whole
+ * trick: a channel's `categoryId` has to keep matching a row in this list
+ * or the grid filters itself down to nothing, and the screens derive which
+ * categories exist from the ids present on the channels. Renaming is safe;
+ * renumbering is not. See core/demo/demoMode.ts.
+ */
+function demo(rows: CategoryRow[]): CategoryRow[] {
+  if (!DEMO_CONTENT) return rows;
+  return rows.map((row, i) => ({ ...row, name: demoCategoryName(i) }));
 }
 
 export function loadLiveCategories(providerId: string, config: XtreamProviderConfig): Promise<CategoryRow[]> {

@@ -1,3 +1,4 @@
+import { DEMO_ART_PREFIX, DEMO_CONTENT, demoSeriesName } from "@/core/demo/demoMode";
 import type { SeriesSummary } from "@/domain/series/types";
 import type { XtreamProviderConfig } from "@/domain/provider/types";
 import { getAllSeries } from "@/providers/xtream/seriesAdapter";
@@ -11,6 +12,21 @@ import { getAllSeries } from "@/providers/xtream/seriesAdapter";
 let series: SeriesSummary[] | null = null;
 
 export function getSeriesList(): SeriesSummary[] | null {
+  /*
+   * Store-listing capture only. `DEMO_CONTENT` is false on main, so this
+   * branch is dead in every build that ships; see core/demo/demoMode.ts for
+   * why it exists. It replaces every title and its poster so the app can be photographed
+   * running on a catalogue that belongs to nobody.
+   */
+  if (DEMO_CONTENT && series) {
+    return series.map((s, i) => ({
+      ...s,
+      name: demoSeriesName(s.providerItemId, i),
+      posterUrl: DEMO_ART_PREFIX + s.providerItemId,
+      rating: i % 4 === 0 ? 7 + (i % 30) / 10 : null,
+      year: String(2024 + (i % 3)),
+    }));
+  }
   return series;
 }
 

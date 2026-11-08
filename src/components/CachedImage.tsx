@@ -1,5 +1,7 @@
 import { Image, type ImageContentFit, type ImageStyle } from "expo-image";
-import type { ImageResizeMode, StyleProp } from "react-native";
+import { View, type ImageResizeMode, type StyleProp } from "react-native";
+
+import { DEMO_ART_PREFIX, DEMO_CONTENT, demoArtColors } from "@/core/demo/demoMode";
 
 import { artworkIsKnownBad, noteImageFailed } from "@/core/media/deadImageHosts";
 import { knownLocalUri } from "@/core/media/imageCache";
@@ -47,6 +49,47 @@ export function CachedImage({
   priority?: "low" | "normal" | "high";
 }) {
   if (!uri) return null;
+
+  /*
+   * Store-listing capture only; dead in every shipping build. A gradient
+   * stands in for a poster so the app can be photographed running on a
+   * catalogue that belongs to nobody — see core/demo/demoMode.ts. Drawn
+   * rather than downloaded, so nothing is requested for a picture that
+   * does not exist.
+   */
+  if (DEMO_CONTENT && uri.startsWith(DEMO_ART_PREFIX)) {
+    const [deep, bright] = demoArtColors(uri);
+    return (
+      <View style={[style, { backgroundColor: deep, overflow: "hidden" }]}>
+        <View
+          style={{
+            position: "absolute",
+            left: "-30%",
+            right: "-30%",
+            top: "26%",
+            height: "46%",
+            backgroundColor: bright,
+            opacity: 0.55,
+            borderRadius: 999,
+            transform: [{ rotate: "-14deg" }],
+          }}
+        />
+        <View
+          style={{
+            position: "absolute",
+            left: "-20%",
+            right: "-20%",
+            top: "44%",
+            height: "30%",
+            backgroundColor: bright,
+            opacity: 0.35,
+            borderRadius: 999,
+            transform: [{ rotate: "9deg" }],
+          }}
+        />
+      </View>
+    );
+  }
 
   /*
    * A URL that has already failed is not asked for again.

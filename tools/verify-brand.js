@@ -231,6 +231,23 @@ if (!fs.existsSync(manifestPath)) {
   );
 }
 
+/*
+ * The demo catalogue must never ship.
+ *
+ * `DEMO_CONTENT` replaces every title and every piece of artwork with
+ * invented ones, for taking store screenshots. A build that left it on
+ * would show a customer a catalogue that does not exist — and would show
+ * Google a listing whose screenshots do not match the app, which is its
+ * own policy problem. One line, checked here, so it cannot be forgotten.
+ */
+console.log("\n== the demo catalogue is off ==");
+const demoSource = read("src/core/demo/demoMode.ts");
+check(
+  "DEMO_CONTENT is false",
+  /export const DEMO_CONTENT = false;/.test(demoSource),
+  "screenshot mode is still switched on in src/core/demo/demoMode.ts"
+);
+
 console.log("\n====================================================");
 console.log("  " + (failed === 0 ? "all checks passed" : failed + " FAILED"));
 console.log("====================================================\n");
