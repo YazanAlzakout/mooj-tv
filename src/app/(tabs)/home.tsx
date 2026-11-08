@@ -16,7 +16,6 @@ import { CachedImage } from "@/components/CachedImage";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ArtScrim } from "@/components/ArtScrim";
 import { BouncePressable } from "@/components/BouncePressable";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ScreenBackground } from "@/components/ScreenBackground";
@@ -47,6 +46,17 @@ import {
 import { getLibraryItems, type LibraryItem } from "@/db/repositories/libraryRepository";
 import { getAllDownloadTasks, type DownloadTask } from "@/db/repositories/downloadRepository";
 import { downloadsSupported } from "@/domain/downloads/eligibility";
+
+/**
+ * The name block under every poster card, to the pixel.
+ *
+ * Two lines at a fixed line height, always — see the note above
+ * PosterCard. These two numbers and the box in the styles below are one
+ * fact written twice; changing either alone is how a rail goes ragged.
+ */
+const CARD_TITLE_LINE_HEIGHT = 14;
+const CARD_TITLE_LINES = 2;
+
 
 function formatRelativeTime(t: ReturnType<typeof useI18n>["t"], timestamp: number): string {
   const diffMinutes = Math.floor((Date.now() - timestamp) / 60000);
@@ -483,12 +493,11 @@ function SavedCard({
         ) : (
           <View style={styles.featuredFallback} />
         )}
-        <ArtScrim />
-        <View style={styles.featuredTitleBox}>
-          <Text style={styles.featuredTitle} numberOfLines={2}>
-            {title}
-          </Text>
-        </View>
+      </View>
+      <View style={styles.featuredTitleBox}>
+        <Text style={styles.featuredTitle} numberOfLines={CARD_TITLE_LINES}>
+          {title}
+        </Text>
       </View>
     </BouncePressable>
   );
@@ -529,22 +538,30 @@ function HeroCard({ item, onPress }: { item: HomeItem; onPress: () => void }) {
   const maxHeight = Math.round(height * (width > height ? 0.42 : 0.6));
 
   return (
-    <BouncePressable style={[styles.hero, { maxHeight }]} onPress={onPress}>
-      {!failed ? (
-        <CachedImage
-          uri={item.posterUrl}
-          style={styles.heroImage}
-          resizeMode="cover"
-          priority="high"
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <View style={[styles.heroImage, styles.heroFallback]} />
-      )}
+    <BouncePressable style={styles.heroCard} onPress={onPress}>
+      <View style={[styles.hero, { maxHeight }]}>
+        {!failed ? (
+          <CachedImage
+            uri={item.posterUrl}
+            style={styles.heroImage}
+            resizeMode="cover"
+            priority="high"
+            onError={() => setFailed(true)}
+          />
+        ) : (
+          <View style={[styles.heroImage, styles.heroFallback]} />
+        )}
 
-      {/* Bottom-up shade, so the title has something to sit on whatever the still is. */}
-      <ArtScrim />
+      </View>
 
+      {/*
+        Under the still, not over it.
+
+        The hero had the same collision as the cards, and worse for being
+        large: "They Fight (2026)" set across the poster's own THEY FIGHT.
+        Below the picture the title has the page to itself, the shade that
+        was holding it up is gone, and the still is a still.
+      */}
       <View style={styles.heroBody}>
         <View style={styles.heroMeta}>
           <View style={styles.heroBadge}>
@@ -582,7 +599,31 @@ function HeroCard({ item, onPress }: { item: HomeItem; onPress: () => void }) {
  * and the two section wrappers, each a beat behind the last.
  */
 /**
- * One card in a row: a poster, its rating, its name over the art.
+ * Why no card in this app prints a title on its artwork any more.
+ *
+ * Almost every poster a provider sends already has the title printed on
+ * it, usually across the bottom third, because that is what a film poster
+ * is. Drawing our own name on top of that produces two titles in the same
+ * place in two different typefaces — and on a screenshot of the home
+ * screen taken on 2026-11-08, that was six cards out of nine: "Another
+ * Life" over ANOTHER LIFE, "Biohackers" over BIOHACKERS, "الجواهرجى" over
+ * its own Arabic lettering. Unreadable, and unmistakably a mistake.
+ *
+ * So the name moves under the card, which has a second effect worth as
+ * much: the dark wash existed *only* to keep white text readable over
+ * artwork. With the text gone the wash goes too, and the poster is seen
+ * whole — the same change, and the same reason, as the channel logos.
+ *
+ * The cost is the one the old comment named: a two-line name under a card
+ * makes that card taller than its neighbours and the row goes ragged. The
+ * answer is the one the channel grid already uses — a name box of a fixed
+ * height, two lines whether the name needs one or two, so every card in a
+ * rail is exactly the same height and every grid row is exactly
+ * `rowHeight()`.
+ */
+
+/**
+ * One card in a row: a poster, its rating, its name underneath.
  *
  * No fallback for a missing picture, because there is no such card here —
  * homeRows filters anything without usable artwork out before a row is
@@ -620,18 +661,12 @@ function PosterCard({ item, onPress }: { item: HomeItem; onPress: () => void }) 
               <Text style={styles.ratingBadgeText}>★ {item.rating.toFixed(1)}</Text>
             </View>
           )}
-          {/*
-            Over the artwork, as on the browse grids. With the name
-            underneath, a two-line title made its card taller than its
-            neighbours and the row went ragged; over the art every card in
-            the rail is exactly a poster.
-          */}
-          <ArtScrim />
-          <View style={styles.featuredTitleBox}>
-            <Text style={styles.featuredTitle} numberOfLines={2}>
-              {item.name}
-            </Text>
-          </View>
+        </View>
+        {/* Under the poster, not on it — see the note above PosterCard. */}
+        <View style={styles.featuredTitleBox}>
+          <Text style={styles.featuredTitle} numberOfLines={CARD_TITLE_LINES}>
+            {item.name}
+          </Text>
         </View>
       </BouncePressable>
   );
@@ -822,7 +857,15 @@ const styles = themedStyles((C: ThemeColors) =>
   },
   heroImage: { ...StyleSheet.absoluteFill, width: "100%", height: "100%" },
   heroFallback: { backgroundColor: C.surfaceElevated },
-  heroBody: { position: "absolute", left: 0, right: 0, bottom: 0, padding: Spacing.lg, gap: Spacing.xs },
+  /** The picture and the block under it, as one pressable. */
+  heroCard: { width: "100%" },
+  /*
+   * In flow now rather than absolutely placed over the picture. No side
+   * padding either: the title lines up with the section headings below it
+   * instead of being inset from the artwork's edge, which is what tells
+   * the eye it belongs to the page rather than to the image.
+   */
+  heroBody: { paddingTop: Spacing.sm, gap: Spacing.xs },
   heroMeta: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
   heroBadge: {
     paddingHorizontal: Spacing.sm,
@@ -833,27 +876,33 @@ const styles = themedStyles((C: ThemeColors) =>
   heroBadgeText: { color: "#02121F", fontFamily: FontFamily.bold, fontSize: 10.5, ...AndroidTextFix },
   heroRating: { color: "#F6C445", fontFamily: FontFamily.semiBold, fontSize: 12, ...AndroidTextFix },
   heroTitle: {
-    color: "#FFFFFF",
+    /* On the page now, so it takes the page's ink rather than a hard white. */
+    color: C.text,
     fontFamily: FontFamily.bold,
     fontSize: 22,
     lineHeight: 30,
     ...AndroidTextFix,
   },
+  /*
+   * A solid button now, not a frosted panel. The translucent white was
+   * reading as glass over a picture; on the page it would just be a grey
+   * box, and the one thing on this screen the viewer is being invited to
+   * press should look pressable.
+   */
   heroPlay: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: Spacing.xs,
     alignSelf: "flex-start",
     marginTop: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 7,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: 9,
     borderRadius: Radii.md,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.22)",
+    backgroundColor: Brand.primary,
   },
-  heroPlayGlyph: { color: "#FFFFFF", fontSize: 11, ...AndroidTextFix },
-  heroPlayText: { color: "#FFFFFF", fontFamily: FontFamily.semiBold, fontSize: 13, ...AndroidTextFix },
+  heroPlayGlyph: { color: "#02121F", fontSize: 11, ...AndroidTextFix },
+  heroPlayText: { color: "#02121F", fontFamily: FontFamily.bold, fontSize: 13, ...AndroidTextFix },
 
   rail: { gap: Spacing.md, paddingEnd: Spacing.lg },
 
@@ -900,18 +949,20 @@ const styles = themedStyles((C: ThemeColors) =>
   continueProgressFill: { height: "100%", backgroundColor: Brand.primary },
 
   featuredCard: { width: 116 },
+  /*
+   * A fixed height, not a minimum. Two lines whether the name needs one or
+   * two, so every card in a rail ends at the same place — see the note
+   * above PosterCard for what a ragged rail looks like.
+   */
   featuredTitleBox: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: Spacing.xs,
-    paddingBottom: Spacing.xs,
+    height: CARD_TITLE_LINE_HEIGHT * CARD_TITLE_LINES,
+    marginTop: Spacing.xs,
+    paddingHorizontal: 2,
   },
   featuredTitle: {
-    color: "#FFFFFF",
+    color: C.textSecondary,
     fontSize: 10.5,
-    lineHeight: 14,
+    lineHeight: CARD_TITLE_LINE_HEIGHT,
     fontFamily: FontFamily.semiBold,
     ...AndroidTextFix,
   },

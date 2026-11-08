@@ -1,5 +1,4 @@
 import { router, useFocusEffect } from "expo-router";
-import { ArtScrim } from "@/components/ArtScrim";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -76,6 +75,19 @@ const POSTER_RATIO = 3 / 2;
  * cells under the finger fell outside the render window and went blank.
  */
 const ROW_GAP = Spacing.md;
+/**
+ * The title block under every poster, to the pixel.
+ *
+ * Two lines of name plus one of year, at fixed line heights, whether the
+ * name needs both lines or the year exists at all — `getItemLayout`
+ * promises a single row height for the whole catalogue and cannot measure
+ * a short name. These numbers and `posterTitleBox` below are one fact
+ * written twice.
+ */
+const TITLE_LINE_HEIGHT = 16;
+const TITLE_LINES = 2;
+const YEAR_LINE_HEIGHT = 14;
+const TITLE_BLOCK = TITLE_LINE_HEIGHT * TITLE_LINES + YEAR_LINE_HEIGHT + Spacing.xs;
 
 /**
  * The exact height of one grid row, so the list can place every row
@@ -92,13 +104,17 @@ function rowHeight(listWidth: number, columns: number): number {
   const available = listWidth - GRID_PADDING * 2 - COLUMN_GAP * (columns - 1);
   const posterWidth = available / columns - CELL_PADDING * 2;
   /*
-   * Neither the title nor the year is in this sum any more: both are drawn
-   * over the bottom of the poster rather than under it, so a row is exactly
-   * a poster plus the gap below it. A one-line title and a two-line title
-   * now produce identical rows, which is the condition getItemLayout needs
-   * in order to promise one height for all of them.
+   * Poster, then the title block, then the gap below the row.
+   *
+   * Name and year were drawn over the poster for a while, which kept this
+   * sum to two terms. It also meant printing a title on top of artwork
+   * that already had one — which almost every poster does — and needing a
+   * dark wash under the text to make that legible. Under the poster the
+   * name needs nothing behind it and the artwork is seen whole. The third
+   * term is a constant: TITLE_BLOCK is the same whether the name wraps and
+   * whether the year exists.
    */
-  return posterWidth * POSTER_RATIO + ROW_GAP;
+  return posterWidth * POSTER_RATIO + TITLE_BLOCK + ROW_GAP;
 }
 
 interface CategoryTab {
@@ -583,17 +599,22 @@ const SeriesPoster = memo(function SeriesPoster({
     <Focusable onPress={press} style={styles.posterWrap} hasTVPreferredFocus={tvFocusFirst} onFocus={onTvFocus}>
       <View style={styles.posterImageWrap}>
         {/*
-          The title sits *behind* the poster rather than being switched in
-          and out by a `loaded` flag. The poster paints over it once it
-          decodes, and stays uncovered if the image is missing or fails —
-          the same result, without a state update and a re-render per cell
-          arriving in the middle of a scroll.
+          A plain tile behind the poster, with no text in it.
+
+          It used to carry the name, because the name was drawn over the
+          artwork and a card whose poster was missing would otherwise have
+          been a blank box. The name sits under the card now, so a tile
+          that still printed it would print it twice — once large and grey
+          in the middle, once small underneath. The same duplication the
+          home screen's fallback had, for the same reason, fixed the same
+          way.
+
+          Still rendered *behind* the poster rather than switched in and
+          out by a `loaded` flag: the poster paints over it once it
+          decodes, which is the same result without a state update and a
+          re-render per cell arriving in the middle of a scroll.
         */}
-        <View style={styles.posterSkeleton}>
-          <Text style={styles.posterFallbackText} numberOfLines={4}>
-            {series.name}
-          </Text>
-        </View>
+        <View style={styles.posterSkeleton} />
         {series.posterUrl && artwork && (
           <CachedImage uri={series.posterUrl} style={styles.posterImage} resizeMode="cover" />
         )}
@@ -602,26 +623,27 @@ const SeriesPoster = memo(function SeriesPoster({
             <Text style={styles.ratingBadgeText}>★ {series.rating.toFixed(1)}</Text>
           </View>
         )}
-        {/*
-          Name and year over the artwork rather than beneath it. The scrim
-          is a flat translucent band, not a gradient: expo-linear-gradient
-          is a native module, and the only other place that wanted one
-          solved it the same way with stacked views.
+      </View>
+      {/*
+        Under the poster, not on it.
 
-          The year is still rendered when absent, as it was when it sat
-          below — but for a different reason now. It no longer changes the
-          row height, so this is about the title not shifting down a line
-          on the cards that happen to have no year.
-        */}
-        <ArtScrim />
-        <View style={styles.posterTitleBox}>
-          <Text style={styles.posterTitle} numberOfLines={2}>
-            {series.name}
-          </Text>
-          <Text style={styles.posterYear} numberOfLines={1}>
-            {series.year ?? ""}
-          </Text>
-        </View>
+        Printing a title over artwork that already carries one gives two
+        titles in the same place in two typefaces, which is what a
+        screenshot of the catalogue on 2026-11-08 showed on most cards.
+        Moving it down also retires the wash that was only ever there to
+        make white text readable over a picture.
+
+        The year is still rendered when absent, for the reason it always
+        was: an empty line keeps the block the same height on the cards
+        that happen to have no year.
+      */}
+      <View style={styles.posterTitleBox}>
+        <Text style={styles.posterTitle} numberOfLines={TITLE_LINES}>
+          {series.name}
+        </Text>
+        <Text style={styles.posterYear} numberOfLines={1}>
+          {series.year ?? ""}
+        </Text>
       </View>
     </Focusable>
     </View>
@@ -781,26 +803,24 @@ const styles = themedStyles((C: ThemeColors) =>
    * one-line and a two-line title occupy the same row either way, which is
    * what lets getItemLayout promise a single height for the whole list.
    */
+  /* Fixed height, not a minimum — see TITLE_BLOCK. */
   posterTitleBox: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: Spacing.sm,
-    paddingBottom: Spacing.sm,
+    height: TITLE_LINE_HEIGHT * TITLE_LINES + YEAR_LINE_HEIGHT,
+    marginTop: Spacing.xs,
+    paddingHorizontal: 2,
   },
   posterTitle: {
-    /* White, not the theme ink: these sit on artwork, not on the page. */
-    color: "#FFFFFF",
+    /* On the page now rather than on artwork, so these take the page's ink. */
+    color: C.textSecondary,
     fontSize: 12,
-    lineHeight: 16,
+    lineHeight: TITLE_LINE_HEIGHT,
     fontFamily: FontFamily.semiBold,
     ...AndroidTextFix,
   },
   posterYear: {
-    color: "rgba(255,255,255,0.72)",
+    color: C.textMuted,
     fontSize: 10,
-    lineHeight: 14,
+    lineHeight: YEAR_LINE_HEIGHT,
     fontFamily: FontFamily.regular,
     ...AndroidTextFix,
   },

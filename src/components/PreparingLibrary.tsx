@@ -6,6 +6,7 @@ import { ScreenBackground } from "@/components/ScreenBackground";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import { brandLogoSource } from "./BrandLogo";
+import { LogoRipple } from "./LogoRipple";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles } from "@/core/theme/themedStyles";
 import type { PreloadProgress } from "@/state/catalogCache";
@@ -34,10 +35,20 @@ export function PreparingLibrary({ progress }: { progress: PreloadProgress | nul
   const fraction = Math.min(1, stepFraction + withinStep);
 
   return (
-    <ScreenBackground>
+    <ScreenBackground particles>
       <SafeAreaView style={styles.safeArea}>
         <Animated.View entering={FadeIn.duration(300)} style={styles.container}>
-          <Image source={brandLogoSource()} style={styles.logo} resizeMode="contain" />
+          {/*
+            The same rings the provider screen and the intro carry. This
+            screen is the longest uninterrupted wait in the app — a cold
+            catalogue is tens of thousands of titles — and a still logo over
+            a progress bar for that long reads as a hang. Something moving
+            that is clearly not the bar is what says the app is alive even
+            when the bar is between steps and not advancing.
+          */}
+          <LogoRipple size={220}>
+            <Image source={brandLogoSource()} style={styles.logo} resizeMode="contain" />
+          </LogoRipple>
 
           <View style={styles.barTrack}>
             <View style={[styles.barFill, { width: `${Math.round(fraction * 100)}%` }]} />
