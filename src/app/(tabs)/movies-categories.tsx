@@ -171,6 +171,7 @@ export default function MoviesCategoriesScreen() {
    * same array it is handed. The two must not be able to disagree.
    */
   const [movies, setMovies] = useState<MovieSummary[] | null>(() => getVodMovies());
+  const [builtForProvider, setBuiltForProvider] = useState<string | null>(session?.provider.id ?? null);
   const [categories, setCategories] = useState<CategoryTab[] | null>(null);
   const railShown = !isTvBuild && !landscape && (categories?.length ?? 0) > 1;
   const gridWidth =
@@ -244,6 +245,40 @@ export default function MoviesCategoriesScreen() {
     three lists are mounted at once now, and a page keeps its place even
     after the window has moved past it and unmounted it.
   */
+  /**
+   * Forget everything the moment the account underneath changes.
+   *
+   * A tab screen is mounted once and kept. Connecting a different provider
+   * does not take it down: `handleSelect` on the providers screen calls
+   * `router.dismissAll()` and `router.replace("/home")`, and neither
+   * unmounts a navigator that is already up. So the film list — read once, at
+   * mount, from a store that `setActiveSession` has since emptied — would
+   * still be the previous provider's, and this screen would draw account
+   * A's catalogue while connected to account B. The focus effect below
+   * does reload, but it is asynchronous: the stale frame is painted first,
+   * and a card tapped in that frame opens an id belonging to the other
+   * line.
+   *
+   * Checked during render rather than in an effect, which is the whole
+   * point — React applies the reset before this render commits, so the
+   * wrong data is never painted at all. It is the pattern the React
+   * documentation calls adjusting state when a prop changes, and the one
+   * `usePlaybackTracks` already uses to stop an old channel's audio
+   * tracks appearing on a new one.
+   *
+   * It costs a string comparison per render and fires on nothing else: the
+   * id only differs on a genuine switch.
+   */
+  if (builtForProvider !== (session?.provider.id ?? null)) {
+    setBuiltForProvider(session?.provider.id ?? null);
+    setMovies(getVodMovies());
+    setCategories(null);
+    setActiveCategoryId(ALL_CATEGORY_ID);
+    setSearchInput("");
+    setSearch("");
+    setErrorMessage(null);
+  }
+
   const pages = useCategoryPages<MovieSummary>({ shape: search, columns, rowHeight: gridRowHeight });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasDataRef = useRef(false);

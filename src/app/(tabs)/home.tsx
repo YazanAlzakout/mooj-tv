@@ -89,8 +89,39 @@ export default function HomeScreen() {
   const [seriesRow, setSeriesRow] = useState<HomeItem[]>([]);
   const [favouriteRow, setFavouriteRow] = useState<LibraryItem[]>([]);
   const [downloadRow, setDownloadRow] = useState<DownloadTask[]>([]);
+  const [builtForProvider, setBuiltForProvider] = useState<string | null>(session?.provider.id ?? null);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+
+  /**
+   * Forget everything the moment the account underneath changes.
+   *
+   * A tab screen is mounted once and kept. Connecting a different provider
+   * does not take it down: `handleSelect` on the providers screen calls
+   * `router.dismissAll()` and `router.replace("/home")`, and neither
+   * unmounts a navigator that is already up. Every row on this screen was
+   * built from the previous provider's catalogue, and `setActiveSession`
+   * has already emptied the stores they came from — so without this the
+   * screen would greet the viewer with account B's name over account A's
+   * recommendations, with a hero that plays a stream on the wrong line.
+   *
+   * Checked during render rather than in an effect, which is the point:
+   * React applies the reset before this render commits, so the wrong rows
+   * are never painted. The focus effect below then refills them from the
+   * new catalogue. Same pattern, same reason, as the three browse grids.
+   */
+  if (builtForProvider !== (session?.provider.id ?? null)) {
+    setBuiltForProvider(session?.provider.id ?? null);
+    setContinueWatching([]);
+    setHero(null);
+    setNewRow([]);
+    setFeaturedRow([]);
+    setTopRow([]);
+    setMovieRow([]);
+    setSeriesRow([]);
+    setFavouriteRow([]);
+    setDownloadRow([]);
+  }
 
   const year = useMemo(() => currentYear(), []);
 
