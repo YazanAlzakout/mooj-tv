@@ -162,6 +162,101 @@ const ku: TranslationShape = {
     },
   },
 
+  privacy: {
+    title: "Siyaseta Taybetiyê",
+    lastUpdatedLabel: "Rojanekirina dawî",
+    lastUpdatedDate: "2026-11-08",
+    intro: "Ev siyaset rave dike ka Mooj TV (\"Sepan\") çawa bi agahiyên te re tevdigere. Ew li sepana Android a Mooj TV ya ku di bin navê pakêtê com.moojtv.player de hatiye weşandin tê sepandin.",
+    sections: {
+      summary: {
+        heading: "Bi kurtî",
+        body: [
+          "Mooj TV tu daneyên kesane yên derbarê te de kom nake, naşîne û tomar nake. Tu hesab tune, tu qeydkirin tune, tu analîtîk tune, tu reklam tune û tu şopandina tu cureyî tune.",
+          "Her tişta ku Sepan hiltîne — agahiyên dabînkerê te, bijarteyên te, dîroka te, daxistinên te — li ser amûra te dimîne û tu carî ji me re nayê şandin.",
+        ],
+      },
+      noCollection: {
+        heading: "Em çi kom dikin",
+        body: [
+          "Tu tişt. Pêşdebirên Mooj TV tu serveran naxebitînin ku ji Sepanê daneyan bistînin, û tu rêyek wan tune ku te an amûra te nas bikin.",
+          "Di Sepanê de tu SDK-ya analîtîkê, tu SDK-ya reklamê, tu karûbarê raporkirina têkçûnê û tu nasnameyên reklam an şopandinê yên aliyên sêyem tune ne.",
+        ],
+      },
+      credentials: {
+        heading: "Agahiyên dabînkerê te",
+        body: [
+          "Ji bo ku tu tiştek temaşe bikî, tu agahiyên karûbarekî ku berê abonetiya te ya wê heye dinivîsî — navnîşana serverekê, navê bikarhêner û şîfreyek, an lînkek streamê ya rasterast.",
+          "Ew agahî tenê li ser amûra te tên tomar kirin, di hilanîna ewle ya ku pergala xebitandinê ji bo nepeniyan pêşkêş dike û bi Android Keystore tê piştgirî kirin. Ew tu carî di danegeha asayî ya Sepanê de nayên nivîsandin, tu carî di logekê de nayên nivîsandin, û tu carî ji pêşdebiran re an ji tu aliyê sêyem re nayên şandin.",
+          "Ew tenê ji bo cihekî tên şandin: ji bo dabînkerê ku te ew jê re nivîsandine, ji bo ku tu têkevî hesabê û tişta ku te xwestiye were lêdan. Ew dabînker dabînkerê te yê xwe ye û tevgera wî bi daneyên te re bi şert û mercên wî bi xwe tê rêvebirin, ne bi vê siyasetê.",
+        ],
+      },
+      onDevice: {
+        heading: "Çi li ser amûra te dimîne",
+        body: [
+          "Sepan ji bo ku bikaribe bixebite van tiştan bi awayek herêmî hiltîne: lîsteya dabînkerên ku te zêde kirine, te kîjan kategorî veşartine, bijarteyên te û lîsteya Paşê Temaşe Bike, dîroka temaşekirinê û cihên lêdanê, pelên te yên daxistî, PIN'a te ya dêûbav heke te yek diyar kiribe, û mîhengên te wekî ziman û dirb.",
+          "Hemî ew di hilanîna taybet a Sepanê de li ser amûra te dimîne. Tu tişt ji wan ji me re nayê kopîkirin, nayê hevdemkirin an nayê parvekirin.",
+        ],
+      },
+      network: {
+        heading: "Girêdanên torê",
+        body: [
+          "Sepan daxwazên torê tenê ji bo cureyekî cihî dişîne: ji bo dabînkerê ku te agahiyên wî nivîsandine. Ew lîsteyên kanal, fîlim û rêzefîlimên te ji wî dabînkerî, wêneyên ku navnîşanên wan di wan lîsteyan de hene, û streamên ku tu hildibijêrî ku lêbidî distîne.",
+          "Sepan bi tu serverê ku ji aliyê pêşdebiran ve tê xebitandin re têkilî nagire, ji ber ku tu serverek wisa tune.",
+          "Kontrolkirina guhertoyek nûtir a Sepanê ji aliyê Google Play ve li ser amûra te tê kirin, ne ji aliyê Sepanê bi xwe ve.",
+        ],
+      },
+      permissions: {
+        heading: "Destûr, û çima her yek jê tê xwestin",
+        body: [
+          "Înternet û rewşa torê: ji bo gihîştina dabînkerê te û ji bo ku ji te re bê gotin kengî amûr ji torê qut e.",
+          "Karûbarê pêşperdeyê û lêdana medyayê: ji bo ku lêdan berdewam bike dema ekran girtî ye an sepanek din li pêş e, heke tu wê di Mîhengan de vekî.",
+          "Wake lock: ji bo ku amûr di nîvê tişta ku tu temaşe dikî de ranekeve.",
+          "Guherandina mîhengên deng: ji bo rêvebirina dengî û fokusa deng di dema lêdanê de.",
+          "Vibrasyon: ji bo bersiva kurt a pêlêkirinê di navrûyê de.",
+          "Depo, tenê li ser Android 12 û kevntir: ji bo tomarkirina daxistinên ku tu dixwazî.",
+          "Sepan gihîştina kameraya te, mîkrofona te, cihê te, têkiliyên te, salnameya te, wêneyên te an dîroka te ya bangan û peyaman naxwaze, û nikare wan bixwîne.",
+        ],
+      },
+      children: {
+        heading: "Zarok",
+        body: [
+          "Mooj TV ne ji bo zarokan e û ji bo wan nehatiye çêkirin. Ew ji tu kesî, di nav de zarok jî, tu daneyan kom nake.",
+          "Di Mîhengan de PIN'eke dêûbav heye, ji bo ku kesê xwediyê amûrê bikaribe sînor bike kîjan kategorî xuya dibin.",
+        ],
+      },
+      retention: {
+        heading: "Hilanîn û jêbirina agahiyên te",
+        body: [
+          "Ji ber ku tu tişt nagihîje me, tu tişt jî tune ku em ji bo te hilînin an jê bibin.",
+          "Her tişta ku Sepan tomar kiriye di bin kontrola te de li ser amûrê ye. Tu dikarî dabînkerek û agahiyên wî yên têketinê yên tomarkirî ji ekrana dabînkeran rakî, dîroka temaşekirinê û wêneyên hilanîn ji Mîhengan paqij bikî, daxistinan ji ekrana daxistinan jê bibî, û hemî wan bi carekê jê bibî bi rakirina Sepanê an bi paqijkirina daneyên wê di mîhengên Android de.",
+          "Rakirina Sepanê hemî hilanîna wê ya herêmî jê dibe, di nav de agahiyên dabînkerê yên tomarkirî.",
+        ],
+      },
+      security: {
+        heading: "Ewlehî",
+        body: [
+          "Şîfreyên dabînkeran di hilanîna ewle ya pergala xebitandinê de tên hilanîn, ya ku bi Android Keystore tê piştgirî kirin û ji aliyê amûrê ve tê şîfrekirin.",
+          "Navnîşana serverê ya dabînkerekê li her cihê ku di Sepanê de tê nîşandan tê veşartin, ji ber vê yekê navnîşana tevahî ji ekranek vekirî nayê xwendin.",
+          "Gelek dabînkerên IPTV tenê bi HTTP ya sade tên gihîştin, û Sepan loma destûrê wê dide. Trafîka ber bi dabînkerek wisa ve di veguhastinê de nayê şîfrekirin, û ev taybetmendiya dabînkerê ku te hilbijartiye ye, ne ya Sepanê. Heke dabînkerê te navnîşanek HTTPS pêşkêş bike, wê tercîh bike.",
+        ],
+      },
+      changes: {
+        heading: "Guherandinên vê siyasetê",
+        body: [
+          "Heke ev siyaset biguhere, guhertoya nûkirî dê li navnîşana jêrîn were weşandin û dîroka li serê vê rûpelê dê were rojanekirin.",
+        ],
+      },
+      contact: {
+        heading: "Têkilî",
+        body: [
+          "Ji bo pirsên li ser vê siyasetê an li ser taybetiyê di Mooj TV de, têkilî bike:",
+          "Email: support@mooj-player.com",
+          "Web: https://mooj-player.com/privacy",
+        ],
+      },
+    },
+  },
+
   providers: {
     title: "Dabînker",
     tagline: "Hemû kanal, fîlm û rêzefîlmên te li yek cihî.",
@@ -464,6 +559,7 @@ const ku: TranslationShape = {
     clearConfirmBody: "Ev kiryar nayê vegerandin.",
     legal: "Yasayî",
     termsConditions: "Mercên Bikaranînê",
+    privacyPolicy: "Politîkaya Nehêniyê",
     diagnostics: "Teşxîs",
     playerDiagnostics: "Teşxîsa lîstikvan",
     about: "Derbarê",

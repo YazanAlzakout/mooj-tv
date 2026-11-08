@@ -158,6 +158,101 @@ const fr: TranslationShape = {
     },
   },
 
+  privacy: {
+    title: "Politique de confidentialité",
+    lastUpdatedLabel: "Dernière mise à jour",
+    lastUpdatedDate: "2026-11-08",
+    intro: "La présente politique décrit la manière dont Mooj TV (l'« Application ») traite vos informations. Elle s'applique à l'application Android Mooj TV publiée sous le nom de package com.moojtv.player.",
+    sections: {
+      summary: {
+        heading: "En résumé",
+        body: [
+          "Mooj TV ne collecte, ne transmet ni ne stocke aucune donnée personnelle vous concernant. Il n'y a aucun compte, aucune inscription, aucune analyse d'audience, aucune publicité et aucun suivi d'aucune sorte.",
+          "Tout ce que l'Application conserve — les informations de votre fournisseur, vos favoris, votre historique, vos téléchargements — reste sur votre appareil et ne nous est jamais transmis.",
+        ],
+      },
+      noCollection: {
+        heading: "Ce que nous collectons",
+        body: [
+          "Rien. Les développeurs de Mooj TV n'exploitent aucun serveur recevant des données de l'Application et n'ont aucun moyen de vous identifier, ni d'identifier votre appareil.",
+          "L'Application ne contient aucun SDK d'analyse d'audience, aucun SDK publicitaire, aucun service de rapport de plantage et aucun identifiant publicitaire ou de suivi tiers.",
+        ],
+      },
+      credentials: {
+        heading: "Les informations de votre fournisseur",
+        body: [
+          "Pour regarder quoi que ce soit, vous saisissez les informations d'un service auquel vous êtes déjà abonné : une adresse de serveur, un nom d'utilisateur et un mot de passe, ou un lien de flux direct.",
+          "Ces informations sont stockées uniquement sur votre appareil, dans le stockage sécurisé adossé à l'Android Keystore que le système d'exploitation fournit pour les secrets. Elles ne sont jamais écrites dans la base de données ordinaire de l'Application, jamais consignées dans un journal, et jamais transmises aux développeurs ni à un tiers quelconque.",
+          "Elles sont envoyées à une seule destination : le fournisseur pour lequel vous les avez saisies, afin de vous connecter et de lire ce que vous avez demandé. Ce fournisseur est votre propre prestataire et son traitement de vos données est régi par ses propres conditions, et non par la présente politique.",
+        ],
+      },
+      onDevice: {
+        heading: "Ce qui reste sur votre appareil",
+        body: [
+          "L'Application conserve localement les éléments suivants afin de pouvoir fonctionner : la liste des fournisseurs que vous avez ajoutés, les catégories que vous avez masquées, vos favoris et votre liste « à regarder plus tard », votre historique de visionnage et vos positions de lecture, vos fichiers téléchargés, votre code PIN parental si vous en avez défini un, et vos paramètres tels que la langue et le thème.",
+          "Tous ces éléments se trouvent dans le stockage privé de l'Application sur votre appareil. Aucun d'entre eux n'est sauvegardé chez nous, synchronisé ou partagé.",
+        ],
+      },
+      network: {
+        heading: "Connexions réseau",
+        body: [
+          "L'Application effectue des requêtes réseau vers un seul type de destination : le fournisseur dont vous avez saisi les informations. Elle récupère auprès de ce fournisseur vos listes de chaînes, de films et de séries, les images vers lesquelles ces listes renvoient, et les flux que vous choisissez de lire.",
+          "L'Application ne contacte aucun serveur exploité par les développeurs, car il n'en existe aucun.",
+          "La recherche d'une nouvelle version de l'Application est assurée par Google Play sur votre appareil, et non par l'Application elle-même.",
+        ],
+      },
+      permissions: {
+        heading: "Autorisations, et pourquoi chacune est demandée",
+        body: [
+          "Internet et état du réseau : pour joindre votre fournisseur et vous signaler lorsque l'appareil est hors ligne.",
+          "Service de premier plan et lecture multimédia : pour maintenir la lecture en cours lorsque l'écran est éteint ou qu'une autre application est au premier plan, si vous activez cette option dans les Paramètres.",
+          "Maintien en éveil : pour empêcher l'appareil de se mettre en veille au milieu de ce que vous regardez.",
+          "Modification des paramètres audio : pour gérer le volume et le focus audio pendant la lecture.",
+          "Vibration : pour le bref retour haptique lors des appuis dans l'interface.",
+          "Stockage, sur Android 12 et versions antérieures uniquement : pour enregistrer les téléchargements que vous demandez.",
+          "L'Application ne demande pas l'accès à votre appareil photo, votre microphone, votre position, vos contacts, votre agenda, vos photos, ni à votre historique d'appels ou de messages, et ne peut pas les lire.",
+        ],
+      },
+      children: {
+        heading: "Enfants",
+        body: [
+          "Mooj TV ne s'adresse pas aux enfants et n'est pas conçue pour eux. L'Application ne collecte aucune donnée de qui que ce soit, y compris des enfants.",
+          "Un code PIN parental est disponible dans les Paramètres afin que la personne propriétaire de l'appareil puisse restreindre les catégories visibles.",
+        ],
+      },
+      retention: {
+        heading: "Conservation et suppression de vos informations",
+        body: [
+          "Comme rien ne nous parvient, nous n'avons rien à conserver ni à supprimer en votre nom.",
+          "Tout ce que l'Application a stocké est sous votre contrôle sur l'appareil. Vous pouvez supprimer un fournisseur et ses identifiants enregistrés depuis l'écran des fournisseurs, effacer votre historique de visionnage et vider les images en cache depuis les Paramètres, supprimer les téléchargements depuis l'écran des téléchargements, et tout supprimer d'un coup en désinstallant l'Application ou en effaçant ses données dans les paramètres Android.",
+          "La désinstallation de l'Application supprime l'intégralité de son stockage local, y compris les identifiants de fournisseur enregistrés.",
+        ],
+      },
+      security: {
+        heading: "Sécurité",
+        body: [
+          "Les mots de passe des fournisseurs sont conservés dans le stockage sécurisé du système d'exploitation, qui est adossé à l'Android Keystore et chiffré par l'appareil.",
+          "L'adresse de serveur d'un fournisseur est masquée partout où elle est affichée dans l'Application, de sorte que l'adresse complète ne puisse pas être lue sur un écran déverrouillé.",
+          "De nombreux fournisseurs IPTV ne sont accessibles qu'en HTTP simple, ce que l'Application autorise donc. Le trafic vers un tel fournisseur n'est pas chiffré en transit, et il s'agit d'une caractéristique du fournisseur que vous avez choisi et non de l'Application. Si votre fournisseur propose une adresse HTTPS, privilégiez-la.",
+        ],
+      },
+      changes: {
+        heading: "Modifications de la présente politique",
+        body: [
+          "Si la présente politique est modifiée, la version révisée sera publiée à l'adresse ci-dessous et la date figurant en haut de cette page sera mise à jour.",
+        ],
+      },
+      contact: {
+        heading: "Contact",
+        body: [
+          "Pour toute question concernant la présente politique ou la confidentialité dans Mooj TV, contactez :",
+          "Email : support@mooj-player.com",
+          "Web : https://mooj-player.com/privacy",
+        ],
+      },
+    },
+  },
+
   providers: {
     title: "Fournisseurs",
     tagline: "Toutes vos chaînes, films et séries au même endroit.",
@@ -460,6 +555,7 @@ const fr: TranslationShape = {
     clearConfirmBody: "Cette action est irréversible.",
     legal: "Mentions légales",
     termsConditions: "Conditions générales",
+    privacyPolicy: "Politique de confidentialité",
     diagnostics: "Diagnostics",
     playerDiagnostics: "Diagnostics du lecteur",
     about: "À propos",

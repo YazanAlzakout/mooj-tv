@@ -161,6 +161,101 @@ const en = {
     },
   },
 
+  privacy: {
+    title: "Privacy Policy",
+    lastUpdatedLabel: "Last updated",
+    lastUpdatedDate: "2026-11-08",
+    intro: "This policy describes how Mooj TV (the “App”) handles your information. It applies to the Mooj TV Android application published under the package name com.moojtv.player.",
+    sections: {
+      summary: {
+        heading: "The short version",
+        body: [
+          "Mooj TV does not collect, transmit, or store any personal data about you. There are no accounts, no sign-up, no analytics, no advertising, and no tracking of any kind.",
+          "Everything the App keeps — your provider details, your favourites, your history, your downloads — stays on your device and is never sent to us.",
+        ],
+      },
+      noCollection: {
+        heading: "What we collect",
+        body: [
+          "Nothing. The developers of Mooj TV operate no servers that receive data from the App, and have no way to identify you or your device.",
+          "The App contains no analytics SDK, no advertising SDK, no crash-reporting service, and no third-party advertising or tracking identifiers.",
+        ],
+      },
+      credentials: {
+        heading: "Your provider details",
+        body: [
+          "To watch anything, you enter the details of a service you already subscribe to — a server address, a username and a password, or a direct stream link.",
+          "Those details are stored only on your device, in the Android Keystore-backed secure storage the operating system provides for secrets. They are never written to the App’s ordinary database, never written to a log, and never transmitted to the developers or to any third party.",
+          "They are sent to one destination only: the provider you entered them for, in order to sign in and play what you asked for. That provider is your own supplier and its handling of your data is governed by its own terms, not by this policy.",
+        ],
+      },
+      onDevice: {
+        heading: "What stays on your device",
+        body: [
+          "The App keeps the following locally so that it can work: the list of providers you have added, which categories you have hidden, your favourites and watch-later list, your watch history and playback positions, your downloaded files, your parental PIN if you set one, and your settings such as language and theme.",
+          "All of it lives in the App’s private storage on your device. None of it is backed up to us, synchronised, or shared.",
+        ],
+      },
+      network: {
+        heading: "Network connections",
+        body: [
+          "The App makes network requests to exactly one kind of destination: the provider whose details you entered. It fetches your channel, film and series lists from that provider, the artwork those lists point to, and the streams you choose to play.",
+          "The App does not contact any server operated by the developers, because none exists.",
+          "Checking for a newer version of the App is handled by Google Play on your device, not by the App itself.",
+        ],
+      },
+      permissions: {
+        heading: "Permissions, and why each one is asked for",
+        body: [
+          "Internet and network state: to reach your provider and to tell you when the device is offline.",
+          "Foreground service and media playback: to keep playback running while the screen is off or another app is in front, if you turn that on in Settings.",
+          "Wake lock: to stop the device sleeping in the middle of what you are watching.",
+          "Modify audio settings: to manage volume and audio focus during playback.",
+          "Vibrate: for the short tap feedback in the interface.",
+          "Storage, on Android 12 and older only: to save downloads you ask for.",
+          "The App does not request access to your camera, your microphone, your location, your contacts, your calendar, your photos, or your call or message history, and cannot read them.",
+        ],
+      },
+      children: {
+        heading: "Children",
+        body: [
+          "Mooj TV is not directed at children and is not designed for them. It collects no data from anyone, including children.",
+          "A parental PIN is available in Settings so that the person who owns the device can restrict which categories are visible.",
+        ],
+      },
+      retention: {
+        heading: "Keeping and deleting your information",
+        body: [
+          "Because nothing reaches us, there is nothing for us to keep or to delete on your behalf.",
+          "Everything the App has stored is under your control on the device. You can remove a provider and its saved credentials from the providers screen, clear your watch history and cached artwork from Settings, delete downloads from the downloads screen, and remove all of it at once by uninstalling the App or clearing its data in the Android settings.",
+          "Uninstalling the App deletes its entire local store, including the saved provider credentials.",
+        ],
+      },
+      security: {
+        heading: "Security",
+        body: [
+          "Provider passwords are held in the operating system’s secure storage, which is backed by the Android Keystore and encrypted by the device.",
+          "The server address of a provider is masked wherever it is displayed in the App, so the full address cannot be read off an unlocked screen.",
+          "Many IPTV providers are reachable only over plain HTTP, which the App therefore allows. Traffic to such a provider is not encrypted in transit, and that is a property of the provider you chose rather than of the App. If your provider offers an HTTPS address, prefer it.",
+        ],
+      },
+      changes: {
+        heading: "Changes to this policy",
+        body: [
+          "If this policy changes, the revised version will be published at the address below and the date at the top of this page will be updated.",
+        ],
+      },
+      contact: {
+        heading: "Contact",
+        body: [
+          "For questions about this policy or about privacy in Mooj TV, contact:",
+          "Email: support@mooj-player.com",
+          "Web: https://mooj-player.com/privacy",
+        ],
+      },
+    },
+  },
+
   providers: {
     title: "Providers",
     tagline: "All your channels, movies and series in one place.",
@@ -463,6 +558,7 @@ const en = {
     clearConfirmBody: "This cannot be undone.",
     legal: "Legal",
     termsConditions: "Terms & Conditions",
+    privacyPolicy: "Privacy Policy",
     diagnostics: "Diagnostics",
     playerDiagnostics: "Player diagnostics",
     about: "About",

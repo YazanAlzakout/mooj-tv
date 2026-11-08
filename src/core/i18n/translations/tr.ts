@@ -158,6 +158,101 @@ const tr: TranslationShape = {
     },
   },
 
+  privacy: {
+    title: "Gizlilik Politikası",
+    lastUpdatedLabel: "Son güncelleme",
+    lastUpdatedDate: "2026-11-08",
+    intro: "Bu politika, Mooj TV'nin (\"Uygulama\") bilgilerinizi nasıl işlediğini açıklar. com.moojtv.player paket adıyla yayınlanan Mooj TV Android uygulaması için geçerlidir.",
+    sections: {
+      summary: {
+        heading: "Kısa özet",
+        body: [
+          "Mooj TV, sizinle ilgili hiçbir kişisel veriyi toplamaz, iletmez veya saklamaz. Hesap yoktur, kayıt yoktur, analitik yoktur, reklam yoktur ve hiçbir şekilde takip yoktur.",
+          "Uygulamanın sakladığı her şey — sağlayıcı bilgileriniz, favorileriniz, geçmişiniz, indirmeleriniz — cihazınızda kalır ve hiçbir zaman bize gönderilmez.",
+        ],
+      },
+      noCollection: {
+        heading: "Hangi bilgileri topluyoruz",
+        body: [
+          "Hiçbirini. Mooj TV geliştiricileri, Uygulamadan veri alan hiçbir sunucu işletmez ve sizi ya da cihazınızı tanımlamalarının hiçbir yolu yoktur.",
+          "Uygulamada hiçbir analitik SDK'sı, reklam SDK'sı, çökme raporlama hizmeti ve üçüncü taraf reklam veya takip tanımlayıcısı bulunmaz.",
+        ],
+      },
+      credentials: {
+        heading: "Sağlayıcı bilgileriniz",
+        body: [
+          "Herhangi bir şey izleyebilmek için, hâlihazırda abone olduğunuz bir hizmetin bilgilerini girersiniz — bir sunucu adresi, bir kullanıcı adı ve bir şifre ya da doğrudan bir yayın bağlantısı.",
+          "Bu bilgiler yalnızca cihazınızda, işletim sisteminin sırlar için sağladığı Android Keystore destekli güvenli depolama alanında saklanır. Hiçbir zaman Uygulamanın sıradan veritabanına yazılmaz, hiçbir zaman bir günlüğe yazılmaz ve hiçbir zaman geliştiricilere veya herhangi bir üçüncü tarafa iletilmez.",
+          "Yalnızca tek bir hedefe gönderilirler: oturum açmak ve istediğiniz içeriği oynatmak üzere, bu bilgileri girdiğiniz sağlayıcıya. Söz konusu sağlayıcı sizin kendi tedarikçinizdir ve verilerinizi işleme biçimi bu politikaya değil, kendi şartlarına tabidir.",
+        ],
+      },
+      onDevice: {
+        heading: "Cihazınızda kalanlar",
+        body: [
+          "Uygulama, çalışabilmesi için şunları yerel olarak saklar: eklediğiniz sağlayıcıların listesi, hangi kategorileri gizlediğiniz, favorileriniz ve Sonra İzle listeniz, izleme geçmişiniz ve oynatma konumlarınız, indirdiğiniz dosyalar, belirlediyseniz ebeveyn PIN'iniz ve dil ile tema gibi ayarlarınız.",
+          "Bunların tamamı cihazınızdaki Uygulamanın özel depolama alanında bulunur. Hiçbiri bize yedeklenmez, eşitlenmez veya paylaşılmaz.",
+        ],
+      },
+      network: {
+        heading: "Ağ bağlantıları",
+        body: [
+          "Uygulama yalnızca tek bir tür hedefe ağ isteği yapar: bilgilerini girdiğiniz sağlayıcıya. Kanal, film ve dizi listelerinizi, bu listelerin işaret ettiği görselleri ve oynatmayı seçtiğiniz yayınları o sağlayıcıdan alır.",
+          "Uygulama, geliştiricilerin işlettiği hiçbir sunucuya bağlanmaz; çünkü böyle bir sunucu yoktur.",
+          "Uygulamanın daha yeni bir sürümü olup olmadığının denetimi, Uygulamanın kendisi tarafından değil, cihazınızdaki Google Play tarafından yapılır.",
+        ],
+      },
+      permissions: {
+        heading: "İzinler ve her birinin neden istendiği",
+        body: [
+          "İnternet ve ağ durumu: sağlayıcınıza ulaşmak ve cihaz çevrimdışı olduğunda bunu size bildirmek için.",
+          "Ön plan hizmeti ve medya oynatma: Ayarlar'dan açmanız hâlinde, ekran kapalıyken veya başka bir uygulama öndeyken oynatmayı sürdürmek için.",
+          "Uyanık tutma (wake lock): izlediğiniz şeyin ortasında cihazın uykuya geçmesini engellemek için.",
+          "Ses ayarlarını değiştirme: oynatma sırasında ses seviyesini ve ses odağını yönetmek için.",
+          "Titreşim: arayüzdeki kısa dokunma geri bildirimi için.",
+          "Depolama, yalnızca Android 12 ve öncesinde: istediğiniz indirmeleri kaydetmek için.",
+          "Uygulama; kameranıza, mikrofonunuza, konumunuza, kişilerinize, takviminize, fotoğraflarınıza ya da çağrı veya mesaj geçmişinize erişim istemez ve bunları okuyamaz.",
+        ],
+      },
+      children: {
+        heading: "Çocuklar",
+        body: [
+          "Mooj TV çocuklara yönelik değildir ve onlar için tasarlanmamıştır. Çocuklar dâhil hiç kimseden veri toplamaz.",
+          "Cihazın sahibi olan kişinin hangi kategorilerin görünür olacağını kısıtlayabilmesi için Ayarlar'da bir ebeveyn PIN'i mevcuttur.",
+        ],
+      },
+      retention: {
+        heading: "Bilgilerinizin saklanması ve silinmesi",
+        body: [
+          "Bize hiçbir şey ulaşmadığı için, sizin adınıza saklayacağımız veya sileceğimiz bir şey de yoktur.",
+          "Uygulamanın sakladığı her şey cihazda sizin kontrolünüzdedir. Bir sağlayıcıyı ve kayıtlı giriş bilgilerini sağlayıcılar ekranından kaldırabilir, izleme geçmişinizi ve önbellekteki görselleri Ayarlar'dan temizleyebilir, indirmeleri indirilenler ekranından silebilir ve Uygulamayı kaldırarak ya da Android ayarlarından verilerini temizleyerek bunların tamamını tek seferde kaldırabilirsiniz.",
+          "Uygulamanın kaldırılması, kayıtlı sağlayıcı giriş bilgileri dâhil tüm yerel deposunu siler.",
+        ],
+      },
+      security: {
+        heading: "Güvenlik",
+        body: [
+          "Sağlayıcı şifreleri, işletim sisteminin Android Keystore tarafından desteklenen ve cihaz tarafından şifrelenen güvenli depolama alanında tutulur.",
+          "Bir sağlayıcının sunucu adresi, Uygulamada görüntülendiği her yerde maskelenir; böylece tam adres kilidi açık bir ekrandan okunamaz.",
+          "Birçok IPTV sağlayıcısına yalnızca düz HTTP üzerinden erişilebilir; Uygulama da bu nedenle buna izin verir. Böyle bir sağlayıcıya giden trafik iletim sırasında şifrelenmez ve bu, Uygulamanın değil, seçtiğiniz sağlayıcının bir özelliğidir. Sağlayıcınız bir HTTPS adresi sunuyorsa onu tercih edin.",
+        ],
+      },
+      changes: {
+        heading: "Bu politikadaki değişiklikler",
+        body: [
+          "Bu politika değişirse, güncellenmiş sürüm aşağıdaki adreste yayınlanacak ve bu sayfanın üst kısmındaki tarih güncellenecektir.",
+        ],
+      },
+      contact: {
+        heading: "İletişim",
+        body: [
+          "Bu politika veya Mooj TV'de gizlilik hakkındaki sorularınız için iletişim:",
+          "E-posta: support@mooj-player.com",
+          "Web: https://mooj-player.com/privacy",
+        ],
+      },
+    },
+  },
+
   providers: {
     title: "Sağlayıcılar",
     tagline: "Tüm kanallarınız, filmleriniz ve dizileriniz tek yerde.",
@@ -460,6 +555,7 @@ const tr: TranslationShape = {
     clearConfirmBody: "Bu işlem geri alınamaz.",
     legal: "Yasal",
     termsConditions: "Şartlar ve Koşullar",
+    privacyPolicy: "Gizlilik Politikası",
     diagnostics: "Tanılama",
     playerDiagnostics: "Oynatıcı tanılaması",
     about: "Hakkında",

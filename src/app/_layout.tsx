@@ -177,6 +177,7 @@ function ThemedRoot() {
           <Stack.Screen name="settings/categories/[contentType]" />
           <Stack.Screen name="downloads" />
           <Stack.Screen name="legal" />
+          <Stack.Screen name="privacy" />
         </Stack>
 
         {!introDone && <BrandSplash onFinish={() => setIntroDone(true)} />}

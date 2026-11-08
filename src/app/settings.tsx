@@ -416,6 +416,16 @@ export default function SettingsScreen() {
 
         <SectionLabel>{t("settings", "legal")}</SectionLabel>
         <Row label={t("settings", "termsConditions")} onPress={() => router.push("/legal")} />
+        {/*
+          Required, not optional, and required *here* rather than only on
+          the website. Google's Developer Program Policy (effective
+          29 October 2026) asks for the policy link in the Play Console
+          field "as well as a privacy policy link or text within the app
+          itself" — an app that links it only from its store listing is
+          half compliant. This opens the text, carried in the app, in the
+          viewer's own language.
+        */}
+        <Row label={t("settings", "privacyPolicy")} onPress={() => router.push("/privacy")} />
 
         {/*
           Last but one, and it used to be third.
