@@ -48,7 +48,7 @@ const fr: TranslationShape = {
     acceptButton: "Accepter et continuer",
     accepted: "Accepté",
     lastUpdatedLabel: "Dernière mise à jour",
-    lastUpdatedDate: "2026-03-26",
+    lastUpdatedDate: "2026-11-08",
     eulaTitle: "Contrat de licence utilisateur final (EULA)",
     tosTitle: "Conditions d'utilisation",
     dmcaTitle: "Avis Droits d'auteur / DMCA",
@@ -147,8 +147,8 @@ const fr: TranslationShape = {
       governingLaw: {
         heading: "Droit applicable et juridiction",
         body: [
-          "Les présentes conditions sont régies par les lois de l'État du Delaware, États-Unis, sans égard aux règles de conflit de lois.",
-          "Vous acceptez que tout litige découlant de ou lié à l'Application ou aux présentes conditions soit porté devant les tribunaux étatiques ou fédéraux situés dans le Delaware, et vous consentez à leur compétence.",
+          "Les présentes conditions sont régies par les lois de la République arabe d'Égypte, sans égard aux règles de conflit de lois.",
+          "Vous acceptez que tout litige découlant de ou lié à l'Application ou aux présentes conditions soit porté devant les tribunaux compétents de la République arabe d'Égypte, et vous consentez à leur compétence.",
         ],
       },
       contact: {

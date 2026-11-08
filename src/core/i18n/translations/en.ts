@@ -51,7 +51,7 @@ const en = {
     acceptButton: "Accept & Continue",
     accepted: "Accepted",
     lastUpdatedLabel: "Last updated",
-    lastUpdatedDate: "2026-03-26",
+    lastUpdatedDate: "2026-11-08",
     eulaTitle: "End User License Agreement (EULA)",
     tosTitle: "Terms of Service",
     dmcaTitle: "Copyright / DMCA Notice",
@@ -150,8 +150,8 @@ const en = {
       governingLaw: {
         heading: "Governing law and venue",
         body: [
-          "These terms are governed by the laws of the State of Delaware, United States, without regard to conflict-of-laws principles.",
-          "You agree that any dispute arising from or relating to the App or these terms will be brought in the state or federal courts located in Delaware, and you consent to their jurisdiction.",
+          "These terms are governed by the laws of the Arab Republic of Egypt, without regard to conflict-of-laws principles.",
+          "You agree that any dispute arising from or relating to the App or these terms will be brought before the competent courts of the Arab Republic of Egypt, and you consent to their jurisdiction.",
         ],
       },
       contact: {

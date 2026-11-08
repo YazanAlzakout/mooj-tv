@@ -48,7 +48,7 @@ const tr: TranslationShape = {
     acceptButton: "Kabul Et ve Devam Et",
     accepted: "Kabul Edildi",
     lastUpdatedLabel: "Son güncelleme",
-    lastUpdatedDate: "2026-03-26",
+    lastUpdatedDate: "2026-11-08",
     eulaTitle: "Son Kullanıcı Lisans Sözleşmesi (EULA)",
     tosTitle: "Hizmet Şartları",
     dmcaTitle: "Telif Hakkı / DMCA Bildirimi",
@@ -147,8 +147,8 @@ const tr: TranslationShape = {
       governingLaw: {
         heading: "Uygulanacak hukuk ve yargı yeri",
         body: [
-          "Bu şartlar, kanunlar ihtilafı kuralları dikkate alınmaksızın Amerika Birleşik Devletleri Delaware Eyaleti hukukuna tabidir.",
-          "Uygulama veya bu şartlardan doğan ya da bunlarla ilgili her türlü uyuşmazlığın Delaware'de bulunan eyalet veya federal mahkemelerde görülmesini kabul eder ve bu mahkemelerin yetkisini kabul edersiniz.",
+          "Bu şartlar, kanunlar ihtilafı kuralları dikkate alınmaksızın Mısır Arap Cumhuriyeti hukukuna tabidir.",
+          "Uygulama veya bu şartlardan doğan ya da bunlarla ilgili her türlü uyuşmazlığın Mısır Arap Cumhuriyeti'nin yetkili mahkemelerinde görülmesini kabul eder ve bu mahkemelerin yetkisini kabul edersiniz.",
         ],
       },
       contact: {

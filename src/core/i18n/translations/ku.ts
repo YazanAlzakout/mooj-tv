@@ -52,7 +52,7 @@ const ku: TranslationShape = {
     acceptButton: "Qebûl bike û Berdewam bike",
     accepted: "Hate qebûlkirin",
     lastUpdatedLabel: "Rojanekirina dawî",
-    lastUpdatedDate: "2026-03-26",
+    lastUpdatedDate: "2026-11-08",
     eulaTitle: "Peymana Lîsansê ya Bikarhênerê Dawî (EULA)",
     tosTitle: "Şertên Xizmetê",
     dmcaTitle: "Agahdariya Mafê Nivîskar / DMCA",
@@ -151,8 +151,8 @@ const ku: TranslationShape = {
       governingLaw: {
         heading: "Qanûna serdest û dadgeh",
         body: [
-          "Ev şert bi qanûnên Dewleta Delaware, Dewletên Yekbûyî yên Amerîkayê tê rêvebirin, bê ku prensîbên tevlihevîya qanûnan were binirxandin.",
-          "Tu qebûl dikî ku her nakokî ku ji Sepanê an van şertan tê an bi wan re têkildar e, li dadgehên eyaletî an federal ên li Delaware were anîn, û tu qebûlîya desthilatdariya wan dide.",
+          "Ev şert bi qanûnên Komara Erebî ya Misirê tê rêvebirin, bê ku prensîbên tevlihevîya qanûnan were binirxandin.",
+          "Tu qebûl dikî ku her nakokî ku ji Sepanê an van şertan tê an bi wan re têkildar e, li dadgehên desthilatdar ên Komara Erebî ya Misirê were anîn, û tu qebûlîya desthilatdariya wan dide.",
         ],
       },
       contact: {
