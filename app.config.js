@@ -197,7 +197,29 @@ module.exports = {
       [
         "expo-splash-screen",
         {
-          image: "./assets/images/splash-icon.png",
+          /*
+           * Deliberately blank — a 1x1 transparent file.
+           *
+           * Android draws a splash screen of its own from the moment the
+           * process starts until React Native renders its first frame, and
+           * since Android 12 it cannot be skipped: the only choice is what
+           * it shows. It used to show the brand mark at 200dp, fully
+           * formed and perfectly still, for the second or so the bundle
+           * takes to load. Then it vanished and the intro clip began on a
+           * near-black frame with the sphere not yet formed — so the app
+           * opened with a logo, threw it away, and drew it again.
+           *
+           * With nothing in it, the system splash is the background colour
+           * and nothing else, which is what the clip's own first frame is
+           * (#040916 against this #0A0A0F — six units apart, invisible).
+           * The hand-off has nothing to see, so the opening is the clip.
+           *
+           * It has to be a real transparent file rather than no file at
+           * all. With the animated-icon attribute unset, Android falls
+           * back to the launcher icon — the one image that carries its own
+           * background, and worse than what was there.
+           */
+          image: "./assets/images/splash-blank.png",
           imageWidth: 200,
           resizeMode: "contain",
           // Must exactly match Colors.background (src/core/theme/tokens.ts) —
