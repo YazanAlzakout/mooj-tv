@@ -44,7 +44,31 @@ export default function TabsLayout() {
 
   return (
     <Tabs
-      screenOptions={{ headerShown: false }}
+      screenOptions={{
+        headerShown: false,
+        /*
+         * All five screens are built at startup rather than on first
+         * visit.
+         *
+         * A tab navigator mounts a screen the first time you open it, so
+         * the first press of Live, Movies or Series paid for building a
+         * grid — measurable as a burst of mount work in the trace, and
+         * absent on every press after. The viewer feels one slow tap per
+         * section, once.
+         *
+         * There is a four-and-a-half second brand clip over this screen at
+         * every cold start. Building the other four tabs behind it costs
+         * the viewer nothing, because the viewer is watching the clip, and
+         * afterwards every tab is instant from the first press.
+         *
+         * Safe because mounting is not loading: each of those screens
+         * fetches inside `useFocusEffect`, which does not run for a screen
+         * that is not focused. Nothing reaches the provider until a tab is
+         * actually opened — which matters on a line that answers a burst
+         * of requests by refusing the next one.
+         */
+        lazy: false,
+      }}
       /*
        * The bar is drawn here rather than configured.
        *

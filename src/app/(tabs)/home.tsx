@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Image,
@@ -133,6 +133,27 @@ export default function HomeScreen() {
     if (!session) router.replace("/");
   }, [session]);
 
+  /*
+   * Stable, so the memoised cards below can bail out.
+   *
+   * Above the early return, because a hook after one is a hook that is
+   * not always called.
+   *
+   * Every row on this screen re-renders whenever the screen does, and the
+   * screen re-renders on every rotation — about a hundred cards rebuilt to
+   * resize one hero. Handing each card a fresh `() => openFeatured(item)`
+   * made that unavoidable; taking the item as an argument instead means
+   * the prop is identical from one render to the next and `memo` can do
+   * its job. Shorter re-render, shorter stale frame.
+   */
+  const openFeatured = useCallback((item: HomeItem) => {
+    if (item.contentType === "movie") {
+      router.push({ pathname: "/movies/details/[movieId]", params: { movieId: item.providerItemId } });
+    } else {
+      router.push({ pathname: "/series/details/[seriesId]", params: { seriesId: item.providerItemId } });
+    }
+  }, []);
+
   if (!session) {
     return null;
   }
@@ -161,13 +182,6 @@ export default function HomeScreen() {
     }
   }
 
-  function openFeatured(item: HomeItem) {
-    if (item.contentType === "movie") {
-      router.push({ pathname: "/movies/details/[movieId]", params: { movieId: item.providerItemId } });
-    } else {
-      router.push({ pathname: "/series/details/[seriesId]", params: { seriesId: item.providerItemId } });
-    }
-  }
 
 
   return (
@@ -218,7 +232,7 @@ export default function HomeScreen() {
 
           {hero && (
             <Animated.View entering={FadeInDown.delay(40).duration(420)}>
-              <HeroCard item={hero} onPress={() => openFeatured(hero)} />
+              <HeroCard item={hero} onPress={openFeatured} />
             </Animated.View>
           )}
 
@@ -244,7 +258,7 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.rail}
                 renderItem={({ item }) => (
-                  <PosterCard item={item} onPress={() => openFeatured(item)} />
+                  <PosterCard item={item} onPress={openFeatured} />
                 )}
               />
             </Animated.View>
@@ -261,7 +275,7 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.rail}
                 renderItem={({ item }) => (
-                  <PosterCard item={item} onPress={() => openFeatured(item)} />
+                  <PosterCard item={item} onPress={openFeatured} />
                 )}
               />
             </Animated.View>
@@ -281,7 +295,7 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.rail}
                 renderItem={({ item }) => (
-                  <PosterCard item={item} onPress={() => openFeatured(item)} />
+                  <PosterCard item={item} onPress={openFeatured} />
                 )}
               />
             </Animated.View>
@@ -301,7 +315,7 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.rail}
                 renderItem={({ item }) => (
-                  <PosterCard item={item} onPress={() => openFeatured(item)} />
+                  <PosterCard item={item} onPress={openFeatured} />
                 )}
               />
             </Animated.View>
@@ -378,7 +392,7 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.rail}
                 renderItem={({ item }) => (
-                  <PosterCard item={item} onPress={() => openFeatured(item)} />
+                  <PosterCard item={item} onPress={openFeatured} />
                 )}
               />
             </Animated.View>
@@ -518,27 +532,57 @@ function SavedCard({
  * nobody can see at this size, and the comment on CategoryColors records
  * the same decision being taken once before.
  */
-function HeroCard({ item, onPress }: { item: HomeItem; onPress: () => void }) {
+function HeroCard({
+  item,
+  onPress,
+}: {
+  item: HomeItem;
+  /** Takes the item, like the cards below — one function for the screen. */
+  onPress: (item: HomeItem) => void;
+}) {
   const { t } = useI18n();
   const [failed, setFailed] = useState(false);
+  const press = useCallback(() => onPress(item), [onPress, item]);
   const { width, height } = useWindowDimensions();
 
-  /*
-   * A ceiling on the height, which only ever bites in landscape.
+  /**
+   * A ceiling on the height — two of them, and the second one is about a
+   * single frame.
    *
-   * The card is full width at 4:3, and on a phone turned sideways that is
-   * 1800pt of hero on a 1080pt screen: it swallowed the window, pushed
-   * every row off the bottom, and clipped its own title and play control
-   * out of view. Portrait is unaffected — 4:3 of a phone's width is about
-   * a third of its height, well under this.
+   * The first is the obvious one. The card is full width at 4:3, and on a
+   * phone turned sideways that is 1800pt of hero on a 1080pt screen: it
+   * swallowed the window, pushed every row off the bottom, and clipped its
+   * own title and play control out of view. 42% leaves the header, a row
+   * and the bar with room.
    *
-   * 42%, which leaves the header, a row and the bar with room. The image
-   * is `cover`, so a capped card crops rather than distorts.
+   * ## The second one, and why it is a fraction of the width
+   *
+   * `useWindowDimensions` lags the window. Android resizes the activity
+   * and lays the view tree out at the new size immediately, but the new
+   * numbers reach JavaScript an event later — so for a frame or two after
+   * a rotation this hero is drawn *at the landscape width* while still
+   * being capped by the *portrait height*. Caught in a screenshot on
+   * 2026-11-08: 873dp of hero in a 393dp window, the greeting shoved under
+   * the status bar and nothing else on screen. That is the "لحظة الشاشة ما
+   * بتكون طبيعية" during a turn.
+   *
+   * The frame itself cannot be removed from here — every dimension this
+   * component can read is stale in it. What can be removed is how bad it
+   * looks, and the trick is to cap against the *width* as well, because
+   * after a turn the stale width is the new height.
+   *
+   * It never bites in portrait, at any screen size: the hero's natural
+   * height is 0.75 of its container, the container is the window less the
+   * page padding, so the natural height is always below 0.78 of the window
+   * width. It only ever applies in the frame where the two disagree.
    */
-  const maxHeight = Math.round(height * (width > height ? 0.42 : 0.6));
+  const maxHeight = Math.min(
+    Math.round(height * (width > height ? 0.42 : 0.6)),
+    Math.round(width * 0.78)
+  );
 
   return (
-    <BouncePressable style={styles.heroCard} onPress={onPress}>
+    <BouncePressable style={styles.heroCard} onPress={press}>
       <View style={[styles.hero, { maxHeight }]}>
         {!failed ? (
           <CachedImage
@@ -631,11 +675,19 @@ function HeroCard({ item, onPress }: { item: HomeItem; onPress: () => void }) {
  * whole catalogue, blanks and all, but a recommendation with no picture is
  * not a recommendation.
  */
-function PosterCard({ item, onPress }: { item: HomeItem; onPress: () => void }) {
+const PosterCard = memo(function PosterCard({
+  item,
+  onPress,
+}: {
+  item: HomeItem;
+  /** Takes the item, so one function serves every card — see openFeatured. */
+  onPress: (item: HomeItem) => void;
+}) {
   const [failed, setFailed] = useState(false);
+  const press = useCallback(() => onPress(item), [onPress, item]);
 
   return (
-      <BouncePressable style={styles.featuredCard} onPress={onPress}>
+      <BouncePressable style={styles.featuredCard} onPress={press}>
         <View style={styles.featuredImageWrap}>
           {!failed ? (
             <CachedImage
@@ -670,7 +722,7 @@ function PosterCard({ item, onPress }: { item: HomeItem; onPress: () => void }) 
         </View>
       </BouncePressable>
   );
-}
+});
 
 /** No `entering` animation — same reasoning as `FeaturedCard` above. */
 function ContinueWatchingCard({ entry, onPress }: { entry: WatchProgressEntry; onPress: () => void }) {

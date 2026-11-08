@@ -86,7 +86,18 @@ function Ring({ size, delay }: { size: number; delay: number }) {
       pointerEvents="none"
       style={[
         styles.ring,
-        { width: size, height: size, borderRadius: size / 2, marginStart: -size / 2, marginTop: -size / 2 },
+        /*
+         * `start`/`top`, not negative margins.
+         *
+         * This was `marginStart: -size / 2, marginTop: -size / 2`, and on
+         * a device the rings came out half a radius down and to the right
+         * of the mark — orbiting a point beside it rather than sitting on
+         * it. Yoga does not apply margin to an absolutely positioned child
+         * that specifies no inset on that axis, so the offsets were simply
+         * dropped and each ring was drawn from the centre anchor outward
+         * instead of around it. An inset is not ignorable.
+         */
+        { width: size, height: size, borderRadius: size / 2, start: -size / 2, top: -size / 2 },
         style,
       ]}
     />
