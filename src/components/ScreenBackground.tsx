@@ -1,5 +1,13 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 
 import { isTvBuild } from "@/core/platform/isTvBuild";
 
@@ -42,12 +50,105 @@ export const TV_OVERSCAN_X = isTvBuild ? TVSafeArea.horizontal * 2 : 0;
  * the frames come out of the remote. They are also a decoration nobody can
  * see from three metres away — the worst possible trade for a television.
  */
+/**
+ * One breath of the glow, in milliseconds.
+ *
+ * Long on purpose. This is behind everything the viewer is reading, so it
+ * has to be the kind of movement you only notice when you stop looking at
+ * the text — around the pace of slow breathing. Anything under three
+ * seconds starts to pull the eye up to the top of the screen.
+ */
+const GLOW_CYCLE_MS = 4600;
+
+/**
+ * The lag between the small circle and the large one.
+ *
+ * This is the whole effect. Both circles breathing together is just a
+ * screen getting brighter and darker; the small one brightening *first*
+ * and the large one answering a beat later is light travelling outward
+ * from the middle. Roughly a sixth of the cycle — enough to read as cause
+ * and effect, short enough that they are never in opposition.
+ */
+const GLOW_LAG_MS = 760;
+
+function useGlowBreath(delay: number) {
+  const t = useSharedValue(0);
+
+  useEffect(() => {
+    t.value = withDelay(
+      delay,
+      withRepeat(
+        withTiming(1, { duration: GLOW_CYCLE_MS, easing: Easing.inOut(Easing.sin) }),
+        -1,
+        /* Reverses rather than restarting: a glow that snapped back to dim would be a flicker. */
+        true
+      )
+    );
+    // Runs once on mount; the glow breathes for as long as the screen is up.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return t;
+}
+
+/**
+ * The two circles, breathing.
+ *
+ * The alpha is already in the colour (see `glowOuter`/`glowInner`), so the
+ * opacity animated here multiplies it — which is why the range is 0.62 to
+ * 1 rather than anything wider. Below about 0.6 the circle visibly leaves
+ * the screen instead of dimming.
+ *
+ * The scale is tiny, 3%, and it is doing more work than it looks: a light
+ * source that brightens without growing reads as a screen effect, and one
+ * that grows as it brightens reads as light.
+ */
+function BreathingGlow() {
+  const inner = useGlowBreath(0);
+  const outer = useGlowBreath(GLOW_LAG_MS);
+
+  const innerStyle = useAnimatedStyle(() => ({
+    opacity: 0.62 + inner.value * 0.38,
+    transform: [{ scale: 1 + inner.value * 0.03 }],
+  }));
+  const outerStyle = useAnimatedStyle(() => ({
+    opacity: 0.68 + outer.value * 0.32,
+    transform: [{ scale: 1 + outer.value * 0.03 }],
+  }));
+
+  return (
+    <>
+      <Animated.View style={[styles.glowOuter, outerStyle]} pointerEvents="none" />
+      <Animated.View style={[styles.glowInner, innerStyle]} pointerEvents="none" />
+    </>
+  );
+}
+
 export function ScreenBackground({ children, particles = false }: { children: ReactNode; particles?: boolean }) {
+  /*
+   * The same flag the bands already use. `particles` has never really meant
+   * particles — it means "this screen is one the viewer looks at rather
+   * than works in", and the four that pass it are the four that should
+   * move: onboarding, the provider screens and home. A settings list does
+   * not want a pulse behind it.
+   *
+   * Off on the television for the reason written above the component: the
+   * box has to find these frames while moving a focus ring, and they come
+   * out of the remote.
+   */
+  const alive = particles && !isTvBuild;
+
   return (
     <View style={[styles.root, isTvBuild && styles.tvOverscan]}>
-      <View style={styles.glowOuter} pointerEvents="none" />
-      <View style={styles.glowInner} pointerEvents="none" />
-      {particles && !isTvBuild && <WaveBands />}
+      {alive ? (
+        <BreathingGlow />
+      ) : (
+        <>
+          <View style={styles.glowOuter} pointerEvents="none" />
+          <View style={styles.glowInner} pointerEvents="none" />
+        </>
+      )}
+      {alive && <WaveBands />}
       {children}
     </View>
   );

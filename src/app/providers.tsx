@@ -13,6 +13,7 @@ import { useI18n } from "@/core/i18n/I18nContext";
 import { deleteProviderCredentials } from "@/core/storage/secureCredentials";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import { brandLogoSource } from "@/components/BrandLogo";
+import { LogoRipple } from "@/components/LogoRipple";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
 import { deleteProvider, listProviders, setActiveProvider } from "@/db/repositories/providerRepository";
@@ -131,13 +132,15 @@ export default function ProvidersScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Animated.View entering={FadeIn.duration(500)} style={styles.brand}>
-            <View style={[styles.logoWrap, isLandscape && styles.logoWrapLandscape]}>
-              <Image
-                source={brandLogoSource()}
-                style={[styles.logo, isLandscape && styles.logoLandscape]}
-                resizeMode="contain"
-              />
-            </View>
+            <LogoRipple size={isLandscape ? 120 : 200}>
+              <View style={[styles.logoWrap, isLandscape && styles.logoWrapLandscape]}>
+                <Image
+                  source={brandLogoSource()}
+                  style={[styles.logo, isLandscape && styles.logoLandscape]}
+                  resizeMode="contain"
+                />
+              </View>
+            </LogoRipple>
             <Text style={styles.tagline}>{t("providers", "tagline")}</Text>
           </Animated.View>
 
