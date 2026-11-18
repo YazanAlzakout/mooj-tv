@@ -20,6 +20,7 @@
     "build:dev:tv": "eas build --platform android --profile development-tv"
   },
   "dependencies": {
+    "@lunarr/vlc-player": "^2.1.1",
     "expo": "~57.0.18",
     "expo-audio": "~57.0.5",
     "expo-build-properties": "~57.0.15",
