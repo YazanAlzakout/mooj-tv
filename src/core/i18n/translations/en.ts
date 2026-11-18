@@ -254,6 +254,111 @@ const en = {
         ],
       },
     },
+
+    /*
+     * The same policy, on iOS.
+     *
+     * Everything above describes the Android app and was reviewed by Google
+     * in that form, so none of it moves: the keys in `sections` are the
+     * Android text, byte for byte. This object holds only the paragraphs
+     * that are not true on iOS, and src/app/privacy.tsx substitutes them
+     * section by section when `Platform.OS === "ios"`.
+     *
+     * What was wrong, and is the whole reason this exists:
+     *   - the intro called this "the Mooj TV Android application published
+     *     under the package name" — a reviewer reading that on an iPhone is
+     *     guideline 2.3.10, irrelevant platform references, which is a
+     *     routine metadata rejection;
+     *   - the credentials and security sections named the Android Keystore,
+     *     where iOS keeps the same secrets in the keychain;
+     *   - the update sentence named Google Play;
+     *   - the permission list is Android's, and iOS has no counterpart: this
+     *     build declares no usage description for anything, which is what
+     *     iOS requires before an app may even ask;
+     *   - and the downloads sentences contradicted the App Review notes
+     *     outright. Downloads are off on iOS (see
+     *     src/domain/downloads/eligibility.ts), so there is no downloads
+     *     screen to delete anything from and no media file is saved at all.
+     *     A policy promising a reviewer a feature the build does not have is
+     *     worse than one that is merely vague.
+     *
+     * Sections absent from here — noCollection, children, changes, contact —
+     * read the same on both platforms and are rendered from `sections` on
+     * both. Copying them in would be two texts to keep in step, in six
+     * languages, for no difference in what anybody reads.
+     *
+     * `lastUpdatedDate` is here because it is genuinely a different date:
+     * the Android words have not changed since 2026-11-08 and these were
+     * written on 2026-11-18.
+     *
+     * One thing this file cannot fix. The copy published at
+     * mooj-player.com/privacy.html is still the Android wording only, and
+     * App Store Connect requires a privacy policy URL — so whoever submits
+     * the iOS build has to publish this variant there as well. Two policies
+     * that disagree is worse than one of them not existing, which is the
+     * same argument that put the text in the app in the first place.
+     */
+    ios: {
+      lastUpdatedDate: "2026-11-18",
+      intro: "This policy describes how Mooj TV (the “App”) handles your information. It applies to the Mooj TV application for iPhone and iPad, published under the bundle identifier com.moojtv.player.",
+      sections: {
+        summary: {
+          heading: "The short version",
+          body: [
+            "Mooj TV does not collect, transmit, or store any personal data about you. There are no accounts, no sign-up, no analytics, no advertising, and no tracking of any kind.",
+            "Everything the App keeps — your provider details, your favourites, your history — stays on your device and is never sent to us.",
+          ],
+        },
+        credentials: {
+          heading: "Your provider details",
+          body: [
+            "To watch anything, you enter the details of a service you already subscribe to — a server address, a username and a password, or a direct stream link.",
+            "Those details are stored only on your device, in the iOS keychain, the secure storage the operating system provides for secrets. They are never written to the App’s ordinary database, never written to a log, and never transmitted to the developers or to any third party.",
+            "They are sent to one destination only: the provider you entered them for, in order to sign in and play what you asked for. That provider is your own supplier and its handling of your data is governed by its own terms, not by this policy.",
+          ],
+        },
+        onDevice: {
+          heading: "What stays on your device",
+          body: [
+            "The App keeps the following locally so that it can work: the list of providers you have added, which categories you have hidden, your favourites and watch-later list, your watch history and playback positions, your parental PIN if you set one, and your settings such as language and theme.",
+            "Downloading for offline viewing is not available in the iOS version of the App, so no media file is saved to your device.",
+            "All of it lives in the App’s private storage on your device. None of it is backed up to us, synchronised, or shared.",
+          ],
+        },
+        network: {
+          heading: "Network connections",
+          body: [
+            "The App makes network requests to exactly one kind of destination: the provider whose details you entered. It fetches your channel, film and series lists from that provider, the artwork those lists point to, and the streams you choose to play.",
+            "The App does not contact any server operated by the developers, because none exists.",
+            "Checking for a newer version of the App is handled by the App Store on your device, not by the App itself.",
+          ],
+        },
+        permissions: {
+          heading: "Permissions, and why the App asks for none",
+          body: [
+            "On iOS the App asks you for no permissions. It needs network access to reach your provider, and iOS grants that without a prompt.",
+            "The App does not request access to your camera, your microphone, your location, your contacts, your calendar, your photos, or your call or message history, and cannot read them. It declares no usage description for any of them, which is what iOS requires before an app may even ask.",
+            "It does not use Face ID or Touch ID, and it never shows the App Tracking Transparency prompt, because it does not track you and has nothing to ask permission for.",
+          ],
+        },
+        retention: {
+          heading: "Keeping and deleting your information",
+          body: [
+            "Because nothing reaches us, there is nothing for us to keep or to delete on your behalf.",
+            "Everything the App has stored is under your control on the device. You can remove a provider and its saved credentials from the providers screen, clear your watch history and cached artwork from Settings, and remove all of it at once by deleting the App from your device.",
+            "Deleting the App removes its entire local store, including the saved provider credentials.",
+          ],
+        },
+        security: {
+          heading: "Security",
+          body: [
+            "Provider passwords are held in the operating system’s secure storage — the iOS keychain — which is encrypted by the device and readable only after the device has been unlocked once since it was started.",
+            "The server address of a provider is masked wherever it is displayed in the App, so the full address cannot be read off an unlocked screen.",
+            "Many IPTV providers are reachable only over plain HTTP, which the App therefore allows. Traffic to such a provider is not encrypted in transit, and that is a property of the provider you chose rather than of the App. If your provider offers an HTTPS address, prefer it.",
+          ],
+        },
+      },
+    },
   },
 
   providers: {

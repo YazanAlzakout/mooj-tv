@@ -251,6 +251,68 @@ const tr: TranslationShape = {
         ],
       },
     },
+
+    ios: {
+      lastUpdatedDate: "2026-11-18",
+      intro: "Bu politika, Mooj TV'nin (\"Uygulama\") bilgilerinizi nasıl işlediğini açıklar. com.moojtv.player paket kimliğiyle yayınlanan, iPhone ve iPad için Mooj TV uygulaması için geçerlidir.",
+      sections: {
+        summary: {
+          heading: "Kısa özet",
+          body: [
+            "Mooj TV, sizinle ilgili hiçbir kişisel veriyi toplamaz, iletmez veya saklamaz. Hesap yoktur, kayıt yoktur, analitik yoktur, reklam yoktur ve hiçbir şekilde takip yoktur.",
+            "Uygulamanın sakladığı her şey — sağlayıcı bilgileriniz, favorileriniz, geçmişiniz — cihazınızda kalır ve hiçbir zaman bize gönderilmez.",
+          ],
+        },
+        credentials: {
+          heading: "Sağlayıcı bilgileriniz",
+          body: [
+            "Herhangi bir şey izleyebilmek için, hâlihazırda abone olduğunuz bir hizmetin bilgilerini girersiniz — bir sunucu adresi, bir kullanıcı adı ve bir şifre ya da doğrudan bir yayın bağlantısı.",
+            "Bu bilgiler yalnızca cihazınızda, işletim sisteminin sırlar için sağladığı güvenli depolama alanı olan iOS anahtar zincirinde (Keychain) saklanır. Hiçbir zaman Uygulamanın sıradan veritabanına yazılmaz, hiçbir zaman bir günlüğe yazılmaz ve hiçbir zaman geliştiricilere veya herhangi bir üçüncü tarafa iletilmez.",
+            "Yalnızca tek bir hedefe gönderilirler: oturum açmak ve istediğiniz içeriği oynatmak üzere, bu bilgileri girdiğiniz sağlayıcıya. Söz konusu sağlayıcı sizin kendi tedarikçinizdir ve verilerinizi işleme biçimi bu politikaya değil, kendi şartlarına tabidir.",
+          ],
+        },
+        onDevice: {
+          heading: "Cihazınızda kalanlar",
+          body: [
+            "Uygulama, çalışabilmesi için şunları yerel olarak saklar: eklediğiniz sağlayıcıların listesi, hangi kategorileri gizlediğiniz, favorileriniz ve Sonra İzle listeniz, izleme geçmişiniz ve oynatma konumlarınız, belirlediyseniz ebeveyn PIN'iniz ve dil ile tema gibi ayarlarınız.",
+            "Çevrimdışı izleme için indirme, Uygulamanın iOS sürümünde mevcut değildir; bu nedenle cihazınıza hiçbir medya dosyası kaydedilmez.",
+            "Bunların tamamı cihazınızdaki Uygulamanın özel depolama alanında bulunur. Hiçbiri bize yedeklenmez, eşitlenmez veya paylaşılmaz.",
+          ],
+        },
+        network: {
+          heading: "Ağ bağlantıları",
+          body: [
+            "Uygulama yalnızca tek bir tür hedefe ağ isteği yapar: bilgilerini girdiğiniz sağlayıcıya. Kanal, film ve dizi listelerinizi, bu listelerin işaret ettiği görselleri ve oynatmayı seçtiğiniz yayınları o sağlayıcıdan alır.",
+            "Uygulama, geliştiricilerin işlettiği hiçbir sunucuya bağlanmaz; çünkü böyle bir sunucu yoktur.",
+            "Uygulamanın daha yeni bir sürümü olup olmadığının denetimi, Uygulamanın kendisi tarafından değil, cihazınızdaki App Store tarafından yapılır.",
+          ],
+        },
+        permissions: {
+          heading: "İzinler ve Uygulamanın neden hiçbirini istemediği",
+          body: [
+            "iOS'ta Uygulama sizden hiçbir izin istemez. Sağlayıcınıza ulaşmak için ağ erişimine ihtiyacı vardır ve iOS bunu hiçbir istem göstermeden verir.",
+            "Uygulama; kameranıza, mikrofonunuza, konumunuza, kişilerinize, takviminize, fotoğraflarınıza ya da çağrı veya mesaj geçmişinize erişim istemez ve bunları okuyamaz. Bunların hiçbiri için bir kullanım açıklaması bildirmez; oysa iOS, bir uygulamanın bunları isteyebilmesi için bile bu açıklamayı şart koşar.",
+            "Face ID veya Touch ID kullanmaz ve App Tracking Transparency (Uygulama İzleme Şeffaflığı) istemini hiçbir zaman göstermez; çünkü sizi takip etmez ve izin isteyeceği bir şey yoktur.",
+          ],
+        },
+        retention: {
+          heading: "Bilgilerinizin saklanması ve silinmesi",
+          body: [
+            "Bize hiçbir şey ulaşmadığı için, sizin adınıza saklayacağımız veya sileceğimiz bir şey de yoktur.",
+            "Uygulamanın sakladığı her şey cihazda sizin kontrolünüzdedir. Bir sağlayıcıyı ve kayıtlı giriş bilgilerini sağlayıcılar ekranından kaldırabilir, izleme geçmişinizi ve önbellekteki görselleri Ayarlar'dan temizleyebilir ve Uygulamayı cihazınızdan silerek bunların tamamını tek seferde kaldırabilirsiniz.",
+            "Uygulamanın silinmesi, kayıtlı sağlayıcı giriş bilgileri dâhil tüm yerel deposunu siler.",
+          ],
+        },
+        security: {
+          heading: "Güvenlik",
+          body: [
+            "Sağlayıcı şifreleri, işletim sisteminin güvenli depolama alanında — iOS anahtar zincirinde — tutulur; bu alan cihaz tarafından şifrelenir ve yalnızca cihaz açıldıktan sonra bir kez kilidi açıldığında okunabilir.",
+            "Bir sağlayıcının sunucu adresi, Uygulamada görüntülendiği her yerde maskelenir; böylece tam adres kilidi açık bir ekrandan okunamaz.",
+            "Birçok IPTV sağlayıcısına yalnızca düz HTTP üzerinden erişilebilir; Uygulama da bu nedenle buna izin verir. Böyle bir sağlayıcıya giden trafik iletim sırasında şifrelenmez ve bu, Uygulamanın değil, seçtiğiniz sağlayıcının bir özelliğidir. Sağlayıcınız bir HTTPS adresi sunuyorsa onu tercih edin.",
+          ],
+        },
+      },
+    },
   },
 
   providers: {

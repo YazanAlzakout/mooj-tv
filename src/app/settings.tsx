@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Focusable } from "@/components/Focusable";
@@ -413,19 +413,42 @@ export default function SettingsScreen() {
           </>
         )}
 
-        <SectionLabel>{t("settings", "storage")}</SectionLabel>
-        <View style={styles.infoCard}>
-          <InfoRow
-            label={t("settings", "downloadedContent")}
-            value={
-              downloadsSummary
-                ? `${downloadsSummary.count} · ${formatBytes(downloadsSummary.totalBytes)}`
-                : "—"
-            }
-          />
-        </View>
-        {downloadsSupported() && (
-          <Row label={t("settings", "manageDownloads")} onPress={() => router.push("/downloads")} />
+        {/*
+          The whole Storage section, not only the row that opens Downloads.
+
+          The gate is the platform and not `downloadsSupported()`, which is
+          false on iOS *and* on the TV build (see eligibility.ts). Android TV
+          ships today with this label and the "Downloaded content" card on
+          screen and only the Manage row missing; that is a live build and it
+          keeps exactly what it has.
+
+          On iOS downloads are absent by decision — Guideline 5.2.3, the long
+          note in eligibility.ts — so this card could only ever read
+          "0 · 0 B". A counter that cannot move is of no use to the viewer,
+          and in this category it is the kind of line a reviewer reads back to
+          you next to App Review notes saying nothing is saved to the device.
+
+          Nothing is left behind: every element in this section carries its
+          own margin (sectionLabelRow, infoCard), and the sections around it
+          are a plain stack with no separators between them.
+        */}
+        {Platform.OS !== "ios" && (
+          <>
+            <SectionLabel>{t("settings", "storage")}</SectionLabel>
+            <View style={styles.infoCard}>
+              <InfoRow
+                label={t("settings", "downloadedContent")}
+                value={
+                  downloadsSummary
+                    ? `${downloadsSummary.count} · ${formatBytes(downloadsSummary.totalBytes)}`
+                    : "—"
+                }
+              />
+            </View>
+            {downloadsSupported() && (
+              <Row label={t("settings", "manageDownloads")} onPress={() => router.push("/downloads")} />
+            )}
+          </>
         )}
 
         <SectionLabel>{t("settings", "data")}</SectionLabel>

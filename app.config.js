@@ -230,6 +230,29 @@ module.exports = {
       buildNumber: String(ANDROID_VERSION_CODE),
 
       /*
+       * A real 1024 icon, rather than the 512 at the top of this config
+       * stretched to twice its size.
+       *
+       * Apple takes the App Store icon from the uploaded build — there is no
+       * icon field on the version page — so whatever is here is what appears
+       * on the store and on the home screen, and 1024x1024 is the size it is
+       * asked to produce. The project icon is 512x512, which Expo would
+       * upscale.
+       *
+       * This file is not a different icon. It was composed from
+       * `splash-icon.png`, which is a genuine 1024 source, onto the same
+       * `#001651` ground at the same geometry as the icon published on Google
+       * Play, and checked by scaling it back down to 512 and comparing:
+       * 91.9% of bytes within 8/255, sphere bounding box within four pixels.
+       * The remainder is resampling noise. The app looks the same in both
+       * stores, which is the point.
+       *
+       * It is RGB with no alpha. Apple rejects an icon with transparency, and
+       * rounds the corners itself — so this must not be pre-rounded either.
+       */
+      icon: "./assets/images/ios-icon-1024.png",
+
+      /*
        * `ScreenOrientation.lockAsync` is ignored on an iPad that advertises
        * multitasking, and the player locks to landscape when it goes
        * fullscreen. Without this the lock silently does nothing on every iPad.
@@ -240,11 +263,17 @@ module.exports = {
         /*
          * Plain HTTP, and there is no narrower way to say it.
          *
-         * Xtream panels commonly serve over `http://` — this project's own
-         * shortcode table stores one (src/providers/serverShortcodes.ts), and
-         * the panel the review account lives on is one. iOS blocks cleartext
-         * by default, so without this key every login and every stream fails
-         * with a network error that reads as a bug in the app.
+         * Xtream panels commonly serve over `http://`, and the panel the
+         * review account lives on is one. iOS blocks cleartext by default, so
+         * without this key every login and every stream fails with a network
+         * error that reads as a bug in the app.
+         *
+         * (This used to cite the shortcode table in
+         * `src/providers/serverShortcodes.ts` as the second example. That
+         * table is empty since 2026-11-18 — see its own comment for why it
+         * had to be, before the App Store submission — so the sentence was
+         * pointing an auditor at an entry point that had been deliberately
+         * removed. The justification never depended on it.)
          *
          * A per-domain exception is impossible by construction: the viewer
          * types the server address at runtime, and it is not knowable at build

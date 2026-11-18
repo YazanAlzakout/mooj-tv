@@ -1,5 +1,5 @@
 import Constants from "expo-constants";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -35,9 +35,43 @@ import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
  * The terms screen has one, because terms are agreed to. A privacy policy
  * is a disclosure — it describes what the app does whether or not anybody
  * presses anything, and a button implying otherwise would misrepresent it.
+ *
+ * ## Two platforms, one screen
+ *
+ * The text used to be the Android policy on both platforms, and six of its
+ * paragraphs were false on iOS: it opened by calling the app "the Mooj TV
+ * Android application published under the package name", named the Android
+ * Keystore where iOS uses the keychain, said updates come from Google Play,
+ * listed Android runtime permissions, and told the reader to delete
+ * downloads from the downloads screen — a screen the iOS build does not
+ * have, because downloads are off there (src/domain/downloads/eligibility.ts).
+ * An App Review reviewer opening Settings → Privacy Policy on an iPhone
+ * read all of it: guideline 2.3.10 on the platform references, and a flat
+ * contradiction of the submission notes on the downloads.
+ *
+ * So `translations/en.ts` now carries a `privacy.ios` object holding the
+ * paragraphs that differ, and this screen substitutes them section by
+ * section. The Android text is not touched by any of it: when `IS_IOS` is
+ * false nothing here looks at `privacy.ios` at all, and the sections render
+ * from `privacy.sections` in the same order, word for word, as the version
+ * Google reviewed. Sections true on both platforms exist once.
+ *
+ * The published copy at mooj-player.com/privacy.html is still the Android
+ * wording alone. That is now a gap rather than a match, and it has to be
+ * closed by publishing the iOS variant there before the iOS submission —
+ * App Store Connect asks for a privacy policy URL, and the paragraph above
+ * about two versions of a policy that differ applies to that pair too.
  */
 
 type SectionKey = keyof TranslationShape["privacy"]["sections"];
+type PolicySection = TranslationShape["privacy"]["sections"][SectionKey];
+
+/**
+ * Decided once, at module scope. `Platform.OS` cannot change while the app
+ * is running, and a policy screen that re-evaluated it on every render
+ * would only invite the thought that it could.
+ */
+const IS_IOS = Platform.OS === "ios";
 
 /**
  * Reading order, written out rather than taken from `Object.keys`.
@@ -66,21 +100,42 @@ export default function PrivacyScreen() {
   const { t, strings } = useI18n();
   const privacy = strings.privacy;
 
+  /*
+   * The iOS overrides, as a partial map keyed by section.
+   *
+   * The annotation is the point of writing it out rather than reaching into
+   * `privacy.ios.sections` at the call site: it makes the compiler check
+   * that every key in that object is a real section — a typo, or a section
+   * renamed in `sections` and not in `ios.sections`, is a build error here
+   * rather than a paragraph that silently stops appearing on iPhones. The
+   * lookup below then yields `undefined` for the sections that are the same
+   * on both platforms, which is exactly the fallback that is wanted.
+   */
+  const iosSections: Partial<Record<SectionKey, PolicySection>> = privacy.ios.sections;
+
+  const intro = IS_IOS ? privacy.ios.intro : privacy.intro;
+  const lastUpdatedDate = IS_IOS ? privacy.ios.lastUpdatedDate : privacy.lastUpdatedDate;
+
   return (
     <ScreenBackground>
       <SafeAreaView style={styles.safeArea}>
         <ScreenHeader
           title={privacy.title}
-          subtitle={`${privacy.lastUpdatedLabel}: ${privacy.lastUpdatedDate}`}
+          subtitle={`${privacy.lastUpdatedLabel}: ${lastUpdatedDate}`}
         />
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Animated.View entering={FadeIn.duration(360)} style={styles.intro}>
-            <Text style={styles.introText}>{privacy.intro}</Text>
+            <Text style={styles.introText}>{intro}</Text>
           </Animated.View>
 
           {SECTION_ORDER.map((key, index) => {
-            const section = privacy.sections[key];
+            /*
+             * The Android text is the default in the literal sense: on
+             * Android the first operand is never evaluated, so what renders
+             * is `privacy.sections[key]` and nothing else.
+             */
+            const section = (IS_IOS ? iosSections[key] : undefined) ?? privacy.sections[key];
             return (
               <Animated.View
                 key={key}

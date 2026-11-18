@@ -251,6 +251,68 @@ const fr: TranslationShape = {
         ],
       },
     },
+
+    ios: {
+      lastUpdatedDate: "2026-11-18",
+      intro: "La présente politique décrit la manière dont Mooj TV (l'« Application ») traite vos informations. Elle s'applique à l'application Mooj TV pour iPhone et iPad, publiée sous l'identifiant de bundle com.moojtv.player.",
+      sections: {
+        summary: {
+          heading: "En résumé",
+          body: [
+            "Mooj TV ne collecte, ne transmet ni ne stocke aucune donnée personnelle vous concernant. Il n'y a aucun compte, aucune inscription, aucune analyse d'audience, aucune publicité et aucun suivi d'aucune sorte.",
+            "Tout ce que l'Application conserve — les informations de votre fournisseur, vos favoris, votre historique — reste sur votre appareil et ne nous est jamais transmis.",
+          ],
+        },
+        credentials: {
+          heading: "Les informations de votre fournisseur",
+          body: [
+            "Pour regarder quoi que ce soit, vous saisissez les informations d'un service auquel vous êtes déjà abonné : une adresse de serveur, un nom d'utilisateur et un mot de passe, ou un lien de flux direct.",
+            "Ces informations sont stockées uniquement sur votre appareil, dans le trousseau iOS (le Keychain), le stockage sécurisé que le système d'exploitation fournit pour les secrets. Elles ne sont jamais écrites dans la base de données ordinaire de l'Application, jamais consignées dans un journal, et jamais transmises aux développeurs ni à un tiers quelconque.",
+            "Elles sont envoyées à une seule destination : le fournisseur pour lequel vous les avez saisies, afin de vous connecter et de lire ce que vous avez demandé. Ce fournisseur est votre propre prestataire et son traitement de vos données est régi par ses propres conditions, et non par la présente politique.",
+          ],
+        },
+        onDevice: {
+          heading: "Ce qui reste sur votre appareil",
+          body: [
+            "L'Application conserve localement les éléments suivants afin de pouvoir fonctionner : la liste des fournisseurs que vous avez ajoutés, les catégories que vous avez masquées, vos favoris et votre liste « à regarder plus tard », votre historique de visionnage et vos positions de lecture, votre code PIN parental si vous en avez défini un, et vos paramètres tels que la langue et le thème.",
+            "Le téléchargement pour un visionnage hors connexion n'est pas disponible dans la version iOS de l'Application : aucun fichier multimédia n'est donc enregistré sur votre appareil.",
+            "Tous ces éléments se trouvent dans le stockage privé de l'Application sur votre appareil. Aucun d'entre eux n'est sauvegardé chez nous, synchronisé ou partagé.",
+          ],
+        },
+        network: {
+          heading: "Connexions réseau",
+          body: [
+            "L'Application effectue des requêtes réseau vers un seul type de destination : le fournisseur dont vous avez saisi les informations. Elle récupère auprès de ce fournisseur vos listes de chaînes, de films et de séries, les images vers lesquelles ces listes renvoient, et les flux que vous choisissez de lire.",
+            "L'Application ne contacte aucun serveur exploité par les développeurs, car il n'en existe aucun.",
+            "La recherche d'une nouvelle version de l'Application est assurée par l'App Store sur votre appareil, et non par l'Application elle-même.",
+          ],
+        },
+        permissions: {
+          heading: "Autorisations, et pourquoi l'Application n'en demande aucune",
+          body: [
+            "Sur iOS, l'Application ne vous demande aucune autorisation. Elle a besoin d'un accès réseau pour joindre votre fournisseur, et iOS l'accorde sans invite.",
+            "L'Application ne demande pas l'accès à votre appareil photo, votre microphone, votre position, vos contacts, votre agenda, vos photos, ni à votre historique d'appels ou de messages, et ne peut pas les lire. Elle ne déclare aucune description d'usage pour l'un quelconque d'entre eux, ce qu'iOS exige avant qu'une application puisse même le demander.",
+            "Elle n'utilise ni Face ID ni Touch ID, et n'affiche jamais l'invite de transparence du suivi des applications (App Tracking Transparency), car elle ne vous suit pas et n'a rien pour quoi demander une autorisation.",
+          ],
+        },
+        retention: {
+          heading: "Conservation et suppression de vos informations",
+          body: [
+            "Comme rien ne nous parvient, nous n'avons rien à conserver ni à supprimer en votre nom.",
+            "Tout ce que l'Application a stocké est sous votre contrôle sur l'appareil. Vous pouvez supprimer un fournisseur et ses identifiants enregistrés depuis l'écran des fournisseurs, effacer votre historique de visionnage et vider les images en cache depuis les Paramètres, et tout supprimer d'un coup en supprimant l'Application de votre appareil.",
+            "La suppression de l'Application efface l'intégralité de son stockage local, y compris les identifiants de fournisseur enregistrés.",
+          ],
+        },
+        security: {
+          heading: "Sécurité",
+          body: [
+            "Les mots de passe des fournisseurs sont conservés dans le stockage sécurisé du système d'exploitation — le trousseau iOS — qui est chiffré par l'appareil et n'est lisible qu'après un premier déverrouillage de l'appareil depuis son démarrage.",
+            "L'adresse de serveur d'un fournisseur est masquée partout où elle est affichée dans l'Application, de sorte que l'adresse complète ne puisse pas être lue sur un écran déverrouillé.",
+            "De nombreux fournisseurs IPTV ne sont accessibles qu'en HTTP simple, ce que l'Application autorise donc. Le trafic vers un tel fournisseur n'est pas chiffré en transit, et il s'agit d'une caractéristique du fournisseur que vous avez choisi et non de l'Application. Si votre fournisseur propose une adresse HTTPS, privilégiez-la.",
+          ],
+        },
+      },
+    },
   },
 
   providers: {

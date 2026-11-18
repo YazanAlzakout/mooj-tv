@@ -255,6 +255,68 @@ const ku: TranslationShape = {
         ],
       },
     },
+
+    ios: {
+      lastUpdatedDate: "2026-11-18",
+      intro: "Ev siyaset rave dike ka Mooj TV (\"Sepan\") çawa bi agahiyên te re tevdigere. Ew li sepana Mooj TV ya ji bo iPhone û iPadê, ya ku di bin nasnavê pakêtê com.moojtv.player de hatiye weşandin, tê sepandin.",
+      sections: {
+        summary: {
+          heading: "Bi kurtî",
+          body: [
+            "Mooj TV tu daneyên kesane yên derbarê te de kom nake, naşîne û tomar nake. Tu hesab tune, tu qeydkirin tune, tu analîtîk tune, tu reklam tune û tu şopandina tu cureyî tune.",
+            "Her tişta ku Sepan hiltîne — agahiyên dabînkerê te, bijarteyên te, dîroka te — li ser amûra te dimîne û tu carî ji me re nayê şandin.",
+          ],
+        },
+        credentials: {
+          heading: "Agahiyên dabînkerê te",
+          body: [
+            "Ji bo ku tu tiştek temaşe bikî, tu agahiyên karûbarekî ku berê abonetiya te ya wê heye dinivîsî — navnîşana serverekê, navê bikarhêner û şîfreyek, an lînkek streamê ya rasterast.",
+            "Ew agahî tenê li ser amûra te tên tomar kirin, di Keychain'a iOS de, hilanîna ewle ya ku pergala xebitandinê ji bo nepeniyan pêşkêş dike. Ew tu carî di danegeha asayî ya Sepanê de nayên nivîsandin, tu carî di logekê de nayên nivîsandin, û tu carî ji pêşdebiran re an ji tu aliyê sêyem re nayên şandin.",
+            "Ew tenê ji bo cihekî tên şandin: ji bo dabînkerê ku te ew jê re nivîsandine, ji bo ku tu têkevî hesabê û tişta ku te xwestiye were lêdan. Ew dabînker dabînkerê te yê xwe ye û tevgera wî bi daneyên te re bi şert û mercên wî bi xwe tê rêvebirin, ne bi vê siyasetê.",
+          ],
+        },
+        onDevice: {
+          heading: "Çi li ser amûra te dimîne",
+          body: [
+            "Sepan ji bo ku bikaribe bixebite van tiştan bi awayek herêmî hiltîne: lîsteya dabînkerên ku te zêde kirine, te kîjan kategorî veşartine, bijarteyên te û lîsteya Paşê Temaşe Bike, dîroka temaşekirinê û cihên lêdanê, PIN'a te ya dêûbav heke te yek diyar kiribe, û mîhengên te wekî ziman û dirb.",
+            "Daxistin ji bo temaşekirina bê înternet di guhertoya iOS a Sepanê de tune ye, loma tu pelê medyayê li ser amûra te nayê tomar kirin.",
+            "Hemî ew di hilanîna taybet a Sepanê de li ser amûra te dimîne. Tu tişt ji wan ji me re nayê kopîkirin, nayê hevdemkirin an nayê parvekirin.",
+          ],
+        },
+        network: {
+          heading: "Girêdanên torê",
+          body: [
+            "Sepan daxwazên torê tenê ji bo cureyekî cihî dişîne: ji bo dabînkerê ku te agahiyên wî nivîsandine. Ew lîsteyên kanal, fîlim û rêzefîlimên te ji wî dabînkerî, wêneyên ku navnîşanên wan di wan lîsteyan de hene, û streamên ku tu hildibijêrî ku lêbidî distîne.",
+            "Sepan bi tu serverê ku ji aliyê pêşdebiran ve tê xebitandin re têkilî nagire, ji ber ku tu serverek wisa tune.",
+            "Kontrolkirina guhertoyek nûtir a Sepanê ji aliyê App Store ve li ser amûra te tê kirin, ne ji aliyê Sepanê bi xwe ve.",
+          ],
+        },
+        permissions: {
+          heading: "Destûr, û çima Sepan tu destûrê naxwaze",
+          body: [
+            "Li iOS Sepan ji te tu destûrê naxwaze. Ji bo gihîştina dabînkerê te pêdiviya wê bi gihîştina torê heye, û iOS wê bêyî tu pirsê dide.",
+            "Sepan gihîştina kameraya te, mîkrofona te, cihê te, têkiliyên te, salnameya te, wêneyên te an dîroka te ya bangan û peyaman naxwaze, û nikare wan bixwîne. Ew ji bo tu yekê ji wan ravekirina bikaranînê nade, û iOS wê ravekirinê hewce dike berî ku sepanek karibe tenê bixwaze jî.",
+            "Ew ne Face ID ne jî Touch ID bi kar tîne, û tu carî daxwaza App Tracking Transparency nîşan nade, ji ber ku te naşopîne û tiştek wê tune ku jê re destûr bixwaze.",
+          ],
+        },
+        retention: {
+          heading: "Hilanîn û jêbirina agahiyên te",
+          body: [
+            "Ji ber ku tu tişt nagihîje me, tu tişt jî tune ku em ji bo te hilînin an jê bibin.",
+            "Her tişta ku Sepan tomar kiriye di bin kontrola te de li ser amûrê ye. Tu dikarî dabînkerek û agahiyên wî yên têketinê yên tomarkirî ji ekrana dabînkeran rakî, dîroka temaşekirinê û wêneyên hilanîn ji Mîhengan paqij bikî, û hemî wan bi carekê jê bibî bi jêbirina Sepanê ji amûra te.",
+            "Jêbirina Sepanê hemî hilanîna wê ya herêmî jê dibe, di nav de agahiyên dabînkerê yên tomarkirî.",
+          ],
+        },
+        security: {
+          heading: "Ewlehî",
+          body: [
+            "Şîfreyên dabînkeran di hilanîna ewle ya pergala xebitandinê de tên hilanîn — Keychain'a iOS — ya ku ji aliyê amûrê ve tê şîfrekirin û tenê piştî ku amûr carekê ji dema vekirina xwe ve hatiye vekirin tê xwendin.",
+            "Navnîşana serverê ya dabînkerekê li her cihê ku di Sepanê de tê nîşandan tê veşartin, ji ber vê yekê navnîşana tevahî ji ekranek vekirî nayê xwendin.",
+            "Gelek dabînkerên IPTV tenê bi HTTP ya sade tên gihîştin, û Sepan loma destûrê wê dide. Trafîka ber bi dabînkerek wisa ve di veguhastinê de nayê şîfrekirin, û ev taybetmendiya dabînkerê ku te hilbijartiye ye, ne ya Sepanê. Heke dabînkerê te navnîşanek HTTPS pêşkêş bike, wê tercîh bike.",
+          ],
+        },
+      },
+    },
   },
 
   providers: {
