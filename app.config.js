@@ -198,6 +198,90 @@ module.exports = {
        */
     },
 
+    /*
+     * iOS. Nothing here has ever been built — there is no `ios/` directory and
+     * no Podfile anywhere in this repository's history. This block exists so
+     * that `expo prebuild -p ios` can resolve at all: without
+     * `bundleIdentifier` it dies at config resolution, before CocoaPods is
+     * ever reached.
+     *
+     * Added 2026-11-18 as the first step of an iOS port whose decisive
+     * question is not configuration but playback — see docs/IOS_READINESS.md.
+     */
+    ios: {
+      bundleIdentifier: isDevId ? BRAND.bundleIdentifier + ".dev" : BRAND.bundleIdentifier,
+
+      /*
+       * Apple's counterpart to Android's versionCode. A string on purpose —
+       * Apple compares build numbers as dotted sequences, not integers — and
+       * kept in step with ANDROID_VERSION_CODE so that one release carries one
+       * number on both stores.
+       *
+       * This line is why `eas.json` sets `appVersionSource: "local"`. The
+       * default, `"remote"`, has EAS keep its own counter on its servers and
+       * ignore this value — which would be fine for a project built entirely
+       * on EAS, and is wrong for this one: the Android releases are built here
+       * with Gradle and take their versionCode from ANDROID_VERSION_CODE a few
+       * lines up. With a remote counter the two stores would drift apart, and
+       * the number in this file would quietly stop meaning anything. EAS
+       * warned about the conflict on the first iOS build (2026-11-18); this is
+       * the half of the fix that keeps one number for one release.
+       */
+      buildNumber: String(ANDROID_VERSION_CODE),
+
+      /*
+       * `ScreenOrientation.lockAsync` is ignored on an iPad that advertises
+       * multitasking, and the player locks to landscape when it goes
+       * fullscreen. Without this the lock silently does nothing on every iPad.
+       */
+      requireFullScreen: true,
+
+      infoPlist: {
+        /*
+         * Plain HTTP, and there is no narrower way to say it.
+         *
+         * Xtream panels commonly serve over `http://` — this project's own
+         * shortcode table stores one (src/providers/serverShortcodes.ts), and
+         * the panel the review account lives on is one. iOS blocks cleartext
+         * by default, so without this key every login and every stream fails
+         * with a network error that reads as a bug in the app.
+         *
+         * A per-domain exception is impossible by construction: the viewer
+         * types the server address at runtime, and it is not knowable at build
+         * time. Apple accepts that case — the first justification its own
+         * documentation lists for `NSAllowsArbitraryLoads` is "the app must
+         * connect to a server managed by another entity that doesn't support
+         * secure connections", which is this app exactly. That paragraph goes
+         * into App Review Notes at submission.
+         *
+         * Nothing else belongs under this dictionary. Adding
+         * `NSAllowsArbitraryLoadsForMedia` makes iOS 10 and later ignore the
+         * global key entirely, which would leave media playing while the
+         * plain-HTTP `player_api.php` login broke — a network-policy failure
+         * wearing the costume of a login bug.
+         */
+        NSAppTransportSecurity: {
+          NSAllowsArbitraryLoads: true,
+        },
+
+        /*
+         * The export-compliance declaration, answered here rather than by hand.
+         *
+         * Apple asks every build whether it uses encryption that is not exempt
+         * under US export rules. This app uses none: it speaks HTTP and HTTPS
+         * to a server the viewer chooses, and HTTPS is explicitly exempt, as is
+         * the platform keychain that holds the credentials. Nothing here
+         * implements or bundles a cipher of its own.
+         *
+         * Without this key App Store Connect stops and asks the question
+         * interactively on every single upload, which is both a delay and an
+         * invitation to answer it differently one day by accident. EAS warned
+         * about exactly this on the first iOS build, 2026-11-18.
+         */
+        ITSAppUsesNonExemptEncryption: false,
+      },
+    },
+
     web: {
       output: "static",
       favicon: "./assets/images/favicon.png",
@@ -206,7 +290,22 @@ module.exports = {
     plugins: [
       "expo-router",
       "expo-image",
-      "expo-secure-store",
+      [
+        /*
+         * Credentials live in the keystore, and nothing in this app ever asks
+         * the viewer to prove who they are before reading them.
+         *
+         * expo-secure-store supports putting a keychain entry behind Face ID,
+         * and its config plugin writes `NSFaceIDUsageDescription` into
+         * Info.plist by default on the assumption that an app installing it
+         * wants that. This one does not: there is no biometric prompt anywhere
+         * in the product, and the string alone would put "Face ID" on the App
+         * Store privacy label of a video player. Same argument as the
+         * microphone below, same answer.
+         */
+        "expo-secure-store",
+        { faceIDPermission: false },
+      ],
       "expo-sqlite",
       "expo-localization",
       [
@@ -234,6 +333,17 @@ module.exports = {
            * review that has no good answer.
            */
           recordAudioAndroid: false,
+          /*
+           * The same refusal on Apple's side, and it has to be said
+           * separately: `recordAudioAndroid` covers only the Android
+           * permission. On iOS the plugin writes
+           * `NSMicrophoneUsageDescription` into Info.plist unless this is
+           * explicitly `false`, and any usage description string in Info.plist
+           * becomes a line on the App Store privacy label. A video player with
+           * "Microphone" on its listing invites the same question from Apple
+           * that the line above was written to avoid from Google.
+           */
+          microphonePermission: false,
         },
       ],
       [
@@ -365,6 +475,19 @@ module.exports = {
     },
 
     extra: {
+      /*
+       * The EAS project this repository builds as.
+       *
+       * Written by hand on 2026-11-18 because `eas init` cannot edit a dynamic
+       * app.config.js — it creates the project on the Expo account, prints the
+       * id, and stops. The Android releases are built locally with Gradle and
+       * have never needed this; it is here for iOS, which cannot be built on
+       * this machine at all and has to go through EAS.
+       */
+      eas: {
+        projectId: "c5e2edeb-6be9-49c8-b7e2-dd8265f2c7ac",
+      },
+
       /*
        * Whether this binary is the Android TV one. Read through
        * src/core/platform/isTvBuild.ts.

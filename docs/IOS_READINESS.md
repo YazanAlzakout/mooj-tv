@@ -1,0 +1,132 @@
+# Mooj TV on iOS — what it takes, what it costs, and what could stop it
+
+## 1. Can this ship on iOS at all?
+
+Yes — but not as a port. Nothing in Apple's rules or in the codebase makes it impossible, and IPTV players that take a user-supplied Xtream panel are on the App Store today ([Streamly](https://apps.apple.com/app/id6769753335) and others). The react-native-tvos fork is not the obstacle people assume: it is a full fork of React Native 0.86 that keeps iPhone as a first-class target, and with `EXPO_TV` unset an iOS prebuild is an ordinary iPhone prebuild. The real problem is narrower and harder than configuration. On Android the app plays through Media3/ExoPlayer, and a month of this project's work went into making *this provider's* streams play — a vendored FFmpeg MP2 decoder, a renderer-mode patch, a shared OkHttp client. On iOS `expo-video` is AVPlayer/AVFoundation (`node_modules/expo-video/ios/VideoPlayer.swift:7`), which has no pluggable-decoder mechanism at all, and the content this provider actually serves — H.265 video and MPEG-1 Layer II audio inside MPEG-TS, recorded in `D:/Projects/mooj-tv/docs/CODEC_MATRIX.md` — is three separate things AVPlayer does not take (Apple's HLS Authoring Specification rule 1.5: HEVC *must* be fMP4, not TS; MP2 appears on no Apple audio list; raw progressive `.ts` is not a documented AVPlayer input). So the honest headline is: **iOS needs a second video player (libVLC), and that is the project, not a footnote.** Expect four to eight weeks, not a weekend — and there is a one-day test, described in Phase 0, that proves or kills the whole thing before a single dollar is spent.
+
+## 2. What it costs
+
+**Money, per year.** Apple Developer Program: **$99/year**, same price for an individual or a company, non-refundable, auto-renewing (region-priced in local currency; I did not confirm this on Apple's own billing page, only in secondary sources). That is the only mandatory recurring cost.
+
+**Money, one-off and optional.** No Mac is required — every iOS build goes through EAS. EAS Free gives up to 15 iOS builds a month on the low-priority queue; third-party reporting says free-tier builds are cancelled at 45 minutes, and this project's iOS builds will compile React Native from source (the fork does not publish the dependency artifacts Expo looks for), so the free tier may not be enough. Budget **EAS Starter at $19/month** for the active build months — call it **$60–$120 total** — with iOS builds billed $2 (medium worker) or $4 (large worker) each above the included credit. Optional: a Mac mini (~$600) would turn a 30-minute EAS round trip into a 3-minute local one and is worth considering if Phase 2 runs long; a cloud Mac rental (~$30–80/month) is the cheaper version of the same thing. **Non-optional and easy to forget: at least one real iPhone to test on.** There is no iOS release without a device.
+
+**Calendar — work we do.** Phase 0: 1 day. Phase 1 (config + first build): 2–4 days. Phase 2 (the player): 1–2 weeks, and this is where the range lives. Phase 3 (the rest of the iOS surface): 1–2 weeks. Phase 4 (signing, TestFlight, submission prep): 3–7 days. **Total 4–8 weeks of actual work.** The low end assumes the off-the-shelf libVLC binding works against this fork; the high end assumes we write a thin native Swift wrapper ourselves.
+
+**Calendar — waiting on Apple.** Individual enrolment: 24–48 hours typically. App Review: 24–48 hours for a first decision. Each rejection-and-resubmit cycle: 1–3 days. An appeal to the App Review Board, if guideline 5.2.3 is cited: **1–3 weeks**. So **1–2 weeks of Apple time if it goes well, 4–6 weeks if review fights us.** Enrolment should start during Phase 2 so it never sits on the critical path.
+
+## 3. The blockers, in the order they block each other
+
+**B0 — Does any iOS player handle this provider's streams?** Everything else is downstream of this. If libVLC on an iPhone cannot play the real panel, there is no iOS product and we stop. Options: test it (one hour, free), or build for weeks and find out. **Recommendation: test it.** Details in Phase 0.
+
+**B1 — There is no Apple Developer account.** Nothing is submitted, and TestFlight is unavailable, without one. But an EAS `ios.simulator` build is unsigned and needs no account, so the entire native build including `pod install` can be proven from this Windows machine before paying anything. **Recommendation: enrol as an *Individual* once Phase 1 passes — $99, 24–48 hours, no D-U-N-S number, no company paperwork.** The organisation route needs a D-U-N-S and takes weeks.
+
+**B2 — The video player. This is the work.** `expo-video` on iOS is AVPlayer, and AVPlayer refuses raw `.ts`, HEVC-in-TS and MP2 audio — three independent refusals, any one of which is fatal for this provider. The options: *(a)* ship AVPlayer and accept that most channels fail — not a product; *(b)* **add a libVLC-backed player on iOS behind a thin interface, with `expo-video` staying as-is on Android — recommended**, because libVLC decodes all three natively and because it is demonstrably what shipping App Store IPTV players do; *(c)* write our own Swift module around VLCKit or KSPlayer if the community binding will not cooperate — same outcome, more days; *(d)* ask the panel operator to transcode to H.264/AAC — free for us, entirely outside the owner's control, and it would also fix Android. The architectural cost of (b) is real but bounded: `expo-video` is referenced 42 times across 17 files in `src/`, and the whole `src/playback/*` hook layer is typed against its `VideoPlayer`. The candidate binding is `expo-libvlc-player` (MobileVLCKit on iOS, iOS 15.1+); it is a small community package with inconsistent version numbering across registries and it has never been tried against react-native-tvos 0.86 — that is the single biggest estimate risk in this document.
+
+**B3 — App Review guideline 5.2.3, and the Downloads feature.** 5.2.3 reads: *"Apps should not facilitate illegal file sharing or include the ability to save, convert, or download media from third-party sources ... without explicit authorization from those sources."* This app has a user-facing Downloads screen (`src/app/downloads.tsx`, `src/domain/downloads/`). On Google Play that was fine. On iOS it is the most quotable line in the app pointed straight at the most commonly cited guideline for this category, and developers report 5.2.3 rejections even for players that download nothing. **Recommendation: ship iOS v1 with Downloads off.** The switch already exists in the right shape — `downloadsSupported()` in `src/domain/downloads/eligibility.ts` is keyed to the build, not the platform, and every button, entry point and recovery path keys off it, so an iOS arm is close to one line. Turning it on later, once the app has a review history, is a far easier conversation than defending it on submission one.
+
+**B4 — Plain-HTTP panels and App Transport Security.** The survey called this a hard blocker; the verification pass refuted that and I agree with the verification. `expo-build-properties` has no ATS key and never did — arbitrary Info.plist keys go through Expo's own `ios.infoPlist` field. The fix is `ios.infoPlist.NSAppTransportSecurity.NSAllowsArbitraryLoads = true` and *nothing else under that dictionary*: adding `NSAllowsArbitraryLoadsForMedia` makes iOS 10+ ignore the global key entirely and silently breaks the plain-HTTP `player_api.php` login, which would present as a login bug, not a network-policy bug. Apple does require a written justification, but it requires one for narrow per-domain exceptions too, so being unable to narrow costs us nothing — and Apple's own first listed acceptable justification is *"the app must connect to a server managed by another entity that doesn't support secure connections,"* which is literally this app. **Recommendation: write that paragraph into App Review Notes up front.** Cost: thirty minutes, not schedule risk. (Side note: `app.config.js:302` points at `docs/DECISIONS.md` as the record of the cleartext choice; that record is actually in `docs/DEPENDENCIES.md`, and neither version contains prose usable for review. Worth writing properly.)
+
+**B5 — `app.config.js` has no `ios:` block at all.** A case-insensitive grep for "ios" across the whole file returns zero hits. Without `ios.bundleIdentifier`, `expo prebuild -p ios` dies at config resolution before CocoaPods is ever reached. The bundle identifier is permanent after publication, exactly like `packageId` in `brand.config.js`. **Recommendation: choose it once, deliberately, in the same sitting as the ATS block.** ~1 hour.
+
+**B6 — Config hygiene that must land before the first prebuild.** Four small things that are cheap now and awkward later: `expo-audio` adds `NSMicrophoneUsageDescription` by default, which would put a Microphone entry on the App Store privacy label of a video player — the exact outcome the Android config went out of its way to avoid; `expo-secure-store` likewise adds `NSFaceIDUsageDescription`. Both are switched off by passing `microphonePermission: false` and `faceIDPermission: false`. SecureStore's iOS default is `WHEN_UNLOCKED`, meaning credentials are unreadable while the screen is locked — which is precisely when background playback runs; pass `AFTER_FIRST_UNLOCK` at the two call sites in `src/core/storage/secureCredentials.ts`. And `expo-navigation-bar` is Android-only: its three call sites (including both player screens) become silent no-ops on iOS, so hiding the home indicator needs `react-native-screens`' `homeIndicatorHidden` instead. Total: under a day, and privacy labels are hard to change once published.
+
+**B7 — Fullscreen orientation is weaker on iOS.** `ScreenOrientation.lockAsync` needs `ios.requireFullScreen: true` to work on iPad, and on iOS 27+ Expo's own documentation says a lock is a preference, not a guarantee. The existing 400ms hand-off tuning in `src/playback/useFullscreenOrientation.ts` was measured against Android's hard lock and should not be ported on faith. Not a blocker; a design item.
+
+**B8 — Do *not* switch to upstream React Native for iOS.** The two packages cannot coexist, and `src/playback/useTVRemote.ts` imports `useTVEventHandler`, which upstream 0.86 does not export — so the swap would break the JS bundle on *every* platform and break the Android TV build that is being submitted right now. The fork is correct and stays. Its only cost on iOS is slow from-source builds; `RCT_USE_PREBUILT_RNCORE=1` is the lever to try later, after one clean build has succeeded.
+
+**Dropped after verification:** the MP2 decoder as a standalone blocker (it disappears inside the libVLC decision), the VOD `container_extension` issue as a hard blocker (it is a degradation, also solved by libVLC, and the frequency has never been measured), and ATS as a hard blocker.
+
+**One concrete item, cheap and urgent:** `docs/REVIEW_ACCOUNT_CHANNELS.md:45` recommends putting Sintel 1080p **.mkv** in the review account's Movies category. On Android, harmless. If that account is reused for Apple on an AVPlayer build, the reviewer taps the one film and gets an instant failure. Swap it for the `.mp4` trailer listed one row below.
+
+## 4. What would be done, in order
+
+**Phase 0 — the kill test. One day. $0. No Mac, no Apple account, no code.** On any iPhone, install the free VLC for iOS and open the real provider's channel URL for stream `264311` (the confirmed H.265 + MP2 channel) plus two or three VOD URLs. Then open the same URLs in **Safari**, which uses the same AVFoundation stack AVPlayer does. Three possible answers: Safari plays it → iOS might be cheap after all and we re-plan; Safari fails and VLC plays it → the libVLC plan is confirmed and the estimates below hold; VLC also fails → **stop, there is no iOS path**, and we have learned it for the price of an hour. In the same sitting, one API call to `get_vod_streams` on the real panel, counting `container_extension` values — nobody on this project has ever measured that, and it is the number that decides how much of the movie catalogue is at risk.
+
+**Phase 1 — prove the build. Two to four days. $0.** Add the `ios:` block (bundle identifier, ATS, `requireFullScreen`), the config-hygiene fixes from B6, and an EAS `ios.simulator` profile. Run the first iOS build this project has ever had. It needs no Apple account because a simulator build is unsigned. Delivers: proof that the fork plus Reanimated plus the Expo module set actually pod-install and compile for Apple, and the first real number for build duration and cost. Start Apple enrolment at the end of this phase so it runs in parallel.
+
+**Phase 2 — the player. One to two weeks.** Put a thin interface in front of the player, wire `expo-video` behind it on Android unchanged, wire libVLC behind it on iOS. Delivers: one real channel from the real panel, playing with sound on a real iPhone. This is the phase that can slip; if the community binding fights us, the fallback is a small native Swift module around VLCKit, which is more certain and slower.
+
+**Phase 3 — the rest of the surface. One to two weeks.** Fullscreen and orientation, home indicator, keychain accessibility, the downloads decision, the VOD container allow-list, iOS error messages, and the connection-count behaviour on a 3-connection line — which was hard-won on Android against OkHttp and is completely unmeasured on Apple's URL-loading stack.
+
+**Phase 4 — submission. Three to seven days of ours, plus Apple's.** Signing, TestFlight, review account cleanup, screenshots, the ATS justification and the 5.2.3 positioning in review notes, submit.
+
+## 5. The decisions only you can make
+
+**Whose Apple account?** Your own, as an Individual, costs $99/year and 24–48 hours, and your legal name appears as the seller on the listing. Using the developer you hired for Google Play is faster and anonymous, but the app then lives permanently on someone else's account — you cannot update it without them, and moving it later requires their cooperation in an app transfer. *Recommendation: your own.* It is the asset.
+
+**Do you accept a second player on iOS?** libVLC solves the codecs, but it hands back things `expo-video` gives for free on Apple: background audio, picture-in-picture, AirPlay and the lock-screen Now Playing controls. iOS v1 would likely ship without some of those. Accept the gap, or pay more weeks to rebuild them?
+
+**Do you accept shipping iOS without Downloads?** It materially lowers the chance of a 5.2.3 rejection and removes a whole category of work. The feature can come back in v2.
+
+**Is there an iPhone to test on?** If not, that is a purchase before Phase 0, not after.
+
+**EAS Starter at $19/month, or fight the free tier's build cap?** $19/month during the build phase is almost certainly cheaper than the hours lost to cancelled 45-minute builds.
+
+**Apple TV later — yes or no?** It changes nothing today, but it changes the player choice: libVLC on tvOS is less proven than on iOS, and the fork requires iPhone and Apple TV to be two separate prebuilds (exactly as Android phone and Android TV already are). Worth saying now rather than discovering in Phase 2.
+
+**Are you willing to absorb one rejection-and-appeal cycle?** Best case review is 24–48 hours. If 5.2.3 is cited and we appeal, it is weeks. If the answer is "no, I want certainty," the honest reply is that nobody can give you certainty in this category — only better odds, which is what dropping Downloads and writing the review notes carefully buys.
+
+## 6. What we still do not know
+
+Whether libVLC on an iPhone actually plays *this* provider's streams — Phase 0 answers it in an hour, and until then every estimate here rests on it. How much of the channel lineup is H.265 or MP2: the entire codec picture rests on **one** channel, and `docs/CODEC_MATRIX.md` says so itself. The VOD `container_extension` distribution: never measured, so "a meaningful share of the catalogue will fail" is folklore, not data. Whether `expo-libvlc-player` installs and runs against react-native-tvos 0.86 and Expo 57: untested anywhere, by anyone, as far as I can find. Whether VLCKit's LGPL licensing is comfortable for App Store distribution: dynamic linking is the standard argument and many apps ship this way, but VLC's own history with Apple is a cautionary tale and this needs a real answer *before* integration, not after. Whether App Review accepts this category from a brand-new unknown account: the existing IPTV apps prove it is possible, not that it is easy, and I found no official Apple statement either way. Whether the fork's pods install cleanly at all — no `pod install` has ever been run in this project, there is no `ios/` directory and no Podfile in the repository or in its git history. And whether the EAS free tier's build cap survives a from-source React Native build.
+
+**Where the findings disagreed, and what I believe.** The survey asserted the real provider is `.ts`-only with no HLS fallback; the code says otherwise, and I believe the code — `src/providers/xtream/xtreamAdapter.ts:114-125` records the 2026-09-03 revert, where hard-coding `.ts` made *every* channel 404 on the owner's real provider while HLS played fine. But that does not rescue iOS, because the HLS output is HEVC inside TS segments with MP2 audio, and AVPlayer refuses both — and the documented review account returns `allowed_output_formats: ["ts","rtmp"]`, meaning the account an Apple reviewer would use is the worst case. I also side with the verification pass against the survey on three points: MP2 is not a separate blocker (it vanishes with libVLC), the VOD container issue is a degradation rather than a blocker, and ATS is configuration rather than schedule risk. The one thing I would add that no surveyor covered: guideline 5.2.3 and the Downloads feature is, in my judgement, a larger threat to this submission than any codec.
+
+**Files worth reading before the next step:** `D:/Projects/mooj-tv/src/providers/xtream/xtreamAdapter.ts` (lines 110-160), `D:/Projects/mooj-tv/docs/CODEC_MATRIX.md`, `D:/Projects/mooj-tv/app.config.js` (lines 220-315), `D:/Projects/mooj-tv/docs/REVIEW_ACCOUNT_CHANNELS.md`, and `D:/Projects/mooj-tv/src/domain/downloads/eligibility.ts`.
+
+Sources: [Apple Developer Program fee](https://ambsandigital.com/?p=11104) · [Apple enrolment guide](https://www.webtonative.com/blog/apple-developer-program-enrollment) · [Expo pricing](https://expo.dev/pricing) · [Expo billing plans](https://docs.expo.dev/billing/plans) · [App Store Review Guidelines (5.2.2, 5.2.3, 4.2)](https://developer.apple.com/app-store/review/guidelines/) · [NSAllowsArbitraryLoads](https://developer.apple.com/documentation/bundleresources/information-property-list/nsapptransportsecurity/nsallowsarbitraryloads) · [HLS Authoring Specification](https://developer.apple.com/documentation/http-live-streaming/hls-authoring-specification-for-apple-devices) · [Apple forum: AVPlayer and raw MPEG-TS](https://developer.apple.com/forums/thread/710481) · [Apple forum: 5.2.3 rejections for player apps](https://developer.apple.com/forums/thread/845230) · [expo-libvlc-player README](https://app.unpkg.com/expo-libvlc-player@2.3.1/files/README.md) · [Streamly: IPTV Player on the App Store](https://apps.apple.com/app/id6769753335)
+
+---
+
+## Settled since this document was written — 2026-11-18
+
+Three of the unknowns listed above are no longer unknown. Read this section
+before the parts it corrects.
+
+**The iOS project builds.** EAS build `819a7469` finished in six minutes from
+this Windows machine, against commit `827a972`, SDK 57, profile
+`ios-simulator`. The react-native-tvos fork, Reanimated, Worklets and the whole
+Expo module set pod-install and compile for Apple with no change beyond the
+`ios:` block added the same day. The question "has `pod install` ever run here"
+is answered: it runs, and it passes.
+
+**The player architecture is not an open question.** iOS IPTV players solve this
+one way, and have for years: VLCKit/libVLC, usually *alongside* AVPlayer rather
+than instead of it. [msplayer](https://github.com/latinsundon24/msplayer) routes
+HLS and MP4 to AVPlayer and RTMP/RTSP/UDP/FLV to VLC, falling back between them
+when playback fails. [Kanal](https://github.com/magnusbomann/kanal) ships
+VLCKit 3.7.3 inside a proprietary app and states the LGPL permits it. So B2 is a
+wiring job with a known shape, not a research project.
+
+**And a React Native binding exists for exactly this stack.**
+`expo-libvlc-player` publishes a `57.x` line tracking Expo SDK 57 — `57.0.59`
+at the time of writing, out of 325 releases — and its TV fork documents Expo
+SDK 57+, React Native 0.86+, Android TV and Apple TV, driven by the same
+`EXPO_TV` flag this project already uses. `@lunarr/vlc-player@2.1.1` is the
+New-Architecture-only alternative, carrying MobileVLCKit 3.7.3 and
+TVVLCKit 3.7.3 on Apple platforms. The claim above that this was "untested
+anywhere, by anyone" was written before these were found, and is wrong.
+
+**One number worth having, measured by someone else.** Kanal reports that
+31,027 of 31,176 films in their provider's catalogue were `.mkv` — 99.5%.
+AVPlayer opens none of them. This project has never measured its own
+distribution, and the VOD container question was downgraded to "a degradation"
+above partly for want of data. On that evidence it is not a degradation; it is
+the entire film catalogue.
+
+**What is still genuinely unknown**, and both are cheap:
+
+1. Whether libVLC plays *this* provider's streams. Ten minutes on any borrowed
+   iPhone with the free VLC app — no purchase, no Apple account, no code.
+2. What share of this catalogue is `.mkv`. One `get_vod_streams` call against
+   the real panel, counting `container_extension`.
+
+**What also changed in the repository that day:** `brand.config.js` gained
+`bundleIdentifier`, `app.config.js` gained the whole `ios:` block (identifier,
+build number, `requireFullScreen`, ATS) plus `microphonePermission: false` and
+`faceIDPermission: false`, `secureCredentials.ts` moved to
+`AFTER_FIRST_UNLOCK`, `eligibility.ts` turns Downloads off on iOS for
+guideline 5.2.3, `eas.json` gained the `ios-simulator` profile, and
+`docs/REVIEW_ACCOUNT_CHANNELS.md` lost its `.mkv` recommendation. The Android
+release build was rebuilt afterwards and is unchanged: same 13 permissions, no
+microphone, `verify-brand` passing.

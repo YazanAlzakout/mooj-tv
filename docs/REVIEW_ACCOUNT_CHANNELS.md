@@ -42,8 +42,12 @@
 | الاسم | الرابط | الرخصة |
 |---|---|---|
 | Tears of Steel | `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8` | فيلم Blender مفتوح — CC BY 3.0 |
-| Sintel (1080p) | `https://download.blender.org/durian/movies/Sintel.2010.1080p.mkv` | CC BY 3.0 |
 | Sintel — مقطع دعائي | `https://download.blender.org/durian/trailer/sintel_trailer-480p.mp4` | CC BY 3.0 |
+
+> **لا تضع ملف `.mkv` في هذا الحساب.** كان هنا صفّ يقترح Sintel بصيغة mkv، وأندرويد
+> يشغّلها بلا مشكلة — لكن مشغّل iOS لا يفتحها إطلاقاً. لو استُعمل هذا الحساب لمراجعة App Store،
+> يضغط المراجع على الفيلم الوحيد في الحساب فيفشل التشغيل فوراً. النسخة `.mp4` أعلاه تعمل على
+> المنصّتين. (2026-11-18)
 | Apple BipBop | `https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8` | عيّنة تنشرها Apple للمطوّرين |
 | Mux PTS | `https://test-streams.mux.dev/pts_shift/master.m3u8` | عيّنة تنشرها Mux للمطوّرين |
 

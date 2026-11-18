@@ -47,6 +47,21 @@ const BRAND = {
   packageId: "com.moojtv.player",
 
   /**
+   * The same identity on Apple's side, and permanent in the same way.
+   *
+   * Deliberately identical to `packageId`. Nothing forces the two to match —
+   * Apple and Google keep separate namespaces — but one app under two names is
+   * a reliable source of confusion in signing, in deep links, and in every
+   * later conversation about which build is which. The only reason to diverge
+   * would be a collision on Apple's side, and there is none.
+   *
+   * Written down on 2026-11-18, before any iOS build existed, because a bundle
+   * identifier cannot be changed after the first App Store publication any
+   * more than a package id can after the first Play one.
+   */
+  bundleIdentifier: "com.moojtv.player",
+
+  /**
    * Deep-link scheme, without `://`.
    *
    * The sideload copy gets its own (`<scheme>dev`) because two installed
