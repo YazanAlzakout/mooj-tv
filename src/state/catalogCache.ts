@@ -46,10 +46,34 @@ export interface CachedCatalogSnapshot {
 }
 
 /**
- * Everything previously downloaded for this provider, or `null` when there
- * is nothing usable stored yet. A partial cache is treated as no cache:
- * showing Live but an empty Movies would look like a broken account rather
- * than an incomplete download.
+ * Everything previously downloaded for this provider, or `null` when nothing
+ * has been stored for it yet.
+ *
+ * The test is whether the live section was ever WRITTEN, not whether it has
+ * anything in it. Those are two different facts, and conflating them cost a
+ * whole class of account its cache.
+ *
+ * `section()` in `preloadCatalog` writes a row whenever its fetch SUCCEEDS,
+ * empty answers included — so a stored empty live section means "this
+ * subscription genuinely carries no channels", which is a complete and correct
+ * answer, while a missing row means "we never got that far". The old test,
+ * `live.data.length === 0`, read the first as the second: an account with
+ * films and series but no live channels could never hold a usable cache, no
+ * matter how many times it downloaded one.
+ *
+ * Everything downstream hangs on this one return — see `restoreSession`:
+ * launching with no network threw instead of opening from storage; a transient
+ * failure at login was rethrown instead of falling back to the cache; and
+ * `cachedBeforeAuth ?? preloadCatalog(...)` re-downloaded the entire catalogue,
+ * seven steps behind the PreparingLibrary screen, on every single launch.
+ *
+ * Found 2026-11-18 on the account prepared for Google's review, which is
+ * exactly this shape: zero live channels, one film, one series.
+ *
+ * The sections below live stay optional. A provider that returns films but no
+ * series, or whose series call failed once, keeps a usable cache with that
+ * section empty — it is the viewer's own catalogue either way, and an empty
+ * rail beats re-downloading everything to discover that it is empty.
  */
 export async function readCachedCatalog(
   providerId: string,
@@ -64,7 +88,7 @@ export async function readCachedCatalog(
     readCatalog<CategoryRow[]>(providerId, "series_categories"),
   ]);
 
-  if (!live || live.data.length === 0) return null;
+  if (!live) return null;
 
   return {
     channels: live.data.map((stored) => fromStored(stored, config)),

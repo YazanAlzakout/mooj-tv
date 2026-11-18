@@ -81,3 +81,10 @@ replay_pid*.log
 # The brand kit duplicates assets/fonts/ byte for byte so the folder can be
 # handed over whole; the repository only needs one copy of the nine files.
 /store/raw/fonts/
+
+# The Play handover bundle and its zip are assembled from files already in
+# this repository — the signed AAB, the icon, the screenshots. Keeping a second
+# copy of 110MB of binaries in git buys nothing; rebuild it from store/ and
+# android/app/build/outputs when it is needed again.
+/handover-play/
+/MoojTV-*.zip
