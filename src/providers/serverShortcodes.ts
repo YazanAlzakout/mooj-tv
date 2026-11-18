@@ -52,18 +52,41 @@
  * is what keeps a wrong port from looking like a network fault to a viewer
  * who did nothing wrong.
  */
-export const SERVER_SHORTCODES: Record<string, string> = {
-  /*
-   * Confirmed by the operator on 2026-09-13 as the exact address, `:80`
-   * included. Port 80 is the HTTP default and could be dropped, but it is
-   * kept verbatim on purpose: this is the form already stored on devices
-   * that were set up by hand, so a viewer who types the shortcut and a
-   * viewer who typed the address in full end up with byte-identical
-   * records — nothing downstream that compares two base URLs as strings
-   * can see them as two different servers.
-   */
-  "33": "http://albasera-tv.net:80",
-};
+/**
+ * Empty since 2026-11-18, deliberately, and kept rather than deleted.
+ *
+ * It held exactly one entry — `"33"`, pointing at the panel this app's
+ * customer operates. The comment below already recorded that the owner's plan
+ * was to delete the table once the app was approved. What moved that forward
+ * was the App Store submission, and the reason is worth keeping because it is
+ * not the one the table was built to worry about.
+ *
+ * The concern here was never that a curious customer could read the address
+ * out of a release bundle; the section below says plainly that they always
+ * could. It is that the iOS binary would carry an undocumented way to reach
+ * one specific commercial service, reachable by typing two digits into the
+ * server field, while the App Review notes submitted alongside it said the
+ * app is not affiliated with any provider and ships with no sources. Apple
+ * treats an undisclosed entry point as a hidden feature under guideline
+ * 2.3.1, and the submission is made by a third party under *their* developer
+ * account — so the consequence of a statement the binary contradicts would
+ * land on someone who had no part in writing either.
+ *
+ * Removing the entry rather than hiding it better is the only move that makes
+ * the sentence true instead of merely hard to disprove.
+ *
+ * It is removed on **every** platform, not gated to iOS. A gate would have
+ * left Android carrying an address that the iOS notes deny exists, which is
+ * the same problem with an extra branch. Viewers on any platform type the
+ * full address, which has always worked and is what every hand-set-up device
+ * already stores.
+ *
+ * `resolveServerShortcode` stays, now an identity function, so re-adding a
+ * code is a one-line change to this object and nothing at the call site. If
+ * one is ever added back, read the paragraph above first: whatever is in here
+ * ships inside the binary that carries the store listing's claims.
+ */
+export const SERVER_SHORTCODES: Record<string, string> = {};
 
 /**
  * Expands a shortcut to its full server address, or returns the input

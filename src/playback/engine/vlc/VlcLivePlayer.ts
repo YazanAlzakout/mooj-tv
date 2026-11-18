@@ -4,6 +4,7 @@ import type {
   VLCPlayerRef,
   VLCPlayerSource,
   VLCPlayerTracks,
+  VLCProgressEvent,
   VLCStateChangeEvent,
   VLCTrack,
 } from "@lunarr/vlc-player";
@@ -32,6 +33,33 @@ import type { LivePlaybackStatus, LivePlayer } from "../types";
  * and why, and `handleError` for the two that are not.
  */
 const OPEN_WATCHDOG_MS = 15_000;
+
+/**
+ * How long a channel that has started playing may stop advancing before the
+ * adapter calls it dead.
+ *
+ * The open watchdog above only covers the open. After the first `Playing`
+ * there was nothing at all, and the gap it leaves is the ordinary way an IPTV
+ * channel fails rather than an exotic one: when the server closes the
+ * progressive `.ts` response libVLC reaches `.ended` and `handleEnded` deals
+ * with it — but when the upstream dies while the edge holds the TCP
+ * connection open, no bytes arrive, no state change is delivered, libVLC's
+ * HTTP access has no read timeout that reaches this binding, and the adapter
+ * went on reporting `readyToPlay` for ever over a frozen picture.
+ *
+ * It is detected from `onProgress` rather than from a timer of our own,
+ * because the binding's progress timer is a repeating `Timer` on the main
+ * RunLoop (`ios/VLCPlayerView.swift:867-876`) that calls `emitProgress`
+ * unconditionally — so it keeps firing with a frozen `p.time` and the stall
+ * arrives as an event rather than as an absence. Nothing extra to arm, cancel
+ * or leak.
+ *
+ * Twenty seconds against a five-second cadence means four flat readings
+ * before it fires, which no ordinary rebuffer survives: libVLC emits
+ * `Buffering` for those, and they move the clock again within a second or
+ * two on a working stream.
+ */
+const STALL_TIMEOUT_MS = 20_000;
 
 /**
  * What the adapter reports when libVLC fails before a single byte has been
@@ -310,6 +338,17 @@ export class VlcLivePlayer {
   private sawPlaying = false;
   private sawTracks = false;
   private failed = false;
+
+  /**
+   * Stall detection state. `positionAdvanced` is the arming condition and it
+   * is not optional: a live `.ts` with no PCR mapping libVLC can use reports
+   * a clock that never moves at all, and on such a channel a position that
+   * has never advanced is normal rather than a fault. Only a channel that has
+   * been seen to advance once can be judged to have stopped.
+   */
+  private lastPosition = -1;
+  private lastAdvanceAt = 0;
+  private positionAdvanced = false;
 
   private audioTracksValue: AudioTrack[] = [];
   private subtitleTracksValue: SubtitleTrack[] = [];
@@ -593,6 +632,27 @@ export class VlcLivePlayer {
   play(): void {
     this.surfaceRef?.current?.play();
     if (this.snapshot.paused) this.update({ paused: false });
+    /*
+      This can also be the start of an open rather than a resume, and then it
+      needs everything an open gets.
+
+      The case is a surface that mounted paused — the viewer paused a channel
+      and turned the phone, so `attachSurface` deliberately armed nothing. The
+      native player exists but has never decoded a frame, and the open does
+      not actually begin until here. Without this the deferred open runs with
+      no watchdog, so a channel that has gone off the air in the meantime
+      would spin for ever, and with no track poll, so its audio tracks would
+      never be discovered.
+
+      `sawPlaying` is what separates the two: a media that has played is being
+      resumed, and libVLC resumes from its own buffer with nothing to wait
+      for.
+    */
+    if (this.snapshot.source !== undefined && !this.sawPlaying && !this.failed) {
+      this.setStatus("loading");
+      this.armWatchdog();
+      this.startTrackPoll();
+    }
   }
 
   pause(): void {
@@ -863,7 +923,15 @@ export class VlcLivePlayer {
    */
   readonly handleLoadStart = (): void => {
     if (this.failed) return;
-    this.setStatus("loading");
+    /*
+      A player built paused announces LoadStart like any other, but it will
+      not play and so will never answer with `Playing`. Reporting `loading`
+      for it puts the screen's spinner (`[channelId].tsx:2034`, and
+      `SplitChannelView`'s own) over a view that is deliberately stopped, with
+      nothing coming to take it away. The volume still has to be written here
+      — that is this handler's other job and it does not depend on playing.
+    */
+    if (!this.snapshot.paused) this.setStatus("loading");
     this.reassertVolume();
   };
 
@@ -906,6 +974,7 @@ export class VlcLivePlayer {
     if (this.failed) return;
     this.clearWatchdog();
     this.sawPlaying = true;
+    this.lastAdvanceAt = Date.now();
     this.setStatus("readyToPlay");
     this.setPlaying(true);
     this.reassertVolume();
@@ -913,6 +982,49 @@ export class VlcLivePlayer {
 
   readonly handlePaused = (): void => {
     this.setPlaying(false);
+  };
+
+  /**
+   * The only reader of a position in this adapter, and it reads it to decide
+   * whether the stream is still alive — see `STALL_TIMEOUT_MS`.
+   *
+   * Everything here is a guard against calling a working channel dead:
+   *
+   *   - before the first `Playing` the open watchdog owns the timeout;
+   *   - `positionAdvanced` keeps a channel whose clock never moves out of it
+   *     entirely;
+   *   - a paused channel is supposed to be frozen, so the clock is pushed
+   *     forward rather than judged — otherwise a pause longer than the
+   *     timeout would be reported as a dropped connection the moment the
+   *     viewer came back;
+   *   - and `fail` is once per media, so a stall cannot double-count against
+   *     the screen's retry budget.
+   */
+  readonly handleProgress = (event: VLCProgressEvent): void => {
+    if (this.failed || !this.sawPlaying) return;
+
+    const position = event.currentTime;
+    if (!Number.isFinite(position)) return;
+
+    const now = Date.now();
+
+    if (position > this.lastPosition) {
+      this.lastPosition = position;
+      this.lastAdvanceAt = now;
+      this.positionAdvanced = true;
+      return;
+    }
+
+    if (!this.positionAdvanced) return;
+
+    if (this.snapshot.paused) {
+      this.lastAdvanceAt = now;
+      return;
+    }
+
+    if (now - this.lastAdvanceAt >= STALL_TIMEOUT_MS) {
+      this.fail("network_timeout", "the stream stopped advancing while still connected");
+    }
   };
 
   /**
@@ -1071,6 +1183,9 @@ export class VlcLivePlayer {
     this.sawPlaying = false;
     this.sawTracks = false;
     this.failed = false;
+    this.lastPosition = -1;
+    this.lastAdvanceAt = 0;
+    this.positionAdvanced = false;
     this.cancelTrackPoll();
 
     if (this.audioTracksValue.length > 0) {

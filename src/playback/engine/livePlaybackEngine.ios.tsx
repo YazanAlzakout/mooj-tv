@@ -2,6 +2,8 @@ import VLCPlayerView, { type VLCPlayerRef, type VLCResizeMode } from "@lunarr/vl
 import type { VideoContentFit } from "expo-video";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
+import { BRAND } from "@/core/brand";
+
 import type { LivePlayer, LivePlayerSetup, LiveVideoViewProps } from "./types";
 import { asLivePlayer, asVlcLivePlayer, VlcLivePlayer } from "./vlc/VlcLivePlayer";
 
@@ -55,12 +57,44 @@ const RESIZE_MODES: Record<VideoContentFit, VLCResizeMode> = {
 /**
  * `onProgress` cadence, in milliseconds.
  *
- * Nothing on the live screen reads a position — it is live television — so
- * this is set to the cheapest cadence the binding allows rather than to 0,
- * which makes libVLC emit on every time change
+ * Nothing on the live screen reads a position — it is live television — and
+ * this was 10s on that basis, as the cheapest cadence the binding allows
+ * short of 0, which makes libVLC emit on every time change
  * (`ios/VLCPlayerView.swift:638`) and bridge an event per tick for nobody.
+ *
+ * The adapter now reads it, for one purpose: a position that stops advancing
+ * while the connection stays open is the only evidence available that a
+ * channel has died, since no state change is delivered for it. See
+ * `STALL_TIMEOUT_MS` in `vlc/VlcLivePlayer.ts`. Five seconds gives four flat
+ * readings inside that timeout, which is enough to be sure and still one
+ * bridge event every five seconds — cheaper than the 1s cadence the VOD
+ * screens run at on the other engine.
  */
-const PROGRESS_INTERVAL_MS = 10_000;
+const PROGRESS_INTERVAL_MS = 5_000;
+
+/**
+ * What the lock screen, Control Center, CarPlay and a paired watch are told
+ * is playing.
+ *
+ * `showNowPlaying` is true (see `LiveVideoView` for why it has to be), so a
+ * Now Playing entry is published for every channel whether or not anything
+ * fills it in. Left empty, the binding falls back to libVLC's own media title
+ * and then to the URL's last path component
+ * (`ios/VLCPlayerView.swift:787-813`) — which for this provider is a bare
+ * stream id like `283572.ts`, and for a libVLC-supplied title could be more
+ * of the MRL than belongs on a lock screen, given these URLs carry the
+ * viewer's username and password as path segments.
+ *
+ * A constant is used rather than the channel name because the adapter is
+ * never told the channel name: `replaceAsync` takes the source shape the
+ * screen already passes to `expo-video`, `{ uri, headers }`, and widening it
+ * would mean changing a call the Android engine shares. The channel name
+ * would be better and the prop supports it — an override title wins over the
+ * media title at `swift:755` — so if it is ever wanted, the route is a small
+ * adapter method the screen calls when it selects a channel, not a change to
+ * `replaceAsync`.
+ */
+const NOW_PLAYING = { title: BRAND.displayName } as const;
 
 /**
  * Constructs the player object the screen holds for its whole life.
@@ -151,7 +185,9 @@ export function LiveVideoView({ player, style, contentFit }: LiveVideoViewProps)
       resizeMode={RESIZE_MODES[contentFit ?? "contain"]}
       continueAudioInBackground={surface.continueAudioInBackground}
       showNowPlaying
+      nowPlayingMetadata={NOW_PLAYING}
       progressUpdateInterval={PROGRESS_INTERVAL_MS}
+      onProgress={engine.handleProgress}
       onLoadStart={engine.handleLoadStart}
       onLoad={engine.handleOpening}
       onBuffer={engine.handleBuffer}
