@@ -12,7 +12,7 @@ import { toPlaybackError } from "@/core/errors/PlaybackError";
  * becomes `http_unauthorized`, "404"/"not found" becomes
  * `stream_unavailable`. That works on Android only because ExoPlayer writes
  * the HTTP status into the message ("Source error / Response code: 403",
- * quoted at `[channelId].tsx:1957`).
+ * quoted at `core/errors/playbackReason.ts:9-11`).
  *
  * libVLC's error event carries no message at all. Its payload is
  * `{type, currentTime, duration}` and nothing else
@@ -21,11 +21,11 @@ import { toPlaybackError } from "@/core/errors/PlaybackError";
  * that package to recover a status from. So on iOS every single failure would
  * come back `category: "unknown"`.
  *
- * That is not a wording problem, it is control flow. `[channelId].tsx:898`
- * and `:1074` branch the whole retry machine on
+ * That is not a wording problem, it is control flow. `[channelId].tsx:937`
+ * and `:1125` branch the whole retry machine on
  * `failure.category !== "http_unauthorized"`: walk the four candidate URL
  * shapes or keep the shape, two retries at 1s or six at 2.5s. The two longest
- * comments in that file (`:874-896` and `:1049-1069`) exist because walking
+ * comments in that file (`:901-923` and `:1103-1123`) exist because walking
  * the shapes on a *busy* connection slot was measured, twice, as the thing
  * that turns a one-second wait into a 23-second one and twelve stream opens
  * into an anti-flood block.

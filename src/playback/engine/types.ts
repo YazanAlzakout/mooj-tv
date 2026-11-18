@@ -20,12 +20,23 @@ import type { VideoContentFit, VideoPlayer } from "expo-video";
  *   - `src/playback/usePlayerGestures.ts:206`     (`volume`, and two reads)
  *   - `src/playback/usePlaybackTracks.ts:128`     (tracks, four events)
  *
- * `usePlaybackTracks` is shared with the film and episode screens, which stay
- * on `expo-video`/AVPlayer (mp4 plays there — docs/IOS_READINESS.md:190-193),
- * and its own comment at :117-125 warns that its parameter list must not be
- * touched because the three player screens pass `preferredAudioLang` and
- * `preferredSubtitleLang` positionally. Widening four shared hooks to a union
- * would therefore ripple into screens that have nothing to do with iOS.
+ * `usePlaybackTracks` is shared with the film and episode screens, which are
+ * still on `expo-video`/AVPlayer, and its own comment at :117-125 warns that
+ * its parameter list must not be touched because the three player screens pass
+ * `preferredAudioLang` and `preferredSubtitleLang` positionally. Widening four
+ * shared hooks to a union would therefore ripple into screens that have
+ * nothing to do with iOS.
+ *
+ * "Still on", not "stay on". AVPlayer plays 13,018 of this account's 20,124
+ * films, which are `.mp4`; the remaining ~7,100 are the `.mkv`/x265 share
+ * AVFoundation refuses, and the plan in docs/IOS_READINESS.md was always
+ * AVPlayer for the former and libVLC for the latter. Only the live half of
+ * that is built. This seam cannot absorb the other half as it stands — it is
+ * live-shaped (`useLivePlayer(setup)` with a null source, no position
+ * readers), while the VOD screens construct the player *with* a source and
+ * use `currentTime`, `duration` and `playbackRate`, every one of which
+ * `VlcLivePlayer` deliberately does not implement. A VOD adapter is
+ * outstanding work, not a gap in this file.
  *
  * So the libVLC adapter presents `expo-video`'s surface instead, and the one
  * cast that makes that legal lives in `vlc/VlcLivePlayer.ts` with the list of
@@ -49,7 +60,7 @@ export type LivePlayerSetup = (player: LivePlayer) => void;
  * The four statuses the live screen mirrors into React state, which are
  * `expo-video`'s own. Both engines emit `statusChange` with this set and
  * **only on an actual transition** — the screen depends on that twice, at
- * `[channelId].tsx:1022-1027` and `:131-135`.
+ * `[channelId].tsx:1075-1081` and `:148-152`.
  */
 export type LivePlaybackStatus = "idle" | "loading" | "readyToPlay" | "error";
 
@@ -60,8 +71,8 @@ export type LivePlaybackStatus = "idle" | "loading" | "readyToPlay" | "error";
  *
  * `nativeControls` and `allowsPictureInPicture` are accepted and ignored by
  * the libVLC surface: libVLC draws no controls of its own, and there is no
- * picture-in-picture on that path (an accepted feature gap, recorded in
- * docs/IOS_READINESS.md:315-316).
+ * picture-in-picture on that path — a feature gap accepted as a decision in
+ * docs/DECISIONS.md.
  */
 export interface LiveVideoViewProps {
   player: LivePlayer;

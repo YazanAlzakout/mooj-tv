@@ -1,7 +1,7 @@
 import { useEventListener } from "expo";
 import { useKeepAwake } from "expo-keep-awake";
 import { router, useLocalSearchParams } from "expo-router";
-import { useVideoPlayer, VideoView, type VideoContentFit } from "expo-video";
+import type { VideoContentFit } from "expo-video";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -23,7 +23,6 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { brandLogoOnDark } from "@/components/BrandLogo";
 import { Focusable } from "@/components/Focusable";
 
-import { toPlaybackError } from "@/core/errors/PlaybackError";
 import { playbackReasonKey } from "@/core/errors/playbackReason";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { PROVIDER_REQUEST_HEADERS } from "@/core/network/providerHeaders";
@@ -34,6 +33,24 @@ import { getAppState, setPlayerFitMode } from "@/db/repositories/appStateReposit
 import { setLastChannelId } from "@/db/repositories/liveTvStateRepository";
 import type { LiveChannel } from "@/domain/provider/types";
 import { ChannelGuideOverlay } from "@/playback/ChannelGuideOverlay";
+/*
+  The player engine, and the only place this screen says which one it is
+  using — which is nowhere: `@/playback/engine` resolves to `expo-video` on
+  Android (unchanged, what ships today) and to libVLC on iOS, where
+  AVFoundation refuses this provider's bare progressive MPEG-TS. Read
+  `src/playback/engine/livePlaybackEngine.ios.tsx` for what libVLC cannot
+  match and what is done about it; the three differences this screen has to
+  know about are `releaseLiveSource` (a null source has no libVLC meaning),
+  `toEnginePlaybackError` (libVLC's failures carry no HTTP status, so the
+  engine classifies them itself), and rotation, noted where the two layout
+  branches part company below.
+*/
+import {
+  LiveVideoView,
+  releaseLiveSource,
+  toEnginePlaybackError,
+  useLivePlayer,
+} from "@/playback/engine";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { useTVRemote } from "@/playback/useTVRemote";
 import { PlayerLifecycleMonitor } from "@/playback/diagnostics/PlayerLifecycleMonitor";
@@ -246,7 +263,7 @@ export default function LivePlayerScreen() {
     return session.channels.filter((c) => c.categoryId === listCategoryId);
   }, [session, listCategoryId]);
 
-  const player = useVideoPlayer(null, () => {
+  const player = useLivePlayer(() => {
     PlayerLifecycleMonitor.playerConstructed();
   });
 
@@ -791,7 +808,7 @@ export default function LivePlayerScreen() {
       Response code: 403" after six quick zaps.
 
       `SOURCE_RELEASE_MS` is the pause between letting go and reaching for
-      the next one. `replaceAsync(null)` resolving means the command was
+      the next one. `releaseLiveSource` resolving means the command was
       accepted, not that the socket is shut — the close happens on
       ExoPlayer's own thread — so a beat is needed before the panel will
       count the slot as free.
@@ -844,11 +861,27 @@ export default function LivePlayerScreen() {
       and playback never stops, so focus is never dropped and the loop is
       never woken.
     */
+    /*
+      On the libVLC engine this condition cannot be honoured, and saying so
+      is cheaper than pretending: `setSource` there always releases the old
+      player before building the new one
+      (`@lunarr/vlc-player/ios/VLCPlayerView.swift:159-165`), so the release
+      happens whether this line asks for it or not. Nothing is lost by it —
+      the cost the condition exists to avoid is expo-video's
+      `AudioFocusManager` loop, measured above, which is not on that path.
+
+      Read the asymmetry the right way round, because the obvious reading is
+      backwards. On a line with room, `releaseFirst` is false, so neither the
+      release nor the `SOURCE_RELEASE_MS` beat below is in play at all: there
+      Android replaces the source without stopping, while iOS still tears the
+      `VLCMediaPlayer` down first, and the black gap is the whole iOS-only
+      cost. The beat applies only in the other branch, where iOS pays it on
+      top of a release it would have performed anyway.
+    */
     const releaseFirst = needsReleaseWait(session?.accountInfo?.maxConnections);
 
     const opened = releaseFirst
-      ? player
-          .replaceAsync(null)
+      ? releaseLiveSource(player)
           .then(
             () =>
               new Promise((resolve) => {
@@ -894,7 +927,19 @@ export default function LivePlayerScreen() {
           and when the budget runs out the viewer is told the account is in
           use somewhere else, which is the one cause they can act on.
         */
-        const failure = toPlaybackError(error);
+        /*
+          `toEnginePlaybackError`, not `toPlaybackError`: on the libVLC
+          engine the failure arrives with its category already decided,
+          because libVLC's error event carries no message for
+          `toPlaybackError` to match against. On Android nothing sets that
+          field and this is `toPlaybackError` exactly. See
+          `src/playback/engine/enginePlaybackError.ts`.
+
+          Dead on the libVLC path either way — that engine's `replaceAsync`
+          never rejects, deliberately, so that one failure cannot both land
+          here and arrive on `statusChange` and spend the retry budget twice.
+        */
+        const failure = toEnginePlaybackError(error);
         const shapeIsWrong = failure.category !== "http_unauthorized";
 
         if (shapeIsWrong && advanceCandidate(target, isStale)) return;
@@ -1012,7 +1057,22 @@ export default function LivePlayerScreen() {
     }
 
     if (newStatus === "error" && error) {
-      const playbackError = toPlaybackError(error);
+      /*
+        The one expression on this screen that had to change for the second
+        engine, and the most consequential one in the file.
+
+        Everything below branches on `playbackError.category`, and on Android
+        that category comes out of ExoPlayer's message, which carries the HTTP
+        status ("Source error / Response code: 403"). libVLC's error event
+        carries no message and no code at all, so its engine decides the
+        category from libVLC's own state machine and attaches it to the error
+        — and this call prefers that answer when it is there.
+        `src/playback/engine/enginePlaybackError.ts` explains why, and
+        `OPAQUE_OPEN_FAILURE_CATEGORY` in the libVLC adapter states plainly
+        what iOS has to assume and what that costs. On Android nothing sets
+        the field and this is `toPlaybackError`, unchanged.
+      */
+      const playbackError = toEnginePlaybackError(error);
       PlayerLifecycleMonitor.errorOccurred(playbackError.message);
 
       /*
@@ -1439,7 +1499,16 @@ export default function LivePlayerScreen() {
     const subscription = AppState.addEventListener("change", (next: AppStateStatus) => {
       if (unmountedRef.current) return;
       if (next === "background") {
-        void player.replaceAsync(null);
+        /*
+          Still needed on the libVLC engine, and for an extra reason there:
+          its `continueAudioInBackground={false}` pauses on background and
+          then *auto-resumes* on foreground
+          (`@lunarr/vlc-player/ios/VLCPlayerView.swift:95-102`), which would
+          bring back the very stream this is dropping. Dropping the source
+          releases the native player, which clears that pending resume, and
+          the `active` arm below is what actually re-opens the channel.
+        */
+        void releaseLiveSource(player);
       } else if (next === "active" && currentChannelRef.current) {
         selectChannel(currentChannelRef.current);
       }
@@ -1699,6 +1768,36 @@ export default function LivePlayerScreen() {
     return <View style={styles.safeArea} />;
   }
 
+  /*
+    ## The two trees below cost a reconnect per rotation on iOS
+
+    This return and the one after it are different trees — at child position
+    zero the element types differ (`SplitChannelView` against `StatusBar`) —
+    so React unmounts the whole subtree, video surface included, every time
+    the phone is turned.
+
+    On `expo-video` that is free, and `SplitChannelView`'s own note says why:
+    the player is an object this screen owns and the view is only a window
+    onto it, so the picture never unmounts and the provider connection is
+    never dropped. libVLC has no such separation. Its native player is built
+    inside the view and every unmount path releases it, so there is no
+    adapter anywhere that can deliver one player across two render trees.
+
+    What happens instead: the libVLC engine notices the new surface and
+    re-opens the current channel itself, emitting no error, so no retry
+    budget is spent and this screen only sees `loading` and then
+    `readyToPlay` again. The viewer pays a black gap and a re-buffer for each
+    turn of the phone, and the account pays one request — a human action, not
+    a burst, so nothing near the rate the panel objects to.
+
+    The fix, if that gap is objectionable on a real iPhone, is to fold these
+    two returns into one tree that mounts the video surface exactly once and
+    positions it by style — a layout edit that touches no playback logic. It
+    was not done here because it changes the render path of the Android build
+    that is live on Play, which this work is not allowed to touch, and it
+    could not be tested on either platform from where it would have been
+    written. See `VlcLivePlayer.attachSurface`.
+  */
   if (showSplit) {
     return (
       /*
@@ -1796,7 +1895,7 @@ export default function LivePlayerScreen() {
       */}
       <NavigationBar hidden />
       <View style={styles.playerArea}>
-        <VideoView style={styles.video} player={player} nativeControls={false}
+        <LiveVideoView style={styles.video} player={player} nativeControls={false}
           allowsPictureInPicture contentFit={contentFit} />
 
         {/*

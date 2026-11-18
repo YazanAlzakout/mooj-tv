@@ -1,6 +1,14 @@
 import type { VideoContentFit, VideoPlayer } from "expo-video";
-import { VideoView } from "expo-video";
 import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, Text, View } from "react-native";
+
+/*
+  The engine's surface rather than `expo-video`'s `VideoView` directly: on
+  Android this *is* `VideoView`, re-exported, and on iOS it is the libVLC
+  surface. The `player` prop keeps its `VideoPlayer` type either way — see
+  `src/playback/engine/types.ts` for why the libVLC adapter presents that
+  surface instead of a neutral one.
+*/
+import { LiveVideoView } from "@/playback/engine";
 
 import { useMemo } from "react";
 
@@ -30,6 +38,13 @@ import {
  * That matters more than it looks: the test account allows a single
  * connection, so a layout that rebuilt the player on every switch would
  * spend that connection reconnecting instead of playing.
+ *
+ * That paragraph is true of `expo-video`, which is to say of Android. On the
+ * libVLC engine the native player lives inside the view and is rebuilt for
+ * every source whatever the layout does, so there the saving is the one this
+ * layout still makes on its own: picking a channel from the list is not a
+ * navigation and does not tear down the screen. See
+ * `src/playback/engine/vlc/VlcLivePlayer.ts`.
  *
  * Deliberately carries almost no chrome: the list below does the job of
  * previous/next and channel-number entry, so all that is left on the
@@ -112,7 +127,7 @@ export function SplitChannelView({
   return (
     <View style={styles.root}>
       <View style={styles.videoBox}>
-        <VideoView
+        <LiveVideoView
           style={styles.video}
           player={player}
           nativeControls={false}
