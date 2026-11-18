@@ -88,3 +88,11 @@ replay_pid*.log
 # android/app/build/outputs when it is needed again.
 /handover-play/
 /MoojTV-*.zip
+
+# The iOS handover pack is the same idea with one difference worth stating: it
+# carries no binary at all, because nobody here can produce one. There is no
+# Mac, the libVLC pod has never compiled, and a submittable iOS build can only
+# be made on the Apple account that will publish it. So the pack is documents,
+# the 1024 icon and the credentials file — generated from store/ and assets/ or
+# written in docs/. Rebuild it rather than commit it.
+/handover-ios/

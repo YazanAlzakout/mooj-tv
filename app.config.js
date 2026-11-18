@@ -296,10 +296,26 @@ module.exports = {
          * The export-compliance declaration, answered here rather than by hand.
          *
          * Apple asks every build whether it uses encryption that is not exempt
-         * under US export rules. This app uses none: it speaks HTTP and HTTPS
-         * to a server the viewer chooses, and HTTPS is explicitly exempt, as is
-         * the platform keychain that holds the credentials. Nothing here
-         * implements or bundles a cipher of its own.
+         * under US export rules. The app's own code uses none: it speaks HTTP
+         * and HTTPS to a server the viewer chooses, and HTTPS is explicitly
+         * exempt, as is the platform keychain that holds the credentials.
+         *
+         * The sentence that used to follow — "nothing here implements or
+         * bundles a cipher of its own" — stopped being true on 2026-11-18, and
+         * it is recorded here rather than quietly deleted. MobileVLCKit (and
+         * TVVLCKit), linked statically through `@lunarr/vlc-player` on Apple
+         * platforms, carries its own TLS stack — gnutls and libgcrypt — for
+         * `https` and `rtsps` input. The build therefore does bundle ciphers,
+         * even though no line of this app calls them and the only transport it
+         * uses for media is plain HTTP.
+         *
+         * `false` is kept, because the basis for it survives on the ordinary
+         * reading: publicly available open-source code implementing standard
+         * algorithms, used for nothing but standard transport. But this is a
+         * declaration to a government, made by whoever uploads the build under
+         * their own developer account — not by this file. Whoever submits has
+         * to confirm it themselves and change it here if their answer differs.
+         * It is called out in the iOS handover notes for that reason.
          *
          * Without this key App Store Connect stops and asks the question
          * interactively on every single upload, which is both a delay and an

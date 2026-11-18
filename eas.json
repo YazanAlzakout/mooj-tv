@@ -27,6 +27,20 @@
       "ios": {
         "simulator": true
       }
+    },
+    "ios-device": {
+      "developmentClient": false,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    },
+    "ios-store": {
+      "distribution": "store",
+      "autoIncrement": false,
+      "ios": {
+        "resourceClass": "m-medium"
+      }
     }
   }
 }
