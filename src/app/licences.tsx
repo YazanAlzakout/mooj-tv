@@ -117,13 +117,13 @@ const ENTRIES: Entry[] = [
     name: "libVLC (MobileVLCKit on iOS, TVVLCKit on tvOS)",
     licence: "LGPL 2.1 or later",
     note:
-      "Apple platforms only, and statically linked: MobileVLCKit on iOS and " +
-      "TVVLCKit on tvOS, from VideoLAN's VLCKit, at version 3.7.3 or the nearest " +
-      "compatible release. It is the live playback engine " +
-      "on those platforms, where AVFoundation refuses these streams. The binary also " +
-      "carries libVLC's own TLS and crypto stack, gnutls and libgcrypt, which is what " +
-      "serves https and rtsps. The Android build excludes the package and contains no " +
-      "libVLC.",
+      "Apple platforms only: MobileVLCKit on iOS and TVVLCKit on tvOS, from " +
+      "VideoLAN's VLCKit, at version 3.7.3 or the nearest compatible release. It is " +
+      "the live playback engine on those platforms, where AVFoundation refuses these " +
+      "streams. It ships as a separate dynamic framework inside the app bundle, at " +
+      "Frameworks/MobileVLCKit.framework, and can be replaced there. It also carries " +
+      "libVLC's own TLS and crypto stack, gnutls and libgcrypt, which is what serves " +
+      "https and rtsps. The Android build excludes the package and contains no libVLC.",
     url: "https://code.videolan.org/videolan/VLCKit",
   },
   {

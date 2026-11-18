@@ -67,22 +67,35 @@ from the CocoaPods trunk at build time. Which binary depends entirely on the pla
 **License: LGPL 2.1 or later.** That is the basis on which proprietary apps ship VLCKit;
 docs/IOS_READINESS.md cites one that does.
 
-**Still open: the LGPL relinking obligation, again, and harder here than for FFmpeg.** The
-podspec sets `s.static_framework = true`, so MobileVLCKit/TVVLCKit would link *statically* into
-the app binary. The relinking provision recorded as still-open for the FFmpeg `.so` above applies
-to this too, and the argument available there — that JNI dynamic loading satisfies it — does not
-apply to a static link. The licensing note in docs/IOS_READINESS.md reasons from *dynamic*
-linking being the standard argument; that is not the configuration this podspec produces. What a
-static MobileVLCKit link obliges us to publish, and whether the pod can be built non-statically
-at all without breaking the Fabric/Swift header arrangement the podspec's comments describe, has
-not been answered by anyone. **It needs answering before an iOS binary is distributed, not
-after.**
+**Answered 2026-11-18, by building it: the link is dynamic, and the relinking obligation is
+satisfied the easy way.** This section previously read that `s.static_framework = true` in the
+podspec meant MobileVLCKit would link *statically* into the app binary, that this was harder than
+the FFmpeg case, and that it had to be answered before an iOS binary was distributed. The first
+EAS build the project has ever produced with this dependency settles it, and the reading was
+wrong.
 
-**Still open: the TLS/crypto stack MobileVLCKit brings with it.** MobileVLCKit bundles its own
-TLS/crypto stack — gnutls and libgcrypt — so that `https` and `rtsps` work without the system
-one. Those are separate upstream projects with their own license terms. Neither those terms nor
-whether bundled crypto changes anything about the App Store encryption/export declaration has
-been looked at here.
+The artifact of build `1219d2dc` (profile `ios-simulator`, commit `edc92a5`) contains:
+
+    MoojTV.app/Frameworks/MobileVLCKit.framework/     84 MB
+
+A separate dynamic framework inside the bundle, not symbols folded into the app binary.
+`s.static_framework = true` governs how CocoaPods treats the *wrapper* pod, not how the VLCKit
+binary it depends on is vendored — MobileVLCKit ships as a prebuilt dynamic framework and stays
+one. So the standard LGPL argument applies here exactly as docs/IOS_READINESS.md assumed: a
+recipient can replace `Frameworks/MobileVLCKit.framework` with their own build of libVLC and
+re-sign the bundle, which is what the relinking provision asks for. Nothing has to be published
+to satisfy it beyond the notice already in `src/app/licences.tsx`, which now states where the
+framework sits and that it can be replaced.
+
+This also means the app bundle carries an extra 84 MB on Apple platforms. That is a real cost
+and belongs in any size discussion; it is not negotiable without dropping live TV on iOS.
+
+**Confirmed, same build: MobileVLCKit does bundle its own TLS/crypto stack.** `gnutls` and
+`gcrypt` both appear as symbols in the shipped framework binary. They are separate upstream
+projects with their own terms, and **that part is still open**: those terms have not been read,
+and the entry in `src/app/licences.tsx` names them without reproducing their notices. The
+export-compliance consequence is reasoned about in `app.config.js`, where the declaration is
+recorded as belonging to whoever uploads the build rather than to this repository.
 
 ## Everything else
 
