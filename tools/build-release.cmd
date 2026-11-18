@@ -44,8 +44,13 @@ if not exist "%GRADLE_TMP%" mkdir "%GRADLE_TMP%"
 
 set "JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=%GRADLE_TMP%"
 
+rem `if not defined` rather than `if "%TASK%"==""`: the string comparison breaks
+rem the moment more than one task is passed, because CMD expands it to
+rem   if "assembleRelease bundleRelease"==""
+rem and chokes on the embedded quotes with "was unexpected at this time". Caught
+rem on 2026-11-18 by the build it was supposed to run silently not running at all.
 set "TASK=%*"
-if "%TASK%"=="" set "TASK=assembleRelease"
+if not defined TASK set "TASK=assembleRelease"
 
 echo Building %TASK% with AF_UNIX sockets under %GRADLE_TMP%
 call "%PROJECT%\android\gradlew.bat" -p "%PROJECT%\android" %TASK%
