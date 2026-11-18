@@ -7,7 +7,7 @@ the dev environment) — see the method note below.
 
 | Channel | stream_id | Video | Audio | Notes |
 |---|---|---|---|---|
-| KU: NRT 3 HD | 264311 | H.265 | MPEG-1 Layer II (MP2) | Confirmed via PMT stream_type 0x03. Silent before the FFmpeg MP2 decoder fix — **audio confirmed working on-device after the fix**, 2026-09-01 (docs/DECISIONS.md). |
+| KU: NRT 3 HD | 264311 (see note) | H.265 | MPEG-1 Layer II (MP2) | Confirmed via PMT stream_type 0x03. Silent before the FFmpeg MP2 decoder fix — **audio confirmed working on-device after the fix**, 2026-09-01 (docs/DECISIONS.md). |
 | KU: CIRA TV HD | 264322 | — | — | PMT parse failed (probe script bug, not investigated further — one confirmed case was enough to act on). |
 
 ## What this means
@@ -30,3 +30,12 @@ parsed the MPEG-TS Program Association/Map Tables (PAT/PMT) by hand to read each
 stream's `stream_type` byte. This is a one-off diagnostic script, not part of the app — a proper
 Milestone 4 codec probe (representative sampling across categories, documented per-server) is
 still open.
+
+---
+
+> **الأرقام في هذا الجدول قديمة.** قيست على حساب سابق، و`264311` لم يعد
+> موجوداً على الحساب الحالي — طلبُه يُرجع `406`، وهو ما قُرئ خطأً يوم 2026-11-18 على أنه رفضٌ
+> من البانل قبل أن يتبيّن أنه رقم ميت. نفس القناة رقمها الآن `283572`، وطلبها يُرجع
+> `HTTP 200` و`video/mp2t` وبثّاً فعلياً.
+>
+> قبل استعمال أي رقم من هنا، تأكّد أنه موجود في `get_live_streams` للحساب الذي تختبر عليه.

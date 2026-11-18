@@ -130,3 +130,157 @@ guideline 5.2.3, `eas.json` gained the `ios-simulator` profile, and
 `docs/REVIEW_ACCOUNT_CHANNELS.md` lost its `.mkv` recommendation. The Android
 release build was rebuilt afterwards and is unchanged: same 13 permissions, no
 microphone, `verify-brand` passing.
+
+---
+
+# What a day of running the app on iOS actually established — 2026-11-18
+
+Everything above this line was written before any iOS binary existed. This
+section is written after one, and several of its confident claims did not
+survive contact. Read this first; where it disagrees with the plan above, this
+is the one that was measured.
+
+## The app runs on iOS
+
+EAS build `819a7469`, six minutes, from Windows, no Mac. Then three more builds
+the same afternoon. The react-native-tvos fork, Reanimated, Worklets and the
+whole Expo module set pod-install and compile for Apple with nothing beyond the
+`ios:` block added that morning.
+
+Driven on an iPhone 15 Pro simulator through Appetize, with a real account
+(11,294 channels, 20,124 films, 6,179 series), the app:
+
+- completed onboarding, the terms gate and provider setup
+- **authenticated and downloaded the entire 37,000-item catalogue over plain
+  HTTP** — ATS works, and `NSAllowsArbitraryLoads` is verifiable in the shipped
+  `Info.plist` as bytes, not as config
+- rendered every screen correctly, including the flush tab bar, which came out
+  right first time
+- showed no Download button on the film detail screen, which is the
+  guideline 5.2.3 change working
+
+Six unknowns from the plan above are closed by that list.
+
+## Playback: what is settled, and how
+
+| Tested | Result |
+|---|---|
+| mp4 film, Safari on a real iPhone | **plays** |
+| bare `.ts` channel, Safari on a real iPhone | white screen, no player |
+| the app's own bundled splash video, in the simulator | plays |
+| mp4 film, in the app, in the simulator | fails, `playbackUnknown` |
+| 37k-item catalogue over HTTP, in the app | loads completely |
+
+Safari uses the same AVFoundation stack the player does. So:
+
+**Films play on AVFoundation.** The film that failed inside the app was probed
+byte by byte: `ftyp` brand `isom`, `moov` at offset 36 (faststart), video
+`avc1` (H.264), audio `mp4a` (AAC), served at 2 MB/s over a 302 redirect to
+`lb1.albasera-tv.net` with a one-time token. That is the single best-supported
+combination Apple has. 13,018 of this account's 20,124 films are `.mp4`.
+
+**Bare MPEG-TS does not play on AVFoundation.** Safari produced a white page
+rather than a player — the shape of a response iOS cannot render at all, as
+distinct from the film, where Safari built a player and then buffered. Apple's
+documented path for `.ts` is as a segment inside an HLS playlist, never as a
+progressive stream. All 11,294 channels on this account are bare `.ts`:
+`allowed_output_formats` is `["ts","rtmp"]`, so `buildLiveStreamCandidates`
+never even offers an `.m3u8`.
+
+**So the architecture is hybrid, and now for a measured reason:** AVPlayer for
+the two thirds of films it plays natively — keeping picture-in-picture,
+AirPlay, background audio and Now Playing, all four of which this app already
+asks for — and libVLC for the channels and the `.mkv` third.
+
+## The simulator cannot answer a playback question
+
+A film that demonstrably plays in Safari on real hardware fails in the
+simulator, while a bundled local video plays there. Local decode works; network
+playback through AVPlayer does not. Every playback result from Appetize is
+therefore uninformative, in either direction.
+
+This cost most of an afternoon, and the sequence of wrong conclusions is worth
+keeping because each one looked reasonable:
+
+1. *"The simulator is weak at video"* — plausible, and it stopped the
+   investigation. Wrong: the owner saw the splash play.
+2. *"Then it must be ATS for AVFoundation"* — this one is documented in this
+   repo's own config comment, which is exactly why it was convincing. Adding
+   `NSAllowsArbitraryLoadsInMedia` and `NSAllowsArbitraryLoadsInWebContent`
+   broke the login outright: `fetch failed: ... App Transport Security policy
+   requires the use of a secure connection`. The rule, written in that same
+   comment ten minutes earlier: once any sub-key appears, iOS ignores
+   `NSAllowsArbitraryLoads` — and there is no sub-key for ordinary URLSession
+   traffic. The original single key was right. Reverted.
+3. *"The panel is refusing the stream (HTTP 406)"* — wrong. Channel `264311`,
+   taken from `docs/CODEC_MATRIX.md`, does not exist on this account. Real ids
+   return `HTTP 200`, `video/mp2t`, megabytes streaming. That file's ids are
+   from an older account and should not be reused without checking.
+
+## The player library: read the code, not the README
+
+`XJ_Player` advertises itself as "an open source IPTV player for iOS and
+Android built with React Native (Expo)". Its player is 61 lines wrapping
+`expo-av`, and `react-native-vlc-media-player` sits in its package.json
+imported by nothing — verified across every `.ts`/`.tsx` file in the repo.
+Recommending it on the strength of its description was a mistake.
+
+The same test applied to the rest:
+
+- **`@lunarr/vlc-player` 2.1.1 — passes.** MobileVLCKit 3.7.3 / TVVLCKit 3.7.3
+  (stable, not pre-release), Fabric-only, 950 lines of Swift and 982 of Kotlin
+  that genuinely construct `VLCMediaPlayer` / `LibVLC`. Its example app depends
+  on `react-native: npm:react-native-tvos@0.86.2-0` with `expo ~57.0.13` and
+  builds with `EXPO_TV=1` — our stack exactly. Gaps that matter to us: no HTTP
+  headers on the source, no synchronous readers, and `onError` carries no
+  reason at all.
+- **`expo-libvlc-player` — passes on code, fails on maintenance.** Real VLCKit,
+  real config plugin, a maintainer shipping almost daily. But the `57.x` line
+  is dead — 57.0.59 and 58.0.0 shipped the same day and there have been no
+  57.x releases since against eighteen 58.x. It pins VLCKit `4.0.0a25`, fetched
+  from a URL path named `unstable`. Its `EXPO_TV` support is a README claim
+  with zero code behind it. Open issue #24 is a black-screen-with-audio report
+  on IPTV HTTP `.ts` — our exact content. The `tct123` fork is a stale mirror:
+  zero commits of its own.
+- **BlueIPTV — "patched libVLC" is false.** The patch is a patch-package patch
+  of a JS wrapper's Android Java: a released-player crash on background/PiP and
+  a missing audio-focus request. No libVLC fork, no iOS path at all. Its value
+  is diagnostic — those two bugs are what anyone putting libVLC behind React
+  Native hits.
+
+## What swapping the player would actually cost, measured here
+
+**14 files in `src/` import from `expo-video`** — not the 42-across-17 guessed
+above, which counted comments. Eleven are a mechanical swap. Three are hard,
+and nearly all the risk is in roughly 400 lines of one of them.
+
+The three structural facts that decide hybrid-versus-libVLC-everywhere, all
+from this codebase:
+
+- The live player constructs **one** `VideoPlayer` and hands the same object to
+  two render trees — `<VideoView>` when fullscreen, `SplitChannelView`'s when
+  upright. Rotation must not reconstruct the native player.
+- All **17** event subscriptions go through `useEventListener` from `expo`,
+  which requires the player to be an Expo SharedObject. A non-Expo native
+  module means rewriting all 17 across 7 files.
+- `usePlaybackTracks` assigns whole track **objects** back to the player and
+  uses object identity as the selection. libVLC addresses tracks by integer id.
+  That is a data-model change, not a rename.
+
+Movies and series are ~90 and ~140 lines of playback each, against content that
+is 64.7% `.mp4`. The live player is the expensive one. That asymmetry is the
+argument for hybrid.
+
+## The one thing still unknown, and it is cheap
+
+**Does libVLC play this provider's streams on real Apple hardware?** Everything
+above assumes it. The test needs no Apple account, no Mac and no money: install
+the free VLC app on any iPhone and open
+
+    http://albasera-tv.net/live/733007/733007/283572.ts
+
+VLC for iOS is the same libVLC we would embed. If it plays, the plan holds. If
+it does not, there is no live TV on iOS and we have learned it for nothing.
+
+Installing *this app* on a physical iPhone still requires the $99 Apple
+Developer Program — free provisioning needs Xcode, which needs a Mac.

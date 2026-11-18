@@ -262,6 +262,34 @@ module.exports = {
          */
         NSAppTransportSecurity: {
           NSAllowsArbitraryLoads: true,
+
+          /*
+           * And NOTHING else in this dictionary. That is not an oversight; it
+           * was tried the other way on 2026-11-18 and it broke the app.
+           *
+           * The reasoning that looked right: films would not play in the app
+           * while the login and the catalogue worked, so AVFoundation must be
+           * governed separately from URLSession, so state every sub-key
+           * explicitly — `NSAllowsArbitraryLoadsInMedia` and
+           * `NSAllowsArbitraryLoadsInWebContent` — and cover both.
+           *
+           * What actually happened: the very next build could not log in at
+           * all. "fetch failed: The resource could not be loaded because the
+           * App Transport Security policy requires the use of a secure
+           * connection", straight out of ExpoModulesCore/Promise.swift, on the
+           * first call to `player_api.php`.
+           *
+           * The rule that explains it: once ANY sub-key appears here, iOS 10
+           * and later ignore `NSAllowsArbitraryLoads` and consult only the
+           * sub-keys. And the sub-keys cover AVFoundation, WKWebView and local
+           * addresses — there is NO sub-key for an ordinary URLSession
+           * request. So naming them did not add media coverage on top of the
+           * global permission; it replaced the global permission with three
+           * narrower ones, none of which covers the app's own networking.
+           *
+           * Alone, `NSAllowsArbitraryLoads` covers everything, AVFoundation
+           * included. Whatever stops a film playing, it is not this key.
+           */
         },
 
         /*
