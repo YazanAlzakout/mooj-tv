@@ -96,3 +96,8 @@ replay_pid*.log
 # the 1024 icon and the credentials file — generated from store/ and assets/ or
 # written in docs/. Rebuild it rather than commit it.
 /handover-ios/
+
+# A JVM crash replay dump, committed by accident on 2026-11-07 during the
+# Gradle loopback failure. 2.5MB of hotspot internals, no value to anyone.
+replay_pid*.log
+hs_err_pid*.log
