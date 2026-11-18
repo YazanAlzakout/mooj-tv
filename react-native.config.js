@@ -18,9 +18,12 @@
  * otherwise pull `org.videolan.android:libvlc-all` into the Android build. That
  * is not merely wasted bytes:
  *
- * `app.config.js` already sets `packagingOptions.pickFirst` for
- * `**/libc++_shared.so`, because the FFmpeg decoder module and the React Native
- * runtime each ship one and the build fails on the duplicate. libVLC ships its
+ * `app.config.js` already sets `packagingOptions.pickFirst` for every
+ * `libc++_shared.so` on the packaging path (the glob is written there, not
+ * here: a `**` followed by a slash and a star closes a JSDoc block, and this
+ * file was committed broken once for exactly that reason), because the FFmpeg
+ * decoder module and the React Native runtime each ship one and the build
+ * fails on the duplicate. libVLC ships its
  * own `libc++_shared.so` too, and the VLC ecosystem's own guidance is that its
  * copy must win — which `pickFirst` cannot guarantee, since it takes whichever
  * it meets first. Linking both on Android therefore risks a runtime mismatch in
