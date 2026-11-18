@@ -36,10 +36,46 @@ import { Platform } from "react-native";
  * somebody who has asked the system not to. It also needs no VIBRATE
  * permission, which keeps one line out of the manifest.
  */
+/**
+ * Whether this process has already set the audio mode for the tick.
+ *
+ * `setAudioModeAsync` is scoped to neither a player nor a screen: it writes
+ * the process's audio session, which on iOS is the same `AVAudioSession`
+ * category that governs video playback. Four components call this hook — the
+ * tab bar, the More tab and two sections of Settings — so the write used to
+ * happen again on every one of their mounts, and each one is a late-arriving
+ * claim on a setting the live player depends on.
+ *
+ * That is the player's problem rather than the tick's. libVLC sets `.playback`
+ * and activates the session from inside `setupNowPlayingControls`
+ * (`@lunarr/vlc-player/ios/VLCPlayerView.swift:665-667`), guarded so it never
+ * re-asserts for the life of that view — while `playsInSilentMode: false` is
+ * precisely the value that silences a live channel on a phone with the ring
+ * switch off and breaks the background playback the Settings toggle sells.
+ * Last writer wins, and before this guard the ordering was luck: the tab bar
+ * mounts at app start and the player is pushed afterwards, so the player
+ * happened to win — but `more.tsx` and `settings.tsx` mount lazily, the first
+ * time the viewer opens them, and nothing kept that from landing badly.
+ *
+ * Writing once per process is both sufficient and honest about what the call
+ * does: the mode is global, so the later writes never carried information the
+ * first had not. Android is unchanged — identical arguments, and the first
+ * write still happens at the same moment — which matters, because that build
+ * ships.
+ *
+ * It is not a complete answer. Nothing in this app owns the audio session as a
+ * policy, and after a Siri or telephone interruption nobody re-asserts
+ * anything at all. The first build on real Apple hardware should check the
+ * ring switch and an incoming call against a playing channel.
+ */
+let audioModeApplied = false;
+
 export function useTapFeedback(): () => void {
   const click = useAudioPlayer(require("../../../assets/sounds/tab-tap.m4a"));
 
   useEffect(() => {
+    if (audioModeApplied) return;
+    audioModeApplied = true;
     /*
      * `mixWithOthers` so an 85ms tick never takes audio focus — without it
      * Android pauses whatever the viewer was listening to, for a sound
@@ -50,7 +86,12 @@ export function useTapFeedback(): () => void {
      * question of whether they want to hear this.
      */
     setAudioModeAsync({ interruptionMode: "mixWithOthers", playsInSilentMode: false }).catch(() => {
-      /* An audio mode the app can live without; the tick may simply duck. */
+      /*
+       * An audio mode the app can live without; the tick may simply duck. The
+       * flag goes back so the next screen that mounts tries once more — a
+       * failed write claimed nothing.
+       */
+      audioModeApplied = false;
     });
   }, []);
 
