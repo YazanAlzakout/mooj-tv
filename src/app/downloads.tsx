@@ -11,6 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ScreenBackground } from "@/components/ScreenBackground";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { artworkIsKnownBad } from "@/core/media/deadImageHosts";
 import { Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
@@ -187,7 +188,29 @@ function DownloadRow({
   onDelete: () => void;
 }) {
   const { t } = useI18n();
-  const [imageFailed, setImageFailed] = useState(false);
+  /*
+    **The same test `CachedImage` uses, not a blank `false`.**
+
+    The branch below swaps the letter tile OUT for the image, so whenever
+    `CachedImage` declines to render — and it declines by returning null,
+    before any image exists, for a URL that is already known bad — this row
+    drew nothing at all where the artwork goes. With no image mounted
+    `onError` can never fire either, so the row could not correct itself for
+    the rest of the session.
+
+    The tile is a flex child, not a layer behind the text, so a row that
+    draws nothing pulls its title, its status line, its progress bar and the
+    whole Pause / Cancel / Delete column 60dp towards the start edge — the
+    widest shift of the four list screens, and the only one of them where
+    what sits beside the text is what the viewer is aiming at. The poster is
+    also the very one the detail screen they started the download from had
+    already tried and failed to load.
+
+    Same defect and same fix as the browse grid and the channel row beside
+    the player (45d89d0, and ChannelListRow.tsx:61); found again on this
+    screen in the pre-release audit, 2026-11-17.
+  */
+  const [imageFailed, setImageFailed] = useState(() => artworkIsKnownBad(task.imageUrl));
   const liveProgress = useDownloadProgress(task.id);
 
   const bytesDownloaded = liveProgress?.bytesDownloaded ?? task.bytesDownloaded;

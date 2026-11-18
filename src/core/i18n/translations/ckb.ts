@@ -14,7 +14,7 @@ const ckb: TranslationShape = {
     search: "گەڕان",
     loading: "بارکردن…",
     retry: "دووبارە هەوڵدان",
-    refreshFailed: "ئێستا نوێکردنەوە سەرکەوتوو نەبوو — بۆ خوارەوە ڕایبکێشە بۆ هەوڵدانەوە.",
+    refreshFailed: "ئێستا نوێکردنەوە سەرکەوتوو نەبوو — دووبارە هەوڵ بدەرەوە.",
     noInternet: "پەیوەندی ئینتەرنێت نییە.",
     providerUnreachable: "ڕاژەی دابینکەر ئێستا وەڵام ناداتەوە. دوای کەمێک هەوڵ بدەرەوە.",
     confirm: "پشتڕاستکردنەوە",
@@ -251,7 +251,7 @@ const ckb: TranslationShape = {
         body: [
           "بۆ پرسیار دەربارەی ئەم سیاسەتە یان دەربارەی تایبەتمەندێتی لە Mooj TV، پەیوەندی بکە:",
           "Email: support@mooj-player.com",
-          "Web: https://mooj-player.com/privacy",
+          "Web: https://mooj-player.com/privacy.html",
         ],
       },
     },
@@ -294,7 +294,7 @@ const ckb: TranslationShape = {
     m3uUrlPlaceholder: "http://example.com/playlist.m3u8",
     chooseFileButton: "فایل هەڵبژێرە",
     noFileChosen: "هیچ فایلێک هەڵنەبژێردراوە",
-    noVodEmpty: "پەیوەندی کرا، بەڵام ئەم دابینکەرە هیچ کەناڵێکی لایڤی نەگەڕاندەوە.",
+    catalogEmpty: "پەیوەندی کرا، بەڵام ئەم دابینکەرە هیچ ناوەڕۆکێکی نەگەڕاندەوە — نە کەناڵ، نە فیلم، نە زنجیرە.",
   },
 
   /*
@@ -315,6 +315,9 @@ const ckb: TranslationShape = {
     liveTV: "لایڤ تیڤی",
     movies: "فیلمەکان",
     series: "زنجیرەکان",
+    liveTVSub: "کەناڵەکانی ئێستا",
+    moviesSub: "هەموو کەتەلۆگی فیلمەکان",
+    seriesSub: "زنجیرە و بەشەکان",
     quickActions: "کردارە خێراکان",
     favorites: "دڵخوازەکان",
     watchLater: "دواتر تەماشا بکە",
@@ -394,6 +397,7 @@ const ckb: TranslationShape = {
   moviesGrid: {
     title: "فیلمەکان",
     moviesCountSuffix: "فیلم",
+    noMoviesAvailable: "هیچ فیلمێک بەردەست نییە.",
     searchPlaceholder: "گەڕان بۆ فیلم",
   },
 
@@ -417,6 +421,7 @@ const ckb: TranslationShape = {
   seriesGrid: {
     title: "زنجیرەکان",
     seriesCountSuffix: "زنجیرە",
+    noSeriesAvailable: "هیچ زنجیرەیەک بەردەست نییە.",
     searchPlaceholder: "گەڕان بۆ زنجیرە",
   },
 
@@ -463,6 +468,7 @@ const ckb: TranslationShape = {
     preparingSearch: "ئامادەکردنی گەڕان…",
     typeToSearch: "بنووسە بۆ گەڕان لە لایڤ تیڤی، فیلم و زنجیرەکان.",
     noResultsFor: 'هیچ ئەنجامێک نەدۆزرایەوە بۆ "{query}".',
+    resultsCountSuffix: "ئەنجام",
     live: "لایڤ",
     movie: "فیلم",
     series: "زنجیرە",
@@ -500,9 +506,11 @@ const ckb: TranslationShape = {
     setPin: "کۆدێکی ٤ ژمارەیی دابنێ",
     changePin: "گۆڕینی کۆد",
     removePin: "سڕینەوەی کۆد",
+    removePinConfirmBody: "سڕینەوەی کۆد قوفڵی پۆلەکانیش دەکوژێنێتەوە، و هەموو پۆلێکی شاراوە بەبێ کۆد دەگەڕێتەوە.",
     wrongPin: "کۆدەکە هەڵەیە",
     lockCategories: "داواکردنی کۆد بۆ دیارکردنی پۆلەکان",
     lockCategoriesNote: "پۆلە شاراوەکان تەنها بە کۆد دەگەڕێنەوە.",
+    forgotPinNote: "کۆدەکەت لەبیر چووە؟ تەنها بە سڕینەوەی هەموو دابینکەرەکان لە «بەڕێوەبردنی دابینکەران» دەسڕێتەوە — ئەمەش وشەی تێپەڕی پاشەکەوتکراویان و هەموو ئەوەی شاردووتەتەوە دەسڕێتەوە. دواتر دابینکەرەکەت دووبارە زیاد بکە و کۆدێکی نوێ دابنێ.",
     noPinYet: "سەرەتا کۆدێک دابنێ",
   },
 
@@ -525,9 +533,6 @@ const ckb: TranslationShape = {
     themeLight: "ڕووناک",
     themeSystem: "بەپێی سیستەم",
     content: "ناوەڕۆک",
-    showLiveSection: "پیشاندانی بەشی لایڤ تیڤی",
-    showMoviesSection: "پیشاندانی بەشی فیلمەکان",
-    showSeriesSection: "پیشاندانی بەشی زنجیرەکان",
     manageCategoryVisibility: "بەڕێوەبردنی دەرکەوتنی هاوپۆلەکان",
     accountProvider: "هەژمار / دابینکەر",
     provider: "دابینکەر",
@@ -547,8 +552,6 @@ const ckb: TranslationShape = {
     modernChannelViewNote: "وێنەکە لەسەر شاشە دەمێنێتەوە کاتێک کەناڵەکان دەگەڕێیت، لەبری لێدەرێکی پڕ بە شاشە.",
     resumePlayback: "بەردەوامبوونی لێدان",
     autoplayNextEpisode: "لێدانی خۆکاری بەشی داهاتوو",
-    preferredAudio: "زمانی دەنگی دڵخواز",
-    preferredSubtitle: "زمانی ژێرنووسی دڵخواز",
     storage: "هەڵگرتن",
     downloadedContent: "ناوەڕۆکی داگیراو",
     manageDownloads: "بەڕێوەبردنی داگرتنەکان",
@@ -560,6 +563,8 @@ const ckb: TranslationShape = {
     legal: "یاسایی",
     termsConditions: "مەرج و ڕێساکان",
     privacyPolicy: "سیاسەتی تایبەتمەندێتی",
+    licences: "مۆڵەتەکانی سەرچاوەی کراوە",
+    licencesIntro: "ئەم ئەپە ئەم پێکهاتانەی سەرچاوە کراوە بەکاردەهێنێت. دەقی تەواوی مۆڵەتەکان لە پڕۆژەکانیانەوە بەردەستە.",
     diagnostics: "شیکاری",
     playerDiagnostics: "شیکاری لێدەر",
     about: "دەربارە",
@@ -578,6 +583,7 @@ const ckb: TranslationShape = {
   categoryVisibility: {
     title: "هاوپۆلەکان",
     searchPlaceholder: "گەڕان بۆ هاوپۆل",
+    empty: "هیچ هاوپۆلێک لەم بەشەدا نییە.",
   },
 };
 

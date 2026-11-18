@@ -24,6 +24,7 @@ import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
 import { formatBytes } from "@/core/utils/formatBytes";
 import type { MovieDetails } from "@/domain/vod/types";
+import type { DownloadTask } from "@/db/repositories/downloadRepository";
 import { useDownloadState } from "@/domain/downloads/useDownloadState";
 import { getVodDetails } from "@/providers/xtream/vodAdapter";
 import { getActiveSession } from "@/state/activeSessionStore";
@@ -112,12 +113,24 @@ export default function MovieDetailsScreen() {
     router.push({ pathname: "/movies/player/[movieId]", params: { movieId } });
   }
 
-  const downloadLabel =
-    download.record?.status === "completed"
-      ? `✓ ${t("movieDetails", "downloaded")}`
-      : download.record
-        ? `⬇ ${t("movieDetails", "downloaded")}…`
-        : `⬇ ${t("movieDetails", "download")}`;
+  /* One handler, two call sites — the full-screen failure and the banner
+     over a movie that is already drawn both mean "ask the provider again". */
+  function retry() {
+    setReloadToken((n) => n + 1);
+  }
+
+  /*
+   * Retry is `resume`, not `trigger`: `trigger` refuses outright while a
+   * record exists (useDownloadState: `if (!item || !eligible || record)
+   * return`), and `resumeDownload` already restarts a row with no resume
+   * data to work from — which is exactly what a failed row is. The
+   * downloads screen has offered Retry for this status all along
+   * (`task.status === "failed"` → `onResume`); this screen offered a
+   * disabled button reading "تم التنزيل…" and a frozen progress card whose
+   * only control was Cancel. Found in the 2026-11-17 screen audit.
+   */
+  const downloadFailed = download.record?.status === "failed";
+  const downloadLabel = downloadButtonLabel(t, download.record);
 
   return (
     <ScreenBackground>
@@ -131,10 +144,22 @@ export default function MovieDetailsScreen() {
           <BackButton floating />
         </View>
 
-        {(noInternetMessage || errorMessage) && (
-          <View style={styles.centered}>
+        {/*
+          `!details`: this is the state for a screen with nothing else on
+          it, and only that. `errorState` is `flex: 1`, and it was being
+          rendered as a sibling of the ScrollView — so a refresh refused
+          over a movie that had already loaded put a flex-basis-0 box beside
+          a scroll view that grows and shrinks on exactly the same terms.
+          The scroll view kept the whole height, the message was laid out
+          0dp tall, and the failure was therefore silent. A loaded movie
+          says so in its body instead — see `refreshErrorBanner` below.
+          Found on the series twin in the 2026-11-18 verification pass; this
+          screen had the identical defect, with `flex: 1` here all along.
+        */}
+        {!details && (noInternetMessage || errorMessage) && (
+          <View style={styles.errorState}>
             <Text style={styles.errorText}>{noInternetMessage ?? errorMessage}</Text>
-            <BouncePressable style={styles.retryButton} onPress={() => setReloadToken((n) => n + 1)}>
+            <BouncePressable style={styles.retryButton} onPress={retry}>
               <Text style={styles.retryButtonText}>{t("common", "retry")}</Text>
             </BouncePressable>
           </View>
@@ -195,6 +220,34 @@ export default function MovieDetailsScreen() {
             </ArcHero>
 
             <View style={styles.body}>
+              {/*
+                In the body, under the arc, and not at the top of the screen
+                where the full-screen error sits: the back button floats
+                over the artwork at top: Spacing.xl and is 38dp tall, so a
+                strip at y=0 would land in its band. Here it is the first
+                line of the page the viewer is already reading, it scrolls
+                away once read, and the artwork keeps the top of the screen.
+
+                `errorMessage` and not `noInternetMessage ?? errorMessage`:
+                the offline line is `isOffline && !details`, so by
+                definition it is null everywhere inside this branch. A
+                provider that refused the refresh is the only thing that can
+                speak here.
+
+                No `entering` on it either. The animations below are an
+                entrance, played once when the movie arrives; this appears
+                later, on a failure, and a thing that fades in 420ms after
+                the fact reads as decoration rather than as news.
+              */}
+              {errorMessage && (
+                <View style={styles.refreshErrorBanner}>
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                  <BouncePressable style={styles.retryButton} onPress={retry}>
+                    <Text style={styles.retryButtonText}>{t("common", "retry")}</Text>
+                  </BouncePressable>
+                </View>
+              )}
+
               <Animated.Text entering={FadeInDown.duration(420).delay(60)} style={styles.title}>
                 {details.name}
               </Animated.Text>
@@ -233,8 +286,8 @@ export default function MovieDetailsScreen() {
                 {download.eligible && (
                   <BouncePressable
                     style={styles.secondaryButton}
-                    onPress={download.trigger}
-                    disabled={download.record !== null}
+                    onPress={downloadFailed ? download.resume : download.trigger}
+                    disabled={download.record !== null && !downloadFailed}
                   >
                     <Text style={[styles.secondaryButtonText, download.record && styles.secondaryButtonTextActive]}>
                       {downloadLabel}
@@ -245,29 +298,45 @@ export default function MovieDetailsScreen() {
 
               {download.record && download.record.status !== "completed" && (
                 <Animated.View entering={FadeIn.duration(300)} style={styles.downloadProgressCard}>
-                  <View style={styles.downloadProgressTrack}>
-                    <View
-                      style={[
-                        styles.downloadProgressFill,
-                        {
-                          width: `${
-                            download.progress?.bytesTotal
-                              ? Math.min(
-                                  100,
-                                  (download.progress.bytesDownloaded / download.progress.bytesTotal) * 100
-                                )
-                              : 0
-                          }%`,
-                        },
-                      ]}
-                    />
-                  </View>
+                  {/*
+                    No bar on a failed transfer. The fill is driven by the
+                    live progress entry, which is empty after a restart and
+                    is never refilled for a row that died — so what the card
+                    drew under a dead download was an empty track, and a
+                    progress bar is a promise that something is still moving.
+                  */}
+                  {!downloadFailed && (
+                    <View style={styles.downloadProgressTrack}>
+                      <View
+                        style={[
+                          styles.downloadProgressFill,
+                          {
+                            width: `${
+                              download.progress?.bytesTotal
+                                ? Math.min(
+                                    100,
+                                    (download.progress.bytesDownloaded / download.progress.bytesTotal) * 100
+                                  )
+                                : 0
+                            }%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                  )}
                   <View style={styles.downloadControlRow}>
+                    {/* A byte count on a transfer that has stopped for good
+                        says nothing about why it stopped. `downloads.failed`
+                        is the same word the downloads screen prints in its
+                        own row meta, in the same muted style. */}
                     <Text style={styles.downloadProgressText}>
-                      {formatBytes(download.progress?.bytesDownloaded ?? download.record.bytesDownloaded)}
-                      {download.progress?.bytesTotal ?? download.record.bytesTotal
-                        ? ` / ${formatBytes(download.progress?.bytesTotal ?? download.record.bytesTotal ?? 0)}`
-                        : ""}
+                      {downloadFailed
+                        ? t("downloads", "failed")
+                        : `${formatBytes(download.progress?.bytesDownloaded ?? download.record.bytesDownloaded)}${
+                            download.progress?.bytesTotal ?? download.record.bytesTotal
+                              ? ` / ${formatBytes(download.progress?.bytesTotal ?? download.record.bytesTotal ?? 0)}`
+                              : ""
+                          }`}
                     </Text>
                     <View style={styles.downloadControlButtons}>
                       {download.record.status === "downloading" && (
@@ -338,6 +407,42 @@ export default function MovieDetailsScreen() {
   );
 }
 
+/**
+ * One label per download status, as a switch over the union rather than a
+ * chain of ternaries — the same shape, and for the same reason, as
+ * `statusLabel` on the downloads screen.
+ *
+ * `DownloadStatus` carries six values and this button spoke about three:
+ * anything that was neither absent nor "completed" read "⬇ تم التنزيل…" —
+ * "Downloaded…" — over a download that was queued, paused, or (the case the
+ * 2026-11-17 audit raised) dead, on a button that was `disabled` because a
+ * record existed. A switch over the union makes the compiler ask for all
+ * six, so the next status added cannot quietly inherit the wrong sentence.
+ *
+ * Every string below is already translated in all six locales; nothing new
+ * was written for this.
+ *
+ * "canceled" is unreachable — `cancelDownload` deletes the row rather than
+ * marking it — but the type carries it, so it carries the idle label.
+ */
+function downloadButtonLabel(t: ReturnType<typeof useI18n>["t"], record: DownloadTask | null): string {
+  if (!record) return `⬇ ${t("movieDetails", "download")}`;
+  switch (record.status) {
+    case "completed":
+      return `✓ ${t("movieDetails", "downloaded")}`;
+    case "failed":
+      return `↻ ${t("common", "retry")}`;
+    case "queued":
+      return `⋯ ${t("downloads", "queued")}`;
+    case "paused":
+      return `❙❙ ${t("downloads", "paused")}`;
+    case "downloading":
+      return `⬇ ${t("downloads", "downloading")}`;
+    case "canceled":
+      return `⬇ ${t("movieDetails", "download")}`;
+  }
+}
+
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.infoRow}>
@@ -350,7 +455,36 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 const styles = themedStyles((C: ThemeColors) =>
   StyleSheet.create({
   safeArea: { flex: 1 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: Spacing.md, padding: Spacing.xl },
+  /*
+   * Two boxes, and `flex: 1` is right in one and wrong in the other — the
+   * same split the series twin arrived at, under the same names, so the two
+   * screens can be read against each other.
+   *
+   * `errorState` — the whole screen, when nothing has arrived to put on it.
+   * It was called `centered`, which described the alignment and not the job;
+   * it has exactly one caller and that caller is the failure state.
+   * `flex: 1` is what keeps it off the floating back button, which is 38dp
+   * tall at top: Spacing.xl over artwork that reaches the status bar
+   * (edges=["left","right"], no top inset).
+   *
+   * `refreshErrorBanner` — a refresh the provider refused over a movie
+   * already drawn. `flex: 1` is wrong here the other way round: as a sibling
+   * of the ScrollView its flex basis is 0 while the scroll view grows and
+   * shrinks on the same terms, so the scroll view took the full height and
+   * this was laid out 0dp tall. No flex at all, and inside the body rather
+   * than beside the scroll view — it is a line of content, not a screen.
+   * `errorBlock` on the Movies tab answers the same two failures and this
+   * borrows its shape, plus a bottom margin: the body sets no row gap and
+   * the title carries no `marginTop`, so without one the film's name would
+   * sit flush against the Retry button.
+   */
+  errorState: { flex: 1, alignItems: "center", justifyContent: "center", gap: Spacing.md, padding: Spacing.xl },
+  refreshErrorBanner: {
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.md,
+  },
   errorText: { color: C.error, fontSize: 14, fontFamily: FontFamily.medium, textAlign: "center" },
   retryButton: {
     paddingHorizontal: Spacing.xl,

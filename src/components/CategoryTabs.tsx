@@ -413,6 +413,21 @@ export function CategoryTabs({
         ref={listRef}
         horizontal
         showsHorizontalScrollIndicator={false}
+        /*
+          The strip is a ScrollView too, so it ate the first tap as well.
+
+          With the soft keyboard up — which is every tap taken straight after
+          typing in the Live TV, Movies or Series search box — React Native's
+          default `"never"` lets this list capture the touch to dismiss the
+          keyboard, and the chip underneath never sees it: the viewer presses a
+          category, the keyboard closes, nothing changes, and they press again.
+          `"handled"` hands the touch to the chip and still dismisses the
+          keyboard on a tap that lands on the strip's own padding.
+
+          Found on Live TV 2026-11-17, fixed here because the same tap was
+          being eaten on every screen that draws this strip.
+        */
+        keyboardShouldPersistTaps="handled"
         onLayout={onStripLayout}
         onContentSizeChange={onContentSizeChange}
         CellRendererComponent={MeasuredCell}

@@ -20,9 +20,11 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { BouncePressable } from "@/components/BouncePressable";
 import { TV_RAIL_WIDTH } from "@/components/CategorySidebar";
 import { BrowseLayout } from "@/components/TvBrowseLayout";
-import { PHONE_RAIL_WIDTH } from "@/components/CategoryRail";
 import { ScreenBackground, TV_OVERSCAN_X } from "@/components/ScreenBackground";
+import { useTabBarSpace } from "@/components/MoojTabBar";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { SECTION_SERIES } from "@/core/theme/sections";
+import { SeriesGlyph } from "@/components/TabIcons";
 import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
 import { CategoryPager } from "@/components/CategoryPager";
 import { useI18n } from "@/core/i18n/I18nContext";
@@ -132,6 +134,8 @@ export default function SeriesCategoriesScreen() {
   // Repaints this screen — and everything it renders — when the theme changes.
   const theme = useThemeRerender();
   const { t } = useI18n();
+  /* The bar floats over the screen, so the screen leaves room for it. */
+  const tabBarSpace = useTabBarSpace();
   const session = getActiveSession();
   /*
      * The list's own width, not the window's. The grid sits inside a
@@ -140,13 +144,12 @@ export default function SeriesCategoriesScreen() {
      * narrower than the screen — and `getItemLayout` would then promise
      * taller rows than are actually drawn.
      */
-    const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+    const { width: windowWidth } = useWindowDimensions();
   /*
    * Turned sideways the categories move to a strip on top, so nothing
    * takes width off the grid — and `getItemLayout` has to be told, or
    * it promises rows sized for a narrower list than the one drawn.
    */
-  const landscape = windowWidth > windowHeight;
   const insets = useSafeAreaInsets();
   /*
    * The rail is subtracted on TV: the grid is not the window, and
@@ -184,10 +187,17 @@ export default function SeriesCategoriesScreen() {
   const [series, setSeries] = useState<SeriesSummary[] | null>(() => getSeriesList());
   const [builtForProvider, setBuiltForProvider] = useState<string | null>(session?.provider.id ?? null);
   const [categories, setCategories] = useState<CategoryTab[] | null>(null);
-  const railShown = !isTvBuild && !landscape && (categories?.length ?? 0) > 1;
   const gridWidth =
     windowWidth - insets.left - insets.right - TV_OVERSCAN_X -
-    (isTvBuild ? TV_RAIL_WIDTH : railShown ? PHONE_RAIL_WIDTH : 0);
+    /*
+     * Only the television's rail takes width now. 2026-11-17 the phone moved
+     * from a right-hand rail to a chip strip above the grid, and a strip costs
+     * height, not width — leaving the subtraction in declared the grid
+     * narrower than it draws, and `getItemLayout` believes that number
+     * absolutely. That is the same mistake that put black bands down the
+     * channel list before (see CategorySidebar).
+     */
+    (isTvBuild ? TV_RAIL_WIDTH : 0);
   /*
    * Width first, then the column count, then the row height — in that
    * order and not the other way round. The count is worked out FROM the
@@ -229,8 +239,30 @@ export default function SeriesCategoriesScreen() {
   const categoryIds = useMemo(() => (categories ?? []).map((c) => c.id), [categories]);
   /* Handed to both the strip and the drag surface, so the chips travel with the finger. */
   const categoryDrag = useCategoryDrag();
-  /** Only the first load picks a default; a refresh must not yank the user back. */
-  const categoryAppliedRef = useRef(false);
+  /**
+   * The provider this screen has already picked an opening category for.
+   *
+   * A boolean until today, and a boolean can only be raised once per mount.
+   * Connecting a different provider does not unmount this tab — `handleSelect`
+   * on the providers screen calls `router.dismissAll()` and then
+   * `router.replace("/home")`, and neither takes down a navigator that is
+   * already up, which is the same fact the provider-switch block below is
+   * built on. So the latch stayed raised across the switch, the branch in
+   * `load()` never fired again, and Series opened on "All" for the rest of
+   * the app's life: the new account's whole series catalogue in one list,
+   * which is the one default that branch exists to avoid
+   * (found 2026-11-17).
+   *
+   * Holding the id rather than a flag lowers the latch on exactly the event
+   * that should lower it, and still refuses to yank the viewer back to the
+   * first category on a plain refresh of the same account.
+   *
+   * Written only inside `load()`, never during render: a `ref.current = …`
+   * in the component body is what `react-hooks/refs` rejects, so the
+   * provider-switch block below deliberately leaves this one alone and the
+   * id comparison in `load()` does the work instead.
+   */
+  const categoryAppliedRef = useRef<string | null>(null);
   /**
    * Latched once the grid has taken focus, so `hasTVPreferredFocus` is a
    * one-shot request rather than something that re-fires and steals focus
@@ -292,10 +324,46 @@ export default function SeriesCategoriesScreen() {
 
   const pages = useCategoryPages<SeriesSummary>({ shape: search, columns, rowHeight: gridRowHeight });
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasDataRef = useRef(false);
+  /**
+   * The provider whose catalogue this screen is actually holding, or null
+   * when it is holding none.
+   *
+   * A boolean until today, and it is the same change `categoryAppliedRef`
+   * above was given yesterday for the same reason: a flag raised on the first
+   * successful load can only ever be raised once, and nothing lowered it when
+   * the account underneath changed. The provider-switch block above cannot
+   * lower it either — a `ref.current = …` in the component body is what
+   * `react-hooks/refs` rejects — so provider A's success was carried straight
+   * into provider B's first load.
+   *
+   * What that cost: connect B, `setActiveSession` empties both VOD stores,
+   * the reset above sets `series` to a now-null `getSeriesList()`, the focus
+   * effect calls `load()`, and `loadSeriesList` meets one of this line's
+   * intermittent 404s (docs/DECISIONS.md). The catch below asks "is there a
+   * catalogue on screen to fall back on?"; the flag answered yes on A's
+   * behalf, so no message was set and the error was swallowed. The render
+   * then took the `series === null` branch, which draws a spinner and
+   * nothing else — no banner, no Retry, no list to pull, and no header ⟳
+   * because that control is television-only. A spinner turning for ever over
+   * an empty screen, with no way out but leaving the tab
+   * (found 2026-11-18).
+   *
+   * Holding the id answers the question the catch is really asking, and it
+   * cannot go stale: after a switch it names the previous provider, which is
+   * not `session.provider.id`, so the first load on the new account is
+   * treated as a first load — while a plain refresh of the same account is
+   * still not.
+   */
+  const hasDataForProviderRef = useRef<string | null>(null);
 
   const load = useCallback(
-    async (forceRefresh = false) => {
+    /*
+     * `surfaceFailure` is for the caller that has a face to pull: only
+     * `handleRefresh` passes it. The focus effect's bare `load()` has to
+     * stay a promise that cannot reject, or every focus of this tab on a
+     * flaky line is an unhandled rejection.
+     */
+    async (forceRefresh = false, surfaceFailure = false) => {
       if (!session) return;
       try {
         const cached = getSeriesList();
@@ -317,14 +385,36 @@ export default function SeriesCategoriesScreen() {
          * is a filter you reach for, so it stays available as the first
          * tab rather than being where the screen starts.
          */
-        if (!categoryAppliedRef.current && tabs.length > 1) {
-          categoryAppliedRef.current = true;
+        if (categoryAppliedRef.current !== session.provider.id && tabs.length > 1) {
+          categoryAppliedRef.current = session.provider.id;
           setActiveCategoryId(tabs[1].id);
         }
         setErrorMessage(null);
-        hasDataRef.current = true;
+        hasDataForProviderRef.current = session.provider.id;
       } catch (error) {
-        if (!hasDataRef.current) setErrorMessage(toUserFacingMessage(error, t("common", "providerUnreachable")));
+        /*
+         * A first load that fails owns the screen — a first load on *this*
+         * provider, which is what the ref holds an id for. It has the
+         * specific sentence — `toUserFacingMessage` turns this provider's
+         * bare "HTTP 404 from http://…" into something a viewer can read —
+         * and the Retry button under it, so it must not be overwritten a
+         * moment later by the shorter "couldn't refresh" line. Hence a return
+         * rather than falling through to the throw.
+         */
+        if (hasDataForProviderRef.current !== session.provider.id) {
+          setErrorMessage(toUserFacingMessage(error, t("common", "providerUnreachable")));
+          return;
+        }
+        /*
+         * Otherwise the grid is already holding a catalogue and keeps it — a
+         * failed refresh must never blank what is on screen — so nothing is
+         * painted from here. But the caller has to be told, and swallowing
+         * it unconditionally was the bug: a pull that failed retracted the
+         * spinner and changed nothing at all, so the viewer could not tell a
+         * provider with no new titles from one that never answered
+         * (found 2026-11-17).
+         */
+        if (surfaceFailure) throw error;
       }
     },
     [session, t]
@@ -344,6 +434,17 @@ export default function SeriesCategoriesScreen() {
     };
   }, [searchInput]);
 
+  /**
+   * A failed refresh must never destroy what is already on screen — and must
+   * never pass in silence either.
+   *
+   * The await used to be bare. `load()` swallowed its own failure once the
+   * grid was holding a catalogue, the spinner retracted and nothing on screen
+   * changed, so a provider with no new titles and a provider that never
+   * answered looked exactly alike (found 2026-11-17). The second argument is
+   * what lets a refused refresh reach the catch below; the catalogue itself
+   * is untouched either way.
+   */
   async function handleRefresh() {
     /*
       A pull is the viewer saying "try again", and artwork is the part of the
@@ -352,8 +453,21 @@ export default function SeriesCategoriesScreen() {
     */
     forgetImageFailures();
     setRefreshing(true);
-    await load(true);
-    setRefreshing(false);
+    try {
+      await load(true, true);
+      /* Nothing to clear here: load() sets the banner to null when it gets through. */
+    } catch {
+      /*
+       * Short and plain, not the raw HTTP line: this provider's Cloudflare
+       * edge 404s intermittently on requests that succeed moments later
+       * (docs/DECISIONS.md), so the honest sentence is "couldn't refresh, try
+       * again". Same string and same reasoning as live-categories' own
+       * `handleRefresh`, which is where this screen should have been already.
+       */
+      setErrorMessage(t("common", "refreshFailed"));
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   /**
@@ -432,8 +546,12 @@ export default function SeriesCategoriesScreen() {
 
   return (
     <ScreenBackground>
-      {/* No bottom edge: the tab bar below already clears the gesture area,
-          and asking for it here too leaves a second empty strip. */}
+      {/* No bottom edge, and that is what lets the bar's scoop show content.
+          The capsule floats over this screen rather than sitting below it, so
+          the screen has to run all the way down and pass under it; a bottom
+          inset here would stop the content short and put the page colour back
+          in the gap. The room the capsule needs comes from useTabBarSpace()
+          as padding inside the scroller instead. */}
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       {/*
         Television only. On a phone this said the same word the tab under
@@ -447,7 +565,8 @@ export default function SeriesCategoriesScreen() {
         <ScreenHeader
           title={t("seriesCategories", "title")}
           showBack={false}
-          subtitle={`${filteredSeries.length.toLocaleString()} ${t("seriesGrid", "seriesCountSuffix")}`}
+          badge={{ colour: SECTION_SERIES, glyph: <SeriesGlyph color="#FFFFFF" size={20} /> }}
+          subtitle={`${t("home", "seriesSub")} · ${filteredSeries.length.toLocaleString()} ${t("seriesGrid", "seriesCountSuffix")}`}
           /*
             The television's only way to reload the catalogue. Every other
             refresh path in the app is a pull gesture, which a remote cannot
@@ -525,8 +644,34 @@ export default function SeriesCategoriesScreen() {
           and with it pull-to-refresh — never rendered, and the only way
           out was to leave the screen and come back.
         */}
-        <BouncePressable style={styles.retryButton} onPress={() => load()}>
-          <Text style={styles.retryButtonText}>{t("common", "retry")}</Text>
+        {/*
+          `handleRefresh`, not `load()`. Retry now answers two different
+          failures — a first load that never arrived, and a refresh that was
+          refused — and `load()` on its own only ever re-reads what is already
+          stored: `getSeriesList()` returns the cached list and
+          `loadSeriesCategories` reads the catalog cache. After a failed
+          refresh that button would therefore clear its own banner without one
+          request leaving the device, which reads as "refreshed" and is not.
+          `handleRefresh` forces the fetch, and leaves the banner up when the
+          retry genuinely fails.
+
+          Disabled while it runs, and saying so — the half that was left out
+          yesterday. In a cold failure this button is the only thing on
+          screen: `series` is null, so no grid and no `RefreshControl` spinner
+          is mounted to show that anything is happening, and a second press
+          would open a second full catalogue fetch — `forceRefresh`, the whole
+          series list — on a line that answers a burst with empty 404s
+          (docs/DECISIONS.md). Same shape and same strings as
+          live-categories' Retry.
+        */}
+        <BouncePressable
+          style={[styles.retryButton, refreshing && styles.retryButtonBusy]}
+          disabled={refreshing}
+          onPress={handleRefresh}
+        >
+          <Text style={styles.retryButtonText}>
+            {refreshing ? t("common", "loading") : t("common", "retry")}
+          </Text>
         </BouncePressable>
       </View>
     )}
@@ -550,11 +695,69 @@ export default function SeriesCategoriesScreen() {
         enabled={!isTvBuild}
         single={isTvBuild}
         progress={categoryDrag}
-        renderPage={(pageCategoryId, pageActive) => (
+        renderPage={(pageCategoryId, pageActive) => {
+          /*
+            Each page answers for itself. An empty state cannot be a
+            screen-level branch once three categories are mounted at once:
+            one of them having nothing in it is not a reason to blank the two
+            either side. Series had no empty state at all until yesterday — a
+            search that matched nothing painted a blank area under the chip
+            strip, with no glyph, no sentence and nothing to say the search
+            was the cause (found 2026-11-17).
+
+            It lives in `ListEmptyComponent` rather than in a branch that
+            returns *instead of* the list, which is the shape it was given
+            yesterday. Returning instead of the list takes the
+            `RefreshControl` down with it, and
+            on a phone that pull is the only way to reload this screen — the
+            header, and with it the ⟳ button, is television-only. So a
+            provider whose series catalogue came back empty (an expired
+            account, or a line answering `get_series` with `[]`) drew "no
+            series" with nothing to pull and no button under it, and the only
+            cure was leaving the tab and coming back: the same dead end the
+            Retry button above exists to prevent (found 2026-11-18). A list
+            with no rows in it still keeps its scroller, so the pull survives.
+          */
+          const pageSeries = itemsFor(pageCategoryId);
+          const pageEmpty = pageSeries.length === 0;
+          const emptyState = (
+              <View style={styles.centered}>
+                <Text style={styles.emptyGlyph}>▤</Text>
+                {/*
+                  Which of the two sentences is honest depends on why the page
+                  is empty. A typo in the search box used to fall through to
+                  the catalogue-is-empty line on a screen holding the
+                  provider's whole catalogue, which reads as an expired
+                  account rather than as a typo.
+
+                  The gate is the debounced term, not the one in the box: this
+                  sentence has to agree with the grid under it, and the box
+                  runs SEARCH_DEBOUNCE_MS ahead of the list. Read the box
+                  instead and the keystroke that clears the field prints:
+                  No results for "". It is also why the query is printed
+                  lower-cased — `search` is what actually filtered the list,
+                  and a sentence that quotes something the list did not use
+                  would be a second small lie.
+
+                  The sentence is `seriesGrid.noSeriesAvailable`, worded from
+                  `liveChannelList.noChannelsAvailable` so that the three
+                  browse screens answer an empty grid the same way. It
+                  borrowed `library.nothingHereYet` ("Nothing here yet.")
+                  while the key was being added: true, but silent about
+                  what is missing, on the screen whose whole subject is series.
+                */}
+                <Text style={styles.emptyText}>
+                  {search
+                    ? t("search", "noResultsFor", { query: search })
+                    : t("seriesGrid", "noSeriesAvailable")}
+                </Text>
+              </View>
+          );
+          return (
       <FlatList
         ref={pages(pageCategoryId).listRef}
         {...pages(pageCategoryId).scroll}
-        data={itemsFor(pageCategoryId)}
+        data={pageSeries}
         keyExtractor={(item) => item.providerItemId}
         /*
           The theme is in this key, and it has to be.
@@ -571,15 +774,44 @@ export default function SeriesCategoriesScreen() {
         */
         key={`${columns}|${theme}`}
         numColumns={columns}
-        contentContainerStyle={styles.grid}
+        /*
+          `gridEmpty` only when there are no rows, and it is what makes the
+          empty state sit in the middle of the screen rather than in a
+          zero-height box at the top: `styles.centered` is `flex: 1`, and a
+          scroller's content container is sized by its children unless it is
+          told to grow. See the empty state above for why it is mounted
+          inside the list at all.
+        */
+        contentContainerStyle={[
+          styles.grid,
+          { paddingBottom: Spacing.xl + tabBarSpace },
+          pageEmpty && styles.gridEmpty,
+        ]}
         columnWrapperStyle={styles.gridRow}
         showsVerticalScrollIndicator={false}
+        /*
+          The first tap after typing used to be eaten by the keyboard.
+
+          A FlatList is a ScrollView, and React Native's default
+          `keyboardShouldPersistTaps="never"` lets it take the first touch
+          while the soft keyboard is up: the keyboard closed, the series did
+          not open, and only the second tap reached the poster. The chips
+          above answered first time, because `CategoryTabs` was given this
+          prop yesterday and this grid was not — which made the grid the one
+          dead surface on the screen, worse than the uniform old behaviour.
+          `"handled"` passes the touch to a child that handles it and still
+          dismisses the keyboard on a tap that lands on nothing. `search.tsx`
+          has carried it for the same arrangement since it was written.
+          Found 2026-11-18.
+        */
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           /* See the header button — a pull cannot happen on a television. */
           isTvBuild ? undefined : (
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Brand.primary} />
           )
         }
+        ListEmptyComponent={emptyState}
         renderItem={({ item, index }) => (
           <SeriesPoster
             series={item}
@@ -597,7 +829,8 @@ export default function SeriesCategoriesScreen() {
         })}
         {...(pageActive ? LIST_WINDOW : QUIET_LIST_WINDOW)}
       />
-        )}
+          );
+        }}
       />
     )}
       </BrowseLayout>
@@ -714,7 +947,19 @@ const styles = themedStyles((C: ThemeColors) =>
   tvHeaderGlyph: { color: C.text, fontSize: 20, fontFamily: FontFamily.bold },
 
   safeArea: { flex: 1 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  /* The gap is for the empty state's glyph over its sentence; the loading
+     spinner that also uses this style is a single child and never sees it. */
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: Spacing.sm },
+  emptyGlyph: { color: C.fillMedium, fontSize: 40 },
+  /* Centred and inset, unlike live-categories' copy, because this one can
+     carry a query the viewer typed and that query can wrap. */
+  emptyText: {
+    color: C.textMuted,
+    fontSize: 14,
+    fontFamily: FontFamily.regular,
+    textAlign: "center",
+    paddingHorizontal: Spacing.xl,
+  },
 
   /**
    * Fixed height with vertically centred content, and an explicit
@@ -784,6 +1029,8 @@ const styles = themedStyles((C: ThemeColors) =>
     borderRadius: Radii.md,
     backgroundColor: Brand.primary,
   },
+  /* Dimmed while the refresh it started is still running — see the call site. */
+  retryButtonBusy: { opacity: 0.6 },
   retryButtonText: {
     color: C.onAccent,
     fontSize: 14,
@@ -800,7 +1047,15 @@ const styles = themedStyles((C: ThemeColors) =>
     marginBottom: Spacing.sm,
   },
 
+  /* paddingBottom is added inline from useTabBarSpace(), which needs the insets. */
   grid: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl },
+  /*
+   * Added only on a page with no rows, so `ListEmptyComponent` has a full
+   * screen to centre itself in. `flexGrow`, not `flex`, so it cannot cap the
+   * content height of a list that does have rows if it is ever applied
+   * unconditionally by mistake.
+   */
+  gridEmpty: { flexGrow: 1 },
   gridRow: { gap: Spacing.sm, marginBottom: Spacing.md },
 
   posterCell: { paddingHorizontal: Spacing.xs },

@@ -15,11 +15,13 @@ import {
 import { BouncePressable } from "@/components/BouncePressable";
 import { TV_RAIL_WIDTH } from "@/components/CategorySidebar";
 import { BrowseLayout } from "@/components/TvBrowseLayout";
-import { PHONE_RAIL_WIDTH } from "@/components/CategoryRail";
 import { CachedImage } from "@/components/CachedImage";
 import { Focusable } from "@/components/Focusable";
 import { ScreenBackground, TV_OVERSCAN_X } from "@/components/ScreenBackground";
+import { useTabBarSpace } from "@/components/MoojTabBar";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { SECTION_LIVE } from "@/core/theme/sections";
+import { LiveGlyph } from "@/components/TabIcons";
 import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
 import { CategoryPager } from "@/components/CategoryPager";
 import { useI18n } from "@/core/i18n/I18nContext";
@@ -129,14 +131,15 @@ export default function LiveCategoriesScreen() {
   // Repaints this screen — and everything it renders — when the theme changes.
   const theme = useThemeRerender();
   const { t } = useI18n();
+  /* The bar floats over the screen, so the screen leaves room for it. */
+  const tabBarSpace = useTabBarSpace();
   const session = getActiveSession();
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
   /*
    * Turned sideways the categories move to a strip on top, so nothing
    * takes width off the grid — and `getItemLayout` has to be told, or
    * it promises rows sized for a narrower list than the one drawn.
    */
-  const landscape = windowWidth > windowHeight;
   const insets = useSafeAreaInsets();
   /*
    * The rail is subtracted on TV: the grid is not the window, and
@@ -180,10 +183,17 @@ export default function LiveCategoriesScreen() {
    */
   const [categories, setCategories] = useState<CategoryTab[] | null>(null);
   const [builtForProvider, setBuiltForProvider] = useState<string | null>(session?.provider.id ?? null);
-  const railShown = !isTvBuild && !landscape && (categories?.length ?? 0) > 1;
   const gridWidth =
     windowWidth - insets.left - insets.right - TV_OVERSCAN_X -
-    (isTvBuild ? TV_RAIL_WIDTH : railShown ? PHONE_RAIL_WIDTH : 0);
+    /*
+     * Only the television's rail takes width now. 2026-11-17 the phone moved
+     * from a right-hand rail to a chip strip above the grid, and a strip costs
+     * height, not width — leaving the subtraction in declared the grid
+     * narrower than it draws, and `getItemLayout` believes that number
+     * absolutely. That is the same mistake that put black bands down the
+     * channel list before (see CategorySidebar).
+     */
+    (isTvBuild ? TV_RAIL_WIDTH : 0);
   const columns = useGridColumns(PORTRAIT_COLUMNS, (c) => rowHeight(gridWidth, c));
   const gridRowHeight = rowHeight(gridWidth, columns);
   const [chosenCategoryId, setActiveCategoryId] = useState<string>(ALL_CATEGORY_ID);
@@ -463,19 +473,53 @@ export default function LiveCategoriesScreen() {
   async function handleRefresh() {
     if (!session) return;
     /*
-      A pull is the viewer saying "try again", and artwork is the part of the
-      screen they can see has failed. Without this the only cure for a tile
-      that went blank on a bad connection was killing the app.
+      A refresh is the viewer saying "try again", and artwork is the part of
+      the screen they can see has failed. Without this the only cure for a
+      tile that went blank on a bad connection was killing the app.
+
+      This said "a pull" when it was written, and a pull was the only way in.
+      The television's ⟳ button arrives here too, and so does the error
+      block's Retry as of 2026-11-17 — the sentence is true of all three.
     */
     forgetImageFailures();
     setRefreshing(true);
+    /*
+      Two failures, not one — and the second half runs either way.
+
+      This was a single `try` with `load()` inside it, so a provider that 404'd
+      the channel list also skipped the category read. The category read is
+      served from the SQLite catalogue (see state/categoryQueries), so it
+      almost always succeeds, and it is the half that can still put a list on a
+      screen that has none. That started to matter the moment the error
+      block's Retry button was pointed at this function: Retry is pressed from
+      a cold failure as well as from a failed pull. Found 2026-11-17 in the
+      pre-release audit.
+    */
+    let channelsFailed = false;
     try {
       await refreshActiveSessionChannels();
-      await load();
-      setErrorMessage(null);
     } catch {
-      setErrorMessage(t("common", "refreshFailed"));
+      channelsFailed = true;
+    }
+    try {
+      await load();
+      /*
+        Re-stated *after* `load()`, never before it. `load()` clears the banner
+        when it succeeds, and succeeding from the cache is exactly what it does
+        after a failed refresh — so setting the message first would have it
+        wiped by a read that fetched nothing from the provider, which is the
+        very "it says it worked and nothing happened" this change is about.
+
+        And only once there is something on screen to fall back on:
+        `hasDataRef` is raised inside `load()`, so reading it here asks "is
+        there a list under this banner now?". With nothing loaded at all,
+        `load()`'s own message names the real problem — the provider server is
+        not answering — and that is more use to the viewer than "couldn't
+        refresh". Same rule `load()` already applies to itself.
+      */
+      if (channelsFailed && hasDataRef.current) setErrorMessage(t("common", "refreshFailed"));
     } finally {
+      /* In a `finally` so an unexpected throw cannot leave the pull spinner turning. */
       setRefreshing(false);
     }
   }
@@ -590,8 +634,33 @@ export default function LiveCategoriesScreen() {
           and with it pull-to-refresh — never rendered, and the only way
           out was to leave the screen and come back.
         */}
-        <BouncePressable style={styles.retryButton} onPress={() => load()}>
-          <Text style={styles.retryButtonText}>{t("common", "retry")}</Text>
+        {/*
+          `handleRefresh`, not `load()`.
+
+          `load()` reads the categories out of the SQLite catalogue, so after a
+          failed refresh it succeeded without touching the provider: the banner
+          vanished, the viewer read that as "refreshed", and the lineup
+          underneath was byte-for-byte the one that had just failed to update —
+          the channels the provider had added were still missing and the next
+          pull failed again. Retry now does what the word says, and it is the
+          same path as the pull gesture and the television's ⟳ button, so the
+          three can only fail together. Found 2026-11-17 in the pre-release
+          audit.
+
+          Disabled while it runs, because in a cold failure this button is the
+          only thing on screen: the grid is not mounted, so there is no
+          RefreshControl spinner to show that anything is happening, and a
+          second press would open a second channel-list request on a line that
+          answers a burst with empty 404s (docs/DECISIONS.md).
+        */}
+        <BouncePressable
+          style={[styles.retryButton, refreshing && styles.retryButtonBusy]}
+          disabled={refreshing}
+          onPress={handleRefresh}
+        >
+          <Text style={styles.retryButtonText}>
+            {refreshing ? t("common", "loading") : t("common", "retry")}
+          </Text>
         </BouncePressable>
       </View>
     )}
@@ -627,7 +696,33 @@ export default function LiveCategoriesScreen() {
             return (
               <View style={styles.centered}>
                 <Text style={styles.emptyGlyph}>▤</Text>
-                <Text style={styles.emptyText}>{t("liveChannelList", "noChannelsAvailable")}</Text>
+                {/*
+                  A search that matches nothing is not an empty category.
+
+                  Both used to say "لا توجد قنوات متاحة." — "No channels
+                  available." — on a screen holding the provider's entire
+                  eleven-thousand-channel lineup, with every category still
+                  listed in the strip above and repeating the same sentence as
+                  you tapped through them. The honest reading of that is that
+                  the account has expired. A typo, or an English name typed
+                  against an Arabic lineup, is all it takes.
+
+                  The key is the one `search.tsx` already renders for exactly
+                  this case, with its {query} placeholder, translated in all six
+                  locales — so this names the term the viewer typed and adds no
+                  translation debt.
+
+                  The debounced `search` and not `searchInput`: it is the term
+                  the list was actually filtered by, so the sentence and the
+                  empty grid under it cannot disagree — including in the 200ms
+                  after the box is cleared, where the raw input would print
+                  No results for "". Found 2026-11-17 in the pre-release audit.
+                */}
+                <Text style={styles.emptyText}>
+                  {search
+                    ? t("search", "noResultsFor", { query: search })
+                    : t("liveChannelList", "noChannelsAvailable")}
+                </Text>
               </View>
             );
           }
@@ -652,9 +747,23 @@ export default function LiveCategoriesScreen() {
         */
         key={`${columns}|${theme}`}
         numColumns={columns}
-        contentContainerStyle={styles.grid}
+        contentContainerStyle={[styles.grid, { paddingBottom: Spacing.xl + tabBarSpace }]}
         columnWrapperStyle={styles.gridRow}
         showsVerticalScrollIndicator={false}
+        /*
+          The first tap after typing used to be eaten by the keyboard.
+
+          A FlatList is a ScrollView, and React Native's default
+          `keyboardShouldPersistTaps="never"` lets it take the first touch
+          while the soft keyboard is up: the keyboard closed, the channel did
+          not open, and only the second tap reached the card. On the screen the
+          owner uses most, that is how every search ended. `"handled"` passes
+          the touch to a child that handles it — the card, the star — and still
+          dismisses the keyboard on a tap that lands on nothing. `search.tsx`
+          has carried the same prop for the same arrangement since it was
+          written. Found 2026-11-17 in the pre-release audit.
+        */
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           /*
             Undefined on the television: a `RefreshControl` there is a
@@ -699,8 +808,12 @@ export default function LiveCategoriesScreen() {
 
   return (
     <ScreenBackground>
-      {/* No bottom edge: the tab bar below already clears the gesture area,
-          and asking for it here too leaves a second empty strip. */}
+      {/* No bottom edge, and that is what lets the bar's scoop show content.
+          The capsule floats over this screen rather than sitting below it, so
+          the screen has to run all the way down and pass under it; a bottom
+          inset here would stop the content short and put the page colour back
+          in the gap. The room the capsule needs comes from useTabBarSpace()
+          as padding inside the scroller instead. */}
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       {/*
         Television only. On a phone this said the same word the tab under
@@ -714,7 +827,8 @@ export default function LiveCategoriesScreen() {
         <ScreenHeader
           title={t("liveCategories", "title")}
           showBack={false}
-          subtitle={`${filteredChannels.length.toLocaleString()} ${t("liveChannelList", "channelsCountSuffix")}`}
+          badge={{ colour: SECTION_LIVE, glyph: <LiveGlyph color="#FFFFFF" size={20} /> }}
+          subtitle={`${t("home", "liveTVSub")} · ${filteredChannels.length.toLocaleString()} ${t("liveChannelList", "channelsCountSuffix")}`}
           /*
             Two controls that exist only on the television, in a slot that
             existed and was used by nothing.
@@ -1025,6 +1139,8 @@ const styles = themedStyles((C: ThemeColors) =>
     borderRadius: Radii.md,
     backgroundColor: Brand.primary,
   },
+  /* Dimmed while the refresh it started is still running — see the call site. */
+  retryButtonBusy: { opacity: 0.6 },
   retryButtonText: {
     color: C.onAccent,
     fontSize: 14,
@@ -1041,6 +1157,7 @@ const styles = themedStyles((C: ThemeColors) =>
     marginBottom: Spacing.sm,
   },
 
+  /* paddingBottom is added inline from useTabBarSpace(), which needs the insets. */
   grid: { paddingHorizontal: Spacing.md, paddingBottom: Spacing.xl },
   gridRow: { gap: Spacing.sm, marginBottom: Spacing.sm },
 

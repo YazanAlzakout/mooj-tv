@@ -4,6 +4,19 @@ import type { XtreamAccountInfo } from "@/providers/xtream/xtreamAdapter";
 import { resetSearchIndex } from "@/state/searchIndexStore";
 import { clearSeriesList } from "@/state/seriesStore";
 import { clearVodMovies } from "@/state/vodStore";
+import { clearActiveProvider } from "@/db/repositories/providerRepository";
+import { clearEpg } from "@/db/repositories/epgRepository";
+/*
+ * This is a cycle — epgCache.ts imports `providerHasEpg` from this file — and
+ * it is deliberate rather than overlooked. Nothing is called at module scope
+ * on either side: both imports are plain function references read at call
+ * time, long after Metro has finished evaluating both modules. Breaking it
+ * would mean a third module holding the two maps, which is a file for one
+ * `Map.clear()`. The alternative — clearing the tables and not the maps — is
+ * the bug this import fixes.
+ */
+import { clearEpgCache } from "@/state/epgCache";
+import { setDataScope } from "@/db/dataScope";
 
 /**
  * The currently-active provider's resolved config + last-fetched channel
@@ -22,6 +35,8 @@ interface ActiveSession {
 let session: ActiveSession | null = null;
 
 export function setActiveSession(next: ActiveSession): void {
+  /* The per-provider tables follow the session. See src/db/dataScope.ts. */
+  setDataScope(next.provider.id);
   /**
    * Only an actual provider switch invalidates the previously-cached
    * VOD/series catalogs and the search index built from them — never let
@@ -38,11 +53,55 @@ export function setActiveSession(next: ActiveSession): void {
    * user happened to reopen those sections. Comparing provider ids here
    * is what makes the wipe fire only on a genuine switch.
    */
-  const isProviderSwitch = session === null || session.provider.id !== next.provider.id;
+  const isProviderChange = session !== null && session.provider.id !== next.provider.id;
+  const isProviderSwitch = session === null || isProviderChange;
   if (isProviderSwitch) {
     clearVodMovies();
     clearSeriesList();
     resetSearchIndex();
+  }
+  /*
+   * The guide is the one piece of per-provider data that carries no provider
+   * id, so a change of provider empties it instead of scoping it.
+   *
+   * `epg_programmes` and `epg_fetch_log` are keyed by channel id alone, and a
+   * channel id is another small integer the panel chose — provider B has a
+   * channel "412" as well, and it is a different channel. Without this, B's
+   * rows showed A's programme titles until the six-hour STORED_TTL_MS in
+   * src/state/epgCache.ts ran out. Found 2026-11-17, beside the
+   * hidden-categories bug migration 24 fixes; `clearEpg()` has been exported
+   * since the table was written and had no caller anywhere in src/.
+   *
+   * Emptied rather than given a column, which is what 24 does for the other
+   * two tables: a guide is a cache with a six-hour life, and re-earning it
+   * costs one lazy request per channel the viewer actually opens — cheaper
+   * than a column on two tables and a rewrite of every query that reads them.
+   *
+   * The test is deliberately stricter than `isProviderSwitch` above, which is
+   * also true at every cold start, when `session` is null only because the
+   * process just began. Wiping the stored guide on every launch would spend
+   * this panel's small request budget re-fetching what was already on the
+   * device, on a line that bans for asking too often. So this fires only when
+   * one provider replaces another inside a running app.
+   *
+   * 2026-11-18, the second half of the same bug: the tables were emptied and
+   * the in-memory map in src/state/epgCache.ts was not, so for the five
+   * minutes of its CACHE_TTL_MS the switch changed nothing a viewer could
+   * see — `useEpgNowNext` found B's channel "412" already answered and never
+   * reached the tables at all. `clearEpgCache()` empties the map and the
+   * in-flight requests, synchronously, which also covers the tick or two in
+   * which `clearEpg()`'s fire-and-forget promise has not landed yet. The two
+   * belong together everywhere: neither is sufficient alone.
+   *
+   * Together with the one-time clear in migration 24, the clear in
+   * `clearActiveSession` below, and the one in add-provider.tsx's edit branch
+   * (same provider id, new panel — which is a change of provider that this
+   * function's id comparison cannot see), that covers every way the active
+   * provider can change.
+   */
+  if (isProviderChange) {
+    clearEpg().catch(() => {});
+    clearEpgCache();
   }
   session = next;
 }
@@ -94,8 +153,48 @@ export function providerHasEpg(): boolean {
 }
 
 export function clearActiveSession(): void {
+  setDataScope(null);
   clearVodMovies();
   clearSeriesList();
   resetSearchIndex();
+  /*
+   * Disconnecting ends the stored guide's claim on a provider, for the reason
+   * `setActiveSession` spells out above: its rows name a channel by an id the
+   * panel chose, and the next account connected will have ids of its own that
+   * collide. Reconnecting the same line pays for a re-fetch, which is the
+   * right price for a deliberate, rare action — and it is what closes the
+   * disconnect-then-connect-someone-else path, where `setActiveSession` sees a
+   * null session and cannot tell a switch from a launch.
+   *
+   * 2026-11-18: a failed launch restore is that same path, and it was open.
+   * src/app/index.tsx caught the rejection and went to /providers without
+   * clearing anything, so `session` stayed null while `providers.is_active`
+   * was still the old provider's — the commonest reason to switch lines is
+   * the old one expiring, which is exactly a rejected login. Connecting
+   * someone else from there found a null session, so `isProviderChange` was
+   * false and nothing was cleared. That catch now calls this function, which
+   * is the state the app is in anyway.
+   *
+   * The map goes with the tables, for the reason `setActiveSession` records
+   * above: on its own, emptying the tables is invisible for five minutes.
+   */
+  clearEpg().catch(() => {});
+  clearEpgCache();
   session = null;
+}
+
+/**
+ * Everything disconnecting has to do, in the order it has to happen.
+ *
+ * It lives here rather than in a screen because it was in two screens and they
+ * had drifted: Settings dismissed the stack and replaced with /providers, Home
+ * only replaced — and neither cleared the active provider, so the launch path
+ * reconnected. Home's round trip was instant and looked like a dead button.
+ *
+ * The caller still does the navigating. This function owns what "disconnected"
+ * means to the rest of the app, and that is a state, not a screen.
+ */
+export async function disconnectProvider(): Promise<void> {
+  await clearActiveProvider();
+  clearActiveSession();
 }

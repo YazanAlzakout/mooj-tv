@@ -1,5 +1,12 @@
 import { useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type AccessibilityRole,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 
 import { Brand, Radii } from "@/core/theme/tokens";
 
@@ -45,6 +52,33 @@ export function Focusable({
    * reads as a mistake.
    */
   round,
+  accessibilityLabel,
+  accessibilityState,
+  /**
+   * What a screen reader should call this.
+   *
+   * "button" is right for nearly all forty-odd call sites and stays the
+   * default — but it was *hard-coded* until 2026-11-18, and by then it had
+   * stopped being true everywhere. Two kinds of call site are not buttons,
+   * and both appeared as this component spread onto the television:
+   *
+   * - the five items in MoojTabBar, which are tabs; they already pass
+   *   `accessibilityState={{ selected }}`, and that state only means
+   *   anything to a screen reader next to the matching role. They now pass
+   *   `"tab"`.
+   * - the stops that exist only to give the focus ring somewhere to go, so
+   *   that Down means "read on" in a document a remote cannot otherwise
+   *   scroll: the trace lines in CrashScreen (`"text"`) and the cards in
+   *   legal.tsx and licences.tsx. Their `onPress` is an empty function on
+   *   purpose, and announcing a paragraph of an agreement as a button
+   *   promises an action that does not exist. Those two screens are twins,
+   *   kept deliberately identical, so they still take the default here and
+   *   should be moved off it in one edit rather than one at a time.
+   *
+   * A prop rather than a guess inside this component: only the caller knows
+   * what the thing it is wrapping actually is.
+   */
+  accessibilityRole = "button",
 }: {
   children: ReactNode;
   onPress: () => void;
@@ -53,8 +87,19 @@ export function Focusable({
   disabled?: boolean;
   hitSlop?: number;
   round?: boolean;
+  accessibilityRole?: AccessibilityRole;
   /** Fired when the D-pad moves focus onto this control. */
   onFocus?: () => void;
+  /**
+   * Passed straight to the Pressable.
+   *
+   * 2026-11-14: added for the tab bar, which announces its five section names
+   * to a screen reader and had to keep doing that while gaining the ring.
+   * A control swapping to this one should be able to bring its accessibility
+   * with it rather than lose it in the swap.
+   */
+  accessibilityLabel?: string;
+  accessibilityState?: { selected?: boolean; disabled?: boolean };
 }) {
   const [focused, setFocused] = useState(false);
 
@@ -65,6 +110,9 @@ export function Focusable({
       style={style}
       hitSlop={hitSlop}
       hasTVPreferredFocus={hasTVPreferredFocus}
+      accessibilityRole={accessibilityRole}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={accessibilityState}
       onFocus={() => {
         setFocused(true);
         onFocus?.();

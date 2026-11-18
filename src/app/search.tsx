@@ -14,11 +14,18 @@ import { ScreenBackground } from "@/components/ScreenBackground";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
 import { useI18n } from "@/core/i18n/I18nContext";
+import { artworkIsKnownBad } from "@/core/media/deadImageHosts";
 import { Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, themeColors, useThemeRerender } from "@/core/theme/themedStyles";
 import { getActiveSession } from "@/state/activeSessionStore";
-import { ensureSearchIndexReady, searchContent, type SearchResult } from "@/state/searchIndexStore";
+import {
+  ensureSearchIndexReady,
+  searchContent,
+  SEARCH_RESULT_LIMIT,
+  type SearchResult,
+  type SearchResultPage,
+} from "@/state/searchIndexStore";
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -36,7 +43,13 @@ export default function SearchScreen() {
   const [indexError, setIndexError] = useState<string | null>(null);
   const [queryInput, setQueryInput] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
+  /*
+    The rows and the "was this cut" flag are one value, never two pieces of
+    state. They are read together in the same frame — the header prints the
+    count, the list prints the rows — and keeping them in one object makes
+    it impossible to ever put one query's count over another query's rows.
+  */
+  const [page, setPage] = useState<SearchResultPage>({ results: [], truncated: false });
 
   useEffect(() => {
     if (!session) return;
@@ -61,14 +74,34 @@ export default function SearchScreen() {
     if (!indexReady || !debouncedQuery) return;
     let cancelled = false;
     searchContent(debouncedQuery).then((found) => {
-      if (!cancelled) setResults(found);
+      if (!cancelled) setPage(found);
     });
     return () => {
       cancelled = true;
     };
   }, [debouncedQuery, indexReady]);
 
-  const visibleResults = debouncedQuery ? results : [];
+  const visibleResults = debouncedQuery ? page.results : [];
+
+  /*
+    What goes under the word "Search".
+
+    A query that filled the page is shown as "50+", not as "50". The bare
+    number was the whole defect: it is the cap, printed in the place a
+    total belongs — so a viewer who matched four thousand titles read
+    "there are fifty of these" and never learned that the title they wanted
+    was in the catalogue and past the fiftieth row (pre-release audit,
+    2026-11-17). The "+" is what makes the same number honest.
+
+    And it is labelled, the way the three browse screens label theirs
+    ("٢٤٨ قناة"): "50+ results" / "50+ نتيجة". A bare number under a
+    screen's title is read as a total of whatever that screen is about,
+    which is the same misreading in a quieter form.
+  */
+  const resultCount =
+    debouncedQuery && page.truncated
+      ? `${SEARCH_RESULT_LIMIT.toLocaleString()}+`
+      : visibleResults.length.toLocaleString();
 
   useEffect(() => {
     if (!session) router.replace("/providers");
@@ -96,7 +129,9 @@ export default function SearchScreen() {
       <SafeAreaView style={styles.safeArea}>
       <ScreenHeader
         title={t("search", "title")}
-        subtitle={indexReady && debouncedQuery ? `${visibleResults.length}` : undefined}
+        subtitle={
+          indexReady && debouncedQuery ? `${resultCount} ${t("search", "resultsCountSuffix")}` : undefined
+        }
       />
 
       <TextInput
@@ -141,7 +176,20 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {indexReady && (
+      {/*
+        Rendered only when there is something in it, the way history.tsx:99
+        and library/[listType].tsx:140 already do it.
+
+        An empty FlatList is not nothing. React Native gives every
+        ScrollView `flexGrow: 1, flexShrink: 1`, so an empty one standing in
+        the same column as the `flex: 1` centred message took half the free
+        height for itself: "Type to search across Live TV, Movies, and
+        Series." and 'No results for "…"' landed about a quarter of the way
+        down an otherwise blank screen, with a large void underneath. That
+        is not what `centered` asks for, and not what the two sibling
+        screens do. Pre-release audit, 2026-11-17.
+      */}
+      {indexReady && visibleResults.length > 0 && (
         <FlatList
         {...NO_CLIP}
           data={visibleResults}
@@ -163,7 +211,28 @@ export default function SearchScreen() {
 /** Plain `Pressable`, no per-row animation — search results scroll and recycle like any other large list. */
 function ResultRow({ result, onPress }: { result: SearchResult; onPress: () => void }) {
   const { t } = useI18n();
-  const [imageFailed, setImageFailed] = useState(false);
+  /*
+    **The same test `CachedImage` uses, not a blank `false`.**
+
+    The branch below swaps the letter tile OUT for the image, so whenever
+    `CachedImage` declines to render — and it declines by returning null,
+    before any image exists, for a URL that is already known bad — this row
+    drew nothing at all where the artwork goes. With no image mounted
+    `onError` can never fire either, so the row could not correct itself for
+    the rest of the session.
+
+    It costs more than a missing picture here: the tile is a flex child, not
+    a layer behind the text, so a row that draws nothing pulls its title and
+    its LIVE/MOVIE/SERIES badge 46dp towards the start edge and sits visibly
+    out of line with the rows above and below it. One channel logo that
+    404'd while the viewer was scrolling Live TV is enough to do it, and
+    Search is one of the screens they open next.
+
+    Same defect and same fix as the browse grid and the channel row beside
+    the player (45d89d0, and ChannelListRow.tsx:61); found again here, and
+    on History, Library and Downloads, in the pre-release audit 2026-11-17.
+  */
+  const [imageFailed, setImageFailed] = useState(() => artworkIsKnownBad(result.imageUrl));
 
   return (
     <Focusable onPress={onPress} style={styles.row}>

@@ -915,6 +915,10 @@ export default function LivePlayerScreen() {
             again in three seconds, so it keeps the short delay.
           */
           const delay = shapeIsWrong ? RETRY_DELAY_MS : BUSY_RETRY_DELAY_MS;
+          // Clear first: the ref holds one timer, so overwriting it without
+          // clearing leaves the old one running and two retry chains then
+          // open two streams on a line that is already refusing one.
+          if (retryTimeoutRef.current !== null) clearTimeout(retryTimeoutRef.current);
           retryTimeoutRef.current = setTimeout(() => {
             retryTimeoutRef.current = null;
             if (!isStale() && !unmountedRef.current) attemptCommit(target, isStale);
@@ -1042,6 +1046,51 @@ export default function LivePlayerScreen() {
       */
       const activeCommit = activeCommitRef.current;
       if (activeCommit && !unmountedRef.current && !activeCommit.isStale()) {
+        /*
+          The 2026-09-16 rule has to be applied HERE, not only in the
+          rejection arm of `attemptCommit`.
+
+          Found 2026-11-14 by audit, and it is the same bug the comment at
+          the top of `attemptCommit` says must never come back. Because
+          `replaceAsync` resolves the moment the native player accepts the
+          source, that rejection arm almost never runs on Android — so the
+          `failure.category !== "http_unauthorized"` test that lives there
+          was being skipped on the one path that actually fires, and this
+          walk ran on every error, 403 included.
+
+          The effect was exactly the measured one: a channel tuned while a
+          connection slot is busy answers 403, and the player opens all four
+          URL shapes against a panel that answers a burst of requests with
+          empty 404s and then refuses everything for a while. The candidate
+          list is the answer to a wrong URL shape. It is the wrong answer to
+          a busy line, where every shape will answer 403 as well.
+
+          So: keep the shape, retry the timing, bounded — and say why while
+          the viewer waits.
+        */
+        if (playbackError.category === "http_unauthorized") {
+          if (retryCountRef.current < MAX_BUSY_RETRIES) {
+            retryCountRef.current += 1;
+            setErrorReasonKey(playbackReasonKey(playbackError.category));
+            setRetryPending(true);
+            // Clear first: two chains running at once is two streams opened.
+            if (retryTimeoutRef.current !== null) clearTimeout(retryTimeoutRef.current);
+            retryTimeoutRef.current = setTimeout(() => {
+              retryTimeoutRef.current = null;
+              if (unmountedRef.current || activeCommit.isStale()) return;
+              attemptCommit(activeCommit.target, activeCommit.isStale);
+            }, BUSY_RETRY_DELAY_MS);
+            return;
+          }
+          /*
+            Out of budget. Tell the viewer the one cause they can act on —
+            the account is in use somewhere else — and stop opening streams.
+          */
+          setRetryPending(false);
+          setErrorReasonKey(playbackReasonKey(playbackError.category));
+          return;
+        }
+
         if (advanceCandidate(activeCommit.target, activeCommit.isStale)) return;
       }
 
@@ -1075,6 +1124,8 @@ export default function LivePlayerScreen() {
         // The shape that played, not wherever the opening walk left the index.
         candidateIndexRef.current = workingCandidateIndexRef.current;
         const uri = currentChannel.streamUrlCandidates[workingCandidateIndexRef.current] ?? currentChannel.streamUrl;
+        // Clear first, same reason as the opening path above.
+        if (retryTimeoutRef.current !== null) clearTimeout(retryTimeoutRef.current);
         retryTimeoutRef.current = setTimeout(() => {
           retryTimeoutRef.current = null;
           if (unmountedRef.current || controller.isStale(generation)) return;

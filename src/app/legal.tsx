@@ -8,6 +8,7 @@ import { BouncePressable } from "@/components/BouncePressable";
 import { Focusable } from "@/components/Focusable";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { ScreenBackground } from "@/components/ScreenBackground";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { CURRENT_LEGAL_VERSION } from "@/core/legal/legalVersion";
 import { useI18n } from "@/core/i18n/I18nContext";
 import type { TranslationShape } from "@/core/i18n/translations/en";
@@ -52,7 +53,28 @@ export default function LegalScreen() {
 
   async function accept() {
     await setLegalAccepted(CURRENT_LEGAL_VERSION);
-    if (isGate) router.replace("/providers");
+    /*
+     * Back to the startup gate, not straight to the provider list.
+     *
+     * This gate catches two different people. On a first install the viewer
+     * has no provider yet and `/providers` is where they belong. But
+     * `legalVersion.ts` bumps `CURRENT_LEGAL_VERSION` whenever the terms
+     * change materially — it is at 2 for the Delaware → Egypt venue change
+     * — and the same gate then stops viewers who have been watching for
+     * months. Sending *those* to the provider list dropped them out of
+     * their own session: their line shown but disconnected, no restore, and
+     * Home unreachable until they tapped it and sat through the catalogue
+     * again. Accepting a new version of the terms is not a reason to log
+     * somebody out.
+     *
+     * `index.tsx` already knows the difference and decides it properly
+     * (`:152-167`): it re-reads the accepted version — which is what was
+     * just written, so it passes — then restores the active provider and
+     * replaces to `/home`, or replaces to `/providers` when there is no
+     * provider, which is the first-install case, unchanged.
+     * `onboarding.tsx` hands back the same way, for the same reason.
+     */
+    if (isGate) router.replace("/");
     else router.back();
   }
 
@@ -62,22 +84,11 @@ export default function LegalScreen() {
   return (
     <ScreenBackground>
       <SafeAreaView style={styles.safeArea}>
-        <Animated.View entering={FadeIn.duration(400)} style={styles.header}>
-          {!isGate && (
-            <BouncePressable onPress={() => router.back()} style={styles.backButton}>
-              <Text style={styles.backButtonText}>‹ {t("common", "back")}</Text>
-            </BouncePressable>
-          )}
-          <View style={styles.headerTitleWrap}>
-            <Text style={styles.title} numberOfLines={1}>
-              {legal.title}
-            </Text>
-            <Text style={styles.subtitle}>
-              {legal.lastUpdatedLabel}: {legal.lastUpdatedDate}
-            </Text>
-          </View>
-          {!isGate && <View style={styles.backButton} />}
-        </Animated.View>
+        <ScreenHeader
+          title={legal.title}
+          subtitle={`${legal.lastUpdatedLabel}: ${legal.lastUpdatedDate}`}
+          showBack={!isGate}
+        />
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Animated.View entering={FadeIn.delay(80).duration(500)} style={styles.hero}>
@@ -102,9 +113,11 @@ export default function LegalScreen() {
             and the Accept button is a *sibling* of the scroll area rather
             than inside it — so arrow keys had nothing to move to and the
             page never scrolled. In gate mode there is also no back button
-            (`:64`, `:77`), so a viewer saw one screenful of a long
-            agreement and the only thing they could press was Accept. They
-            were agreeing to text they had no way to reach.
+            — `showBack={!isGate}` on the header above, because nothing is
+            behind a screen that was reached by `replace` — so a viewer saw
+            one screenful of a long agreement and the only thing they could
+            press was Accept. They were agreeing to text they had no way to
+            reach.
 
             `onPress` does nothing on purpose. The card is not a button; it
             is a stop for the focus ring so that Down means "read on".
@@ -176,21 +189,6 @@ export default function LegalScreen() {
 const styles = themedStyles((C: ThemeColors) =>
   StyleSheet.create({
   safeArea: { flex: 1 },
-
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  backButton: { minWidth: 64, paddingVertical: Spacing.xs },
-  backButtonText: { color: Brand.primaryLight, fontSize: 15, fontFamily: FontFamily.semiBold },
-  headerTitleWrap: { flex: 1, alignItems: "center" },
-  title: { color: C.text, fontSize: 17, fontFamily: FontFamily.extraBold },
-  subtitle: { color: C.textMuted, fontSize: 10, fontFamily: FontFamily.regular, marginTop: 2 },
 
   scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxl, gap: Spacing.md },
 

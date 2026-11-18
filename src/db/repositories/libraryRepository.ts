@@ -1,3 +1,4 @@
+import { dataScope } from "@/db/dataScope";
 import { getDatabase } from "@/db/client";
 
 export type LibraryListType = "favorite" | "watch_later";
@@ -46,19 +47,23 @@ export async function isInLibrary(
 ): Promise<boolean> {
   const db = await getDatabase();
   const row = await db.getFirstAsync(
-    "SELECT 1 FROM library_items WHERE list_type = $listType AND content_type = $contentType AND provider_item_id = $providerItemId;",
-    { $listType: listType, $contentType: contentType, $providerItemId: providerItemId }
+    "SELECT 1 FROM library_items WHERE provider_id = $providerId AND list_type = $listType AND content_type = $contentType AND provider_item_id = $providerItemId;",
+    { $providerId: dataScope(), $listType: listType, $contentType: contentType, $providerItemId: providerItemId }
   );
   return row !== null;
 }
 
 export async function addLibraryItem(item: Omit<LibraryItem, "addedAt">): Promise<void> {
+  const providerId = dataScope();
+  /* Nothing is connected, so there is no provider for this row to belong to. */
+  if (!providerId) return;
   const db = await getDatabase();
   await db.runAsync(
-    `INSERT INTO library_items (list_type, content_type, provider_item_id, title, image_url, category_id, container_extension, added_at)
-     VALUES ($listType, $contentType, $providerItemId, $title, $imageUrl, $categoryId, $containerExtension, $addedAt)
-     ON CONFLICT (list_type, content_type, provider_item_id) DO NOTHING;`,
+    `INSERT INTO library_items (provider_id, list_type, content_type, provider_item_id, title, image_url, category_id, container_extension, added_at)
+     VALUES ($providerId, $listType, $contentType, $providerItemId, $title, $imageUrl, $categoryId, $containerExtension, $addedAt)
+     ON CONFLICT (provider_id, list_type, content_type, provider_item_id) DO NOTHING;`,
     {
+      $providerId: providerId,
       $listType: item.listType,
       $contentType: item.contentType,
       $providerItemId: item.providerItemId,
@@ -78,8 +83,8 @@ export async function removeLibraryItem(
 ): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
-    "DELETE FROM library_items WHERE list_type = $listType AND content_type = $contentType AND provider_item_id = $providerItemId;",
-    { $listType: listType, $contentType: contentType, $providerItemId: providerItemId }
+    "DELETE FROM library_items WHERE provider_id = $providerId AND list_type = $listType AND content_type = $contentType AND provider_item_id = $providerItemId;",
+    { $providerId: dataScope(), $listType: listType, $contentType: contentType, $providerItemId: providerItemId }
   );
 }
 
@@ -97,22 +102,22 @@ export async function toggleLibraryItem(item: Omit<LibraryItem, "addedAt">): Pro
 export async function getLibraryItems(listType: LibraryListType): Promise<LibraryItem[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<LibraryItemRow>(
-    "SELECT * FROM library_items WHERE list_type = $listType ORDER BY added_at DESC;",
-    { $listType: listType }
+    "SELECT * FROM library_items WHERE provider_id = $providerId AND list_type = $listType ORDER BY added_at DESC;",
+    { $providerId: dataScope(), $listType: listType }
   );
   return rows.map(fromRow);
 }
 
 export async function clearLibraryList(listType: LibraryListType): Promise<void> {
   const db = await getDatabase();
-  await db.runAsync("DELETE FROM library_items WHERE list_type = $listType;", { $listType: listType });
+  await db.runAsync("DELETE FROM library_items WHERE provider_id = $providerId AND list_type = $listType;", { $providerId: dataScope(), $listType: listType });
 }
 
 export async function getLibraryCount(listType: LibraryListType): Promise<number> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<{ count: number }>(
-    "SELECT COUNT(*) as count FROM library_items WHERE list_type = $listType;",
-    { $listType: listType }
+    "SELECT COUNT(*) as count FROM library_items WHERE provider_id = $providerId AND list_type = $listType;",
+    { $providerId: dataScope(), $listType: listType }
   );
   return row?.count ?? 0;
 }

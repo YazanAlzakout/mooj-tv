@@ -105,6 +105,38 @@ export default function OnboardingScreen() {
    * slide was wider than the screen and its text sat half off it.
    */
   const { width: screenWidth } = useWindowDimensions();
+  /*
+   * And re-anchored when that width changes, which is the other half of the
+   * same bug.
+   *
+   * The note above fixed the slides: they and `getItemLayout` now agree
+   * after a rotation. The scroll offset was never re-synced, and it is
+   * still index × the *old* width. `pagingEnabled` only snaps on the next
+   * scroll, so a viewer on slide 2 or 3 who turned the phone was left
+   * parked between two slides — the right-hand part of one and the
+   * left-hand part of the next, with the dots insisting on a third answer —
+   * and it stayed that way until they swiped.
+   *
+   * Scheduled for the next frame rather than run here. Going portrait →
+   * landscape the content is still three *old* widths across at this point,
+   * so an immediate scroll past that maximum is clamped to it and the
+   * re-anchor silently does nothing — which is the exact direction the
+   * fault was reported in. One frame later the slides have been laid out at
+   * the new width and the offset lands.
+   *
+   * `index` is read, not depended on: the width change is the trigger, and
+   * the value wanted is the one from the render the rotation interrupted.
+   *
+   * The television never rotates, so there this runs once at mount, scrolls
+   * to an offset of 0 where the list already is, and never fires again.
+   */
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      listRef.current?.scrollToOffset({ offset: index * screenWidth, animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenWidth]);
 
   function goNext() {
     if (isLast) {

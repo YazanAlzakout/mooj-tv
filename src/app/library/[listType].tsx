@@ -12,6 +12,7 @@ import { ScreenBackground } from "@/components/ScreenBackground";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { BouncePressable } from "@/components/BouncePressable";
 import { useI18n } from "@/core/i18n/I18nContext";
+import { artworkIsKnownBad } from "@/core/media/deadImageHosts";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
@@ -160,7 +161,30 @@ export default function LibraryListScreen() {
 /** Plain `Pressable`, no per-row animation — see the note on `ChannelRow` in live-categories.tsx. */
 function ItemRow({ item, onPress, onRemove }: { item: LibraryItem; onPress: () => void; onRemove: () => void }) {
   const { t } = useI18n();
-  const [imageFailed, setImageFailed] = useState(false);
+  /*
+    **The same test `CachedImage` uses, not a blank `false`.**
+
+    The branch below swaps the letter tile OUT for the image, so whenever
+    `CachedImage` declines to render — and it declines by returning null,
+    before any image exists, for a URL that is already known bad — this row
+    drew nothing at all where the artwork goes. With no image mounted
+    `onError` can never fire either, so the row could not correct itself for
+    the rest of the session.
+
+    The tile is a flex child, not a layer behind the text, so a row that
+    draws nothing pulls its title and its LIVE/MOVIE/SERIES badge 46dp
+    towards the start edge, out of line with the rows around it. Favourites
+    is where it is near-certain rather than merely likely: a channel is
+    starred from the Live TV grid, and the logo URL saved in library_items
+    is the same URL that grid has just failed to load — so the star the
+    viewer added right after seeing a blank tile is the row that draws
+    blank here.
+
+    Same defect and same fix as the browse grid and the channel row beside
+    the player (45d89d0, and ChannelListRow.tsx:61); found again on this
+    screen in the pre-release audit, 2026-11-17.
+  */
+  const [imageFailed, setImageFailed] = useState(() => artworkIsKnownBad(item.imageUrl));
 
   return (
     /* The row and its remove button are siblings — see the note below. */

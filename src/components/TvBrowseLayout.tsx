@@ -1,8 +1,7 @@
 import type { ReactNode } from "react";
-import { StyleSheet, View, useWindowDimensions } from "react-native";
+import { StyleSheet, View } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 
-import { CategoryRail } from "@/components/CategoryRail";
 import { CategorySidebar } from "@/components/CategorySidebar";
 import { CategoryTabs, type CategoryTabItem } from "@/components/CategoryTabs";
 import { isTvBuild } from "@/core/platform/isTvBuild";
@@ -23,35 +22,16 @@ import { isTvBuild } from "@/core/platform/isTvBuild";
  * - **Television:** `CategorySidebar` on the left, 241dp, selection
  *   following D-pad focus on a delay. Left enters it, Up/Down walks it,
  *   Right returns.
- * - **Phone:** `CategoryRail` on the right, 84dp, tap to choose. A sideways
- *   swipe on the grid still changes category, and the rail follows.
+ * - **Phone:** `CategoryTabs` above the grid, in both orientations. A strip
+ *   costs height, not width, so nothing is subtracted from the grid.
+ * - **Television:** `CategorySidebar` beside the grid, 241dp wide, which IS
+ *   subtracted — a remote reaches a column with one Left press, and a strip
+ *   above the grid competes with it for Up and Down.
  *
- * ## Why the sides differ
- *
- * A television rail sits on the left because Left is how you reach it. A
- * phone rail sits on the right because that is where the thumb already is,
- * and because the artwork should start at the edge the eye starts from.
- *
- * ## The wrapper is not optional and not free
- *
- * An earlier version wrapped both platforms in a `View` that had no style
- * at all on the phone. That took away the `flex: 1` parent the grid's
- * FlatList needs, and left it filling the screen only by accident of
- * content measurement. Both branches below carry `flex: 1` explicitly for
- * that reason — a wrapper without it is the bug, not the wrapper itself.
- *
- * ## The grid must know this is here
- *
- * Whichever rail renders, it takes width the grid does not get. A grid
- * works its column width out from the width it is handed and gives the
- * resulting row height to `getItemLayout`, which FlatList trusts without
- * ever measuring a row. Forget to subtract the rail and every row is
- * declared taller than it draws, the error compounds down the list, and
- * cells are placed rows away from where they appear. See `TV_RAIL_WIDTH`
- * for the first time that happened, in full.
- *
- * The rail is hidden when there is nothing to choose between — one
- * category, or none loaded yet — so no screen shows an empty column.
+ * 2026-11-17: the phone's right-hand `CategoryRail` was replaced by the chip
+ * strip, because the approved Movies, Series and Channels screens all draw the
+ * categories as chips under the title. The rail is still in the repository —
+ * nothing on a phone reaches it now.
  */
 export function BrowseLayout({
   categories,
@@ -69,8 +49,6 @@ export function BrowseLayout({
   children: ReactNode;
 }) {
   const hasRail = Boolean(categories && categories.length > 1);
-  const { width, height } = useWindowDimensions();
-  const landscape = width > height;
 
   /*
    * One tree, three arrangements — and the keys are the whole point.
@@ -94,9 +72,23 @@ export function BrowseLayout({
    * writing it first in both and reversing the row is how it gets there
    * without the array itself changing shape.
    */
+  /*
+   * The phone takes the horizontal chip strip, in both orientations.
+   *
+   * 2026-11-17: the approved Movies, Series and Channels screens all draw the
+   * categories as a row of chips under the title, and that is now the decision
+   * — it replaces the right-hand `CategoryRail` chosen on 2026-11-07. The rail
+   * is left in the repository because the television still has nothing like it
+   * and because the reasoning in its own file is worth keeping, but no phone
+   * screen reaches it any more.
+   *
+   * The television keeps `CategorySidebar`: a remote reaches a column beside
+   * the grid with one Left press, and a strip above it competes with the grid
+   * for Up and Down.
+   */
   const rail = !hasRail || !categories ? null : isTvBuild ? (
     <CategorySidebar key="rail" categories={categories} activeId={activeId} onSelect={onSelect} />
-  ) : landscape ? (
+  ) : (
     <CategoryTabs
       key="rail"
       categories={categories}
@@ -104,8 +96,6 @@ export function BrowseLayout({
       onSelect={onSelect}
       progress={progress}
     />
-  ) : (
-    <CategoryRail key="rail" categories={categories} activeId={activeId} onSelect={onSelect} />
   );
 
   const content = (
@@ -128,7 +118,8 @@ export function BrowseLayout({
    * moves it with the finger — which is the one thing the column cannot
    * do, a vertical rail following a horizontal drag reading as a glitch.
    */
-  const direction = isTvBuild ? "row" : landscape ? "column" : "row-reverse";
+  /* Chips above the grid on a phone, rail beside it on a television. */
+  const direction = isTvBuild ? "row" : "column";
 
   return <View style={[styles.body, { flexDirection: direction }]}>{[rail, content]}</View>;
 }

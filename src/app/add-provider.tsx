@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Focusable } from "@/components/Focusable";
 import { BouncePressable } from "@/components/BouncePressable";
 import { ScreenBackground } from "@/components/ScreenBackground";
+import { ScreenHeader } from "@/components/ScreenHeader";
 import { toUserFacingMessage } from "@/core/errors/providerErrorMessage";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { getProviderCredentials, saveProviderCredentials } from "@/core/storage/secureCredentials";
@@ -25,8 +26,10 @@ import { resolveServerShortcode } from "@/providers/serverShortcodes";
 import { MASKED_VALUE } from "@/core/storage/maskedValue";
 import { PreparingLibrary } from "@/components/PreparingLibrary";
 import { clearCatalogCache } from "@/db/repositories/catalogCacheRepository";
+import { clearEpg } from "@/db/repositories/epgRepository";
 import { preloadCatalog, type PreloadProgress } from "@/state/catalogCache";
 import { getActiveSession, setActiveSession } from "@/state/activeSessionStore";
+import { clearEpgCache } from "@/state/epgCache";
 import { resetSearchIndex } from "@/state/searchIndexStore";
 import { setSeriesList } from "@/state/seriesStore";
 import { setVodMovies } from "@/state/vodStore";
@@ -156,8 +159,27 @@ export default function AddProviderScreen() {
 
       const snapshot = await preloadCatalog(targetId, config, containerExtension, setPreload);
       const channels = snapshot.channels;
-      if (channels.length === 0) {
-        setErrorMessage(t("addProvider", "noVodEmpty"));
+      /*
+       * Refused only when the provider returned NOTHING.
+       *
+       * This used to refuse any provider with no live channels, which read as
+       * "live TV is the point and the rest is extra". It is not: a subscription
+       * that carries films and series and no channels is an ordinary
+       * subscription, and the app has a tab and a home card for each of the
+       * three.
+       *
+       * Found 2026-11-17 on the account prepared for Google's review — 0 live
+       * categories, 0 live streams, 1 film category, 1 series. It authenticated
+       * (`auth: 1`, `status: Active`), downloaded its catalogue, and was then
+       * turned away at the last step with "this provider returned no live
+       * channels". A reviewer would have seen exactly that and failed the
+       * submission on an app that was working.
+       *
+       * The three browse screens and the home card each already have an empty
+       * state, so a missing section is a quiet section rather than a broken one.
+       */
+      if (channels.length === 0 && snapshot.movies.length === 0 && snapshot.series.length === 0) {
+        setErrorMessage(t("addProvider", "catalogEmpty"));
         return;
       }
 
@@ -193,6 +215,46 @@ export default function AddProviderScreen() {
           setVodMovies(snapshot.movies);
           setSeriesList(snapshot.series);
           resetSearchIndex();
+          /*
+           * The guide as well, when this row actually moved to another panel
+           * or another account.
+           *
+           * 2026-11-18. An edit keeps the provider id, so `isProviderChange`
+           * inside `setActiveSession` is false and the clear that function
+           * owns never fires — yet repointing a row is a change of provider
+           * in the one way the guide cares about: `epg_programmes`,
+           * `epg_fetch_log` and the map in src/state/epgCache.ts are keyed by
+           * a channel id the panel chose and by nothing else, and every panel
+           * numbers from 1. The catalogue, the series list and the search
+           * index on the three lines above were already reset here for
+           * exactly this reason; the guide was the one that was missed, and
+           * it is the one that would have stood for six hours.
+           *
+           * Tested rather than done on every save: the common edit changes
+           * only the name, and throwing away a guide that is still correct
+           * would make the next several channels the viewer opens each cost a
+           * `get_short_epg` on a line that blocks for asking too often.
+           *
+           * The saved address is run through `normalizeBaseUrl` before being
+           * compared even though every writer of the column already does so
+           * (this screen and `legacyProviderImport`): the call is idempotent,
+           * and it keeps the test from depending on that staying true. The
+           * two errors are not equal — reading "moved" when nothing did costs
+           * a lazy re-fetch, reading "unchanged" when it moved puts one
+           * account's programme titles over another's stream.
+           *
+           * Deliberately inside this branch. The stored guide belongs to
+           * whatever is connected right now, so editing some *other* row must
+           * not empty it — when that row is connected later,
+           * `setActiveSession` sees a genuine id change and clears it then.
+           */
+          const panelMoved =
+            baseUrl !== normalizeBaseUrl(stored?.baseUrl ?? "") ||
+            config.username !== (stored?.username ?? "");
+          if (panelMoved) {
+            clearEpg().catch(() => {});
+            clearEpgCache();
+          }
           setActiveSession({
             provider: { ...activeSession.provider, ...updated, lastConnectedAt: now },
             config,
@@ -241,6 +303,16 @@ export default function AddProviderScreen() {
     return (
       <ScreenBackground>
         <SafeAreaView style={styles.safeArea}>
+          {/*
+            The same header the loaded screen wears, so the chrome does not
+            pop in a beat later — and so there is a way back while the
+            provider row and its stored credential are being read, which is
+            a database open plus a SecureStore round trip and is not always
+            instant. This branch is only reachable with `isEdit` true
+            (`loadingExisting` is initialised from it), so the title is
+            never the "add" one.
+          */}
+          <ScreenHeader title={t("addProvider", "editTitle")} />
           <View style={styles.centered}>
             <ActivityIndicator color={Brand.primary} />
           </View>
@@ -267,21 +339,48 @@ export default function AddProviderScreen() {
       */}
       <KeyboardAvoidingView style={styles.keyboardAvoider} behavior="padding">
       <SafeAreaView style={styles.safeArea}>
+      {/*
+        2026-11-17: this screen used to draw its own way back — a 38dp disc
+        filled with `fillSubtle` holding a 22pt "‹" dragged onto its centre
+        with `marginTop: -3`. That is, to the byte, the control the owner
+        turned down ("مو عاجبني", then "شكلو مش حلو") and that BackButton was
+        written to replace; it survived here only because add-provider was
+        the last pushed screen never converted to ScreenHeader, so the first
+        thing the eye landed on when adding a provider was the one control
+        already rejected. It carried the second fault too, the one
+        ScreenHeader's own note records: "‹" is a direction-neutral
+        character, so Android resolved it against the *device* locale and an
+        Arabic interface on an English-locale phone drew the arrow pointing
+        the wrong way. A chevron made of two borders points where it is
+        built to point.
+
+        The header sits outside the ScrollView, as it does on the twelve
+        screens already using it: with the keyboard up the form scrolls and
+        the way back stays on screen instead of scrolling off the top. Inside
+        the scroll content it would also be double-padded against
+        `padding: Spacing.xl` and clipped to the form's `maxWidth: 480`.
+      */}
+      <ScreenHeader title={isEdit ? t("addProvider", "editTitle") : t("addProvider", "title")} />
       <ScrollView
         contentContainerStyle={[styles.scrollContent, keyboardOpen && styles.scrollContentKeyboardOpen]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.topBar}>
-          <BouncePressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>‹</Text>
-          </BouncePressable>
-        </View>
+        {/*
+          Deliberately left in the form rather than passed as ScreenHeader's
+          `subtitle`. That slot is 11pt and `numberOfLines={1}`, in a column
+          of roughly 228dp on a 360dp phone (16 padding either side, a 38dp
+          back button, a 38dp right slot and two 12dp gaps). The counts and
+          dates the other screens put there fit it; a sentence does not — the
+          Kurmanji line ("Agahiyên têketina xwe yên Xtream Codes binivîse.",
+          47 characters) and the Arabic one run past it and would be
+          ellipsized, on the one screen whose single sentence says what to
+          type. It stays at 14pt in the body, where it wraps and can be read.
 
-        <Animated.Text entering={FadeInDown.duration(500)} style={styles.title}>
-          {isEdit ? t("addProvider", "editTitle") : t("addProvider", "title")}
-        </Animated.Text>
-        <Animated.Text entering={FadeInDown.delay(80).duration(500)} style={styles.subtitle}>
+          The 80ms stagger it used to carry is gone with the 22pt title it
+          was staggered behind; it is now the first thing in the form.
+        */}
+        <Animated.Text entering={FadeInDown.duration(500)} style={styles.subtitle}>
           {t("addProvider", "subtitle")}
         </Animated.Text>
 
@@ -408,19 +507,6 @@ const styles = themedStyles((C: ThemeColors) =>
   keyboardAvoider: { flex: 1 },
   /* Kept small: KeyboardAvoidingView now supplies the real inset. */
   scrollContentKeyboardOpen: { paddingBottom: Spacing.xxl },
-  topBar: { flexDirection: "row" },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: Radii.pill,
-    backgroundColor: C.fillSubtle,
-    borderColor: C.border,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backButtonText: { color: C.text, fontSize: 22, fontFamily: FontFamily.bold, marginTop: -3 },
-  title: { color: C.text, fontSize: 22, fontFamily: FontFamily.extraBold },
   subtitle: {
     color: C.textSecondary,
     fontSize: 14,

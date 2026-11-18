@@ -1,9 +1,11 @@
+import Constants from "expo-constants";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { FadeIn, FadeInUp } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ScreenBackground } from "@/components/ScreenBackground";
 import { ScreenHeader } from "@/components/ScreenHeader";
+import { BRAND } from "@/core/brand";
 import { useI18n } from "@/core/i18n/I18nContext";
 import type { TranslationShape } from "@/core/i18n/translations/en";
 import { Brand, FontFamily, Radii, Spacing, AndroidTextFix } from "@/core/theme/tokens";
@@ -104,7 +106,32 @@ export default function PrivacyScreen() {
             );
           })}
 
-          <Text style={styles.footer}>{t("settings", "appVersion")} · Mooj TV</Text>
+          {/*
+            The name, then the build — and the build is a *number*.
+
+            This line read `{t("settings","appVersion")} · Mooj TV`, which
+            printed the label and no value: "App version · Mooj TV", and in
+            the default locale "إصدار التطبيق · Mooj TV". `settings.appVersion`
+            has only ever been a label — there is no key anywhere holding a
+            version number, because the number lives in the manifest, and the
+            "App version" row in the About card on the settings screen
+            already reads it from there. (A name rather than a line number:
+            the first version of this note said `settings.tsx:527`, and by the
+            next day the row was at 644.) The fallback is an em dash rather
+            than an empty string, which is the answer that same row gives when
+            the manifest has nothing: an empty one would print the label with
+            nothing after it, which is the defect.
+
+            The name comes from `BRAND.displayName` for the reason
+            brand.config.js was written: the brand used to be "spread over
+            six unrelated places … a hard-coded string in the home screen".
+            This was the last hard-coded "Mooj TV" anywhere under src/app or
+            src/components, so a second brand built from this tree would
+            have shipped a privacy policy signed with the first one's name.
+          */}
+          <Text style={styles.footer}>
+            {`${BRAND.displayName} · ${t("settings", "appVersion")} ${Constants.expoConfig?.version ?? "—"}`}
+          </Text>
         </ScrollView>
       </SafeAreaView>
     </ScreenBackground>

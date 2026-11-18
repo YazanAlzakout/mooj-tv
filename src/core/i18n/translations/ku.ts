@@ -13,7 +13,7 @@ const ku: TranslationShape = {
     search: "Lêgerîn",
     loading: "Bar dibe…",
     retry: "Dîsa biceribîne",
-    refreshFailed: "Nuha nûvekirin bi ser neket — ji bo dîsa ceribandinê berjêr bikişîne.",
+    refreshFailed: "Nuha nûvekirin bi ser neket — dîsa biceribîne.",
     noInternet: "Girêdana internetê tune ye.",
     providerUnreachable: "Servera pêşkêşkar niha bersiv nade. Piştî kêliyekê dîsa biceribîne.",
     confirm: "Piştrast bike",
@@ -251,7 +251,7 @@ const ku: TranslationShape = {
         body: [
           "Ji bo pirsên li ser vê siyasetê an li ser taybetiyê di Mooj TV de, têkilî bike:",
           "Email: support@mooj-player.com",
-          "Web: https://mooj-player.com/privacy",
+          "Web: https://mooj-player.com/privacy.html",
         ],
       },
     },
@@ -294,7 +294,7 @@ const ku: TranslationShape = {
     m3uUrlPlaceholder: "http://mînak.com/playlist.m3u8",
     chooseFileButton: "Pelê hilbijêre",
     noFileChosen: "Tu pel nehatiye hilbijartin",
-    noVodEmpty: "Girêdan çêbû, lê vî dabînkerî tu kanalên zindî venegerandin.",
+    catalogEmpty: "Girêdan pêk hat, lê vî pêşkêşkarî tu naverok venegerand — ne kanal, ne fîlm, ne rêzefîlm.",
   },
 
   /*
@@ -315,6 +315,9 @@ const ku: TranslationShape = {
     liveTV: "TV ya Zindî",
     movies: "Fîlim",
     series: "Rêzefîlim",
+    liveTVSub: "Kanalên niha",
+    moviesSub: "Hemû katalogê fîlman",
+    seriesSub: "Rêzefîlm û beş",
     quickActions: "Kiryarên Bilez",
     favorites: "Bijarte",
     watchLater: "Paşê Temaşe Bike",
@@ -394,6 +397,7 @@ const ku: TranslationShape = {
   moviesGrid: {
     title: "Fîlim",
     moviesCountSuffix: "fîlim",
+    noMoviesAvailable: "Tu fîlim berdest nîne.",
     searchPlaceholder: "Li fîliman bigere",
   },
 
@@ -417,6 +421,7 @@ const ku: TranslationShape = {
   seriesGrid: {
     title: "Rêzefîlim",
     seriesCountSuffix: "rêzefîlim",
+    noSeriesAvailable: "Tu rêzefîlim berdest nîne.",
     searchPlaceholder: "Li rêzefîlman bigere",
   },
 
@@ -463,6 +468,7 @@ const ku: TranslationShape = {
     preparingSearch: "Lêgerîn tê amadekirin…",
     typeToSearch: "Ji bo lêgerîna di TV ya Zindî, Fîlim û Rêzefîlman de binivîse.",
     noResultsFor: 'Ji bo "{query}" tu encam nehat dîtin.',
+    resultsCountSuffix: "encam",
     live: "ZINDÎ",
     movie: "FÎLIM",
     series: "RÊZEFÎLIM",
@@ -500,9 +506,11 @@ const ku: TranslationShape = {
     setPin: "PIN'eke 4 hejmarî diyar bike",
     changePin: "PIN'ê biguherîne",
     removePin: "PIN'ê rake",
+    removePinConfirmBody: "Rakirina PIN'ê kilîta kategoriyan jî betal dike, û her kategoriya veşartî bêyî PIN'ê tê vekirin.",
     wrongPin: "PIN çewt e",
     lockCategories: "Ji bo xuyabûna kategoriyan PIN bixwaze",
     lockCategoriesNote: "Kategoriyên veşartî tenê bi PIN vedibin.",
+    forgotPinNote: "PIN ji bîr kir? Tenê bi rakirina hemû pêşkêşkaran ji \"Rêveberiya pêşkêşkaran\" tê paqijkirin — ev şîfreyên wan ên tomarkirî û her tiştê te veşartiye jî jê dibe. Paşê pêşkêşkarê xwe dîsa zêde bike û PINeke nû hilbijêre.",
     noPinYet: "Pêşî PIN'ekê diyar bike",
   },
 
@@ -525,9 +533,6 @@ const ku: TranslationShape = {
     themeLight: "Ronî",
     themeSystem: "Li gorî pergalê",
     content: "Naverok",
-    showLiveSection: "Beşa TV ya Zindî nîşan bide",
-    showMoviesSection: "Beşa Fîliman nîşan bide",
-    showSeriesSection: "Beşa Rêzefîlman nîşan bide",
     manageCategoryVisibility: "Xuyabûna kategoriyan birêve bibe",
     accountProvider: "Ajimêr / Dabînker",
     provider: "Dabînker",
@@ -547,8 +552,6 @@ const ku: TranslationShape = {
     modernChannelViewNote: "Dema tu li kanalan digerî wêne li ser ekranê dimîne, li şûna lêdereke tije ekran.",
     resumePlayback: "Lêdanê berdewam bike",
     autoplayNextEpisode: "Beşa pêş de bixweber lêbide",
-    preferredAudio: "Zimanê dengî yê tercîhkirî",
-    preferredSubtitle: "Zimanê bînavîsê yê tercîhkirî",
     storage: "Depo",
     downloadedContent: "Naveroka hatiye dakêşin",
     manageDownloads: "Daxistinan birêve bibe",
@@ -560,6 +563,8 @@ const ku: TranslationShape = {
     legal: "Yasayî",
     termsConditions: "Mercên Bikaranînê",
     privacyPolicy: "Politîkaya Nehêniyê",
+    licences: "Lîsansên çavkaniya vekirî",
+    licencesIntro: "Ev sepan pêkhateyên çavkaniya vekirî yên jêrîn bikar tîne. Nivîsarên tam ên lîsansan ji projeyên wan peyda dibin.",
     diagnostics: "Teşxîs",
     playerDiagnostics: "Teşxîsa lîstikvan",
     about: "Derbarê",
@@ -578,6 +583,7 @@ const ku: TranslationShape = {
   categoryVisibility: {
     title: "Kategorî",
     searchPlaceholder: "Li kategoriyekê bigere",
+    empty: "Di vê beşê de tu kategorî tune.",
   },
 };
 

@@ -9,7 +9,7 @@ const ar: TranslationShape = {
     search: "بحث",
     loading: "جارٍ التحميل…",
     retry: "إعادة المحاولة",
-    refreshFailed: "تعذّر التحديث الآن — اسحب للأسفل للمحاولة مرة أخرى.",
+    refreshFailed: "تعذّر التحديث الآن — حاول مرة أخرى.",
     noInternet: "لا يوجد اتصال بالإنترنت.",
     providerUnreachable: "سيرفر المزوّد لا يستجيب حالياً. حاول مرة أخرى بعد قليل.",
     confirm: "تأكيد",
@@ -246,7 +246,7 @@ const ar: TranslationShape = {
         body: [
           "للاستفسارات حول هذه السياسة أو حول الخصوصية في Mooj TV، تواصل عبر:",
           "البريد الإلكتروني: support@mooj-player.com",
-          "الويب: https://mooj-player.com/privacy",
+          "الويب: https://mooj-player.com/privacy.html",
         ],
       },
     },
@@ -289,7 +289,7 @@ const ar: TranslationShape = {
     m3uUrlPlaceholder: "http://example.com/playlist.m3u8",
     chooseFileButton: "اختر ملفًا",
     noFileChosen: "لم يتم اختيار ملف",
-    noVodEmpty: "تم الاتصال، لكن هذا المزود لم يُرجع أي قنوات مباشرة.",
+    catalogEmpty: "تم الاتصال، لكن هذا المزوّد لم يُرجع أي محتوى — لا قنوات ولا أفلام ولا مسلسلات.",
   },
 
   /*
@@ -310,6 +310,9 @@ const ar: TranslationShape = {
     liveTV: "البث المباشر",
     movies: "أفلام",
     series: "مسلسلات",
+    liveTVSub: "قنوات تبثّ الآن",
+    moviesSub: "كامل كتالوج الأفلام",
+    seriesSub: "مسلسلات وحلقات",
     quickActions: "إجراءات سريعة",
     favorites: "المفضلة",
     watchLater: "مشاهدة لاحقًا",
@@ -389,6 +392,7 @@ const ar: TranslationShape = {
   moviesGrid: {
     title: "أفلام",
     moviesCountSuffix: "فيلم",
+    noMoviesAvailable: "لا توجد أفلام متاحة.",
     searchPlaceholder: "بحث عن أفلام",
   },
 
@@ -412,6 +416,7 @@ const ar: TranslationShape = {
   seriesGrid: {
     title: "مسلسلات",
     seriesCountSuffix: "مسلسل",
+    noSeriesAvailable: "لا توجد مسلسلات متاحة.",
     searchPlaceholder: "بحث عن مسلسلات",
   },
 
@@ -458,6 +463,7 @@ const ar: TranslationShape = {
     preparingSearch: "جارٍ تجهيز البحث…",
     typeToSearch: "اكتب للبحث في البث المباشر والأفلام والمسلسلات.",
     noResultsFor: 'لا توجد نتائج لـ "{query}".',
+    resultsCountSuffix: "نتيجة",
     live: "مباشر",
     movie: "فيلم",
     series: "مسلسل",
@@ -495,9 +501,11 @@ const ar: TranslationShape = {
     setPin: "عيّن رمزاً من 4 أرقام",
     changePin: "تغيير الرمز",
     removePin: "إزالة الرمز",
+    removePinConfirmBody: "إزالة الرمز تُلغي أيضاً قفل التصنيفات، ويمكن عندها إعادة إظهار كل تصنيف مخفي بدون رمز.",
     wrongPin: "الرمز غير صحيح",
     lockCategories: "طلب الرمز لتعديل ظهور التصنيفات",
     lockCategoriesNote: "التصنيفات المخفية لا يمكن إعادة إظهارها إلا بالرمز.",
+    forgotPinNote: "نسيت الرمز؟ لا يمكن إلغاؤه إلا بحذف كل المزوّدين من «إدارة المزوّدين» — وهذا يحذف أيضاً كلمات المرور المحفوظة وكل ما أخفيته. أضف مزوّدك من جديد بعدها واختر رمزاً جديداً.",
     noPinYet: "عيّن رمزاً أولاً",
   },
 
@@ -520,9 +528,6 @@ const ar: TranslationShape = {
     themeLight: "فاتح",
     themeSystem: "حسب النظام",
     content: "المحتوى",
-    showLiveSection: "إظهار قسم البث المباشر",
-    showMoviesSection: "إظهار قسم الأفلام",
-    showSeriesSection: "إظهار قسم المسلسلات",
     manageCategoryVisibility: "إدارة ظهور الفئات",
     accountProvider: "الحساب / المزود",
     provider: "المزود",
@@ -542,8 +547,6 @@ const ar: TranslationShape = {
     modernChannelViewNote: "تبقى الصورة ظاهرة أثناء تصفّح القنوات، بدل مشغّل بملء الشاشة.",
     resumePlayback: "استئناف التشغيل",
     autoplayNextEpisode: "تشغيل الحلقة التالية تلقائيًا",
-    preferredAudio: "لغة الصوت المفضّلة",
-    preferredSubtitle: "لغة الترجمة المفضّلة",
     storage: "التخزين",
     downloadedContent: "المحتوى المُنزَّل",
     manageDownloads: "إدارة التنزيلات",
@@ -555,6 +558,8 @@ const ar: TranslationShape = {
     legal: "الشروط القانونية",
     termsConditions: "الشروط والأحكام",
     privacyPolicy: "سياسة الخصوصية",
+    licences: "تراخيص المصادر المفتوحة",
+    licencesIntro: "يستخدم هذا التطبيق المكوّنات مفتوحة المصدر التالية. نصوص الرخص كاملةً متاحة من مشاريعها.",
     diagnostics: "التشخيص",
     playerDiagnostics: "تشخيص المشغّل",
     about: "حول",
@@ -573,6 +578,7 @@ const ar: TranslationShape = {
   categoryVisibility: {
     title: "الفئات",
     searchPlaceholder: "بحث عن فئة",
+    empty: "لا توجد فئات في هذا القسم.",
   },
 };
 

@@ -33,6 +33,46 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<EpgProgram[]>>();
 
+/**
+ * Which provider generation the two maps above belong to.
+ *
+ * Bumped by `clearEpgCache`. A `get_short_epg` already in the air when the
+ * provider changes still settles afterwards, and its `cache.set` would put
+ * the old account's programmes straight back into a map that had just been
+ * emptied — the request takes as long as the panel takes, and a provider
+ * switch is an authenticate plus a catalogue read, so the two overlap easily.
+ * Every write below is therefore made only if the generation it started in is
+ * still current. A late answer is dropped instead, which leaves the row
+ * showing no guide: the fallback this file already chose for a failed fetch
+ * (see the `catch` in `fetchAndCache`), and the only safe direction when the
+ * alternative is one account's titles over another's stream.
+ */
+let generation = 0;
+
+/**
+ * Forget every guide answer held in memory. Counterpart to `clearEpg()` in
+ * src/db/repositories/epgRepository.ts, which empties the two SQLite tables.
+ *
+ * 2026-11-18: clearing only the tables left the leak they were cleared for
+ * wide open for CACHE_TTL_MS. Both maps are keyed by channel id *alone*, and a
+ * channel id is a small integer the panel chose — every Xtream panel numbers
+ * from 1, which is the whole premise of the scoping work in migration 24. So
+ * after a switch, provider B's channel "412" found provider A's entry still
+ * fresh, `useEpgNowNext` returned without fetching, and the player header
+ * printed A's programme title and progress bar over B's stream. Phone and
+ * television alike.
+ *
+ * Synchronous on purpose, and that matters: `clearEpg()` is a fire-and-forget
+ * promise, so for a tick or two after a switch the tables are still the old
+ * provider's. Emptying the maps in the same turn as the switch means nothing
+ * can read a stale answer in that gap either.
+ */
+export function clearEpgCache(): void {
+  cache.clear();
+  inFlight.clear();
+  generation += 1;
+}
+
 // A single shared, externally-ticking clock — reading `Date.now()` directly
 // during render is disallowed (components must be pure), so every consumer
 // subscribes to this instead of running its own setInterval.
@@ -83,13 +123,20 @@ function fetchAndCache(config: XtreamProviderConfig, channelId: string): Promise
   const existing = inFlight.get(channelId);
   if (existing) return existing;
 
+  /*
+   * Which provider this answer is about. Compared against `generation` at
+   * every write below, because all of them happen after an await and the
+   * provider can have changed in between. See the note on `generation`.
+   */
+  const startedIn = generation;
+
   const promise = (async () => {
     const now = Date.now();
     try {
       const askedAt = await lastFetchedAt(channelId);
       if (askedAt !== null && now - askedAt < STORED_TTL_MS) {
         const stored = await readProgrammes(channelId, now - 60 * 60 * 1000);
-        cache.set(channelId, { programs: stored, fetchedAt: now });
+        if (startedIn === generation) cache.set(channelId, { programs: stored, fetchedAt: now });
         return stored;
       }
     } catch {
@@ -98,17 +145,32 @@ function fetchAndCache(config: XtreamProviderConfig, channelId: string): Promise
 
     try {
       const programs = await getShortEpg(config, channelId);
-      cache.set(channelId, { programs, fetchedAt: Date.now() });
-      await writeProgrammes(channelId, programs).catch(() => {});
+      /*
+       * The table write is inside the guard as well, and it is the more
+       * important of the two: a row written after the switch belongs to
+       * nobody and would be read back as the new provider's guide for the
+       * whole six hours of STORED_TTL_MS, long after the map was emptied.
+       */
+      if (startedIn === generation) {
+        cache.set(channelId, { programs, fetchedAt: Date.now() });
+        await writeProgrammes(channelId, programs).catch(() => {});
+      }
       return programs;
     } catch {
       // Never surface EPG failures to the user — "no data" (master prompt
       // §20) is the correct fallback, not an error banner on the channel list.
-      cache.set(channelId, { programs: [], fetchedAt: Date.now() });
+      if (startedIn === generation) cache.set(channelId, { programs: [], fetchedAt: Date.now() });
       return [] as EpgProgram[];
     }
   })().finally(() => {
-    inFlight.delete(channelId);
+    /*
+     * Ours only. After a `clearEpgCache` the map was emptied wholesale, so
+     * there is nothing of this request's left to remove — and anything now
+     * under this key is a request the *new* provider started, which deleting
+     * would cost the next asker a duplicate `get_short_epg` on a line that
+     * blocks for asking too often.
+     */
+    if (startedIn === generation) inFlight.delete(channelId);
   });
 
   inFlight.set(channelId, promise);

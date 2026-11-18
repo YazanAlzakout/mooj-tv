@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ScreenBackground } from "@/components/ScreenBackground";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useI18n } from "@/core/i18n/I18nContext";
+import { artworkIsKnownBad } from "@/core/media/deadImageHosts";
 import { Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
@@ -142,7 +143,29 @@ function HistoryRow({
   onRemove: () => void;
   t: ReturnType<typeof useI18n>["t"];
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
+  /*
+    **The same test `CachedImage` uses, not a blank `false`.**
+
+    The branch below swaps the letter tile OUT for the image, so whenever
+    `CachedImage` declines to render — and it declines by returning null,
+    before any image exists, for a URL that is already known bad — this row
+    drew nothing at all where the artwork goes. With no image mounted
+    `onError` can never fire either, so the row could not correct itself for
+    the rest of the session.
+
+    The tile is a flex child, not a layer behind the text, so a row that
+    draws nothing pulls its title, its relative-time line and its progress
+    bar 54dp towards the start edge, out of line with every row above and
+    below it. History is the screen most exposed to it: a poster that 404'd
+    once while the viewer was browsing Movies is remembered for the whole
+    session, and everything they have watched is listed here carrying that
+    same URL.
+
+    Same defect and same fix as the browse grid and the channel row beside
+    the player (45d89d0, and ChannelListRow.tsx:61); found again on this
+    screen in the pre-release audit, 2026-11-17.
+  */
+  const [imageFailed, setImageFailed] = useState(() => artworkIsKnownBad(entry.imageUrl));
   const progress = entry.durationSeconds > 0 ? entry.positionSeconds / entry.durationSeconds : 0;
 
   return (

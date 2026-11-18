@@ -1,8 +1,9 @@
 import { router, useFocusEffect } from "expo-router";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Image,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,8 +20,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BouncePressable } from "@/components/BouncePressable";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ScreenBackground } from "@/components/ScreenBackground";
+import { LiveGlyph, MoviesGlyph, SeriesGlyph } from "@/components/TabIcons";
 import { SectionHeader } from "@/components/SectionHeader";
 import { BRAND } from "@/core/brand";
+import { useTabBarSpace } from "@/components/MoojTabBar";
+import { SECTION_LIVE, SECTION_MOVIES, SECTION_SERIES } from "@/core/theme/sections";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import { brandLogoSource } from "@/components/BrandLogo";
@@ -31,10 +35,9 @@ import {
   getRecentWatchProgress,
   type WatchProgressEntry,
 } from "@/db/repositories/watchProgressRepository";
-import { clearActiveSession, getActiveSession } from "@/state/activeSessionStore";
+import { disconnectProvider, getActiveSession } from "@/state/activeSessionStore";
 import {
   featured as pickFeatured,
-  hero as pickHero,
   moviesOnly as pickMovies,
   newThisYear as pickNewThisYear,
   seriesOnly as pickSeries,
@@ -43,6 +46,7 @@ import {
   hasUsableArt,
   type HomeItem,
 } from "@/core/home/homeRows";
+import { artworkIsKnownBad } from "@/core/media/deadImageHosts";
 import { getLibraryItems, type LibraryItem } from "@/db/repositories/libraryRepository";
 import { getAllDownloadTasks, type DownloadTask } from "@/db/repositories/downloadRepository";
 import { downloadsSupported } from "@/domain/downloads/eligibility";
@@ -53,6 +57,56 @@ import { downloadsSupported } from "@/domain/downloads/eligibility";
  * Two lines at a fixed line height, always — see the note above
  * PosterCard. These two numbers and the box in the styles below are one
  * fact written twice; changing either alone is how a rail goes ragged.
+ *
+ * Both cards pin their name with `allowFontScaling={false}`, which is the
+ * third copy of the same fact. 2026-11-17: React Native scales `fontSize`
+ * *and* `lineHeight` by Android's Display → Font size setting, while a
+ * container height written in dp is scaled by nothing — so at Large (1.15)
+ * or Largest (1.30) two lines of a 14-point line height want 32 to 36 points
+ * inside a 28-point box. Nothing clips them: a View's overflow is visible by
+ * default and BouncePressable sets none, so the second line was drawn below
+ * the card, through the rail's gap and into the next SectionHeader — and
+ * only on the cards whose names run to two lines, which is the ragged rail
+ * this box exists to prevent, arriving by another door.
+ *
+ * 2026-11-18: that pin was `maxFontSizeMultiplier={1}` for a day, and it
+ * answered only half of the sentence above — the prop caps the glyphs and
+ * not the leading. The proof is in our own copy of React Native (0.86.2-0,
+ * `newArchEnabled: true`, so the Fabric path):
+ * `TextAttributeProps.setFontSize` converts through
+ * `PixelUtil.toPixelFromSP(fontSize, maxFontSizeMultiplier)`, while the
+ * `lineHeight` setter at the top of the same class calls the one-argument
+ * `toPixelFromSP(value)` — whose `maxFontScale` parameter then defaults to
+ * NaN, so the `if (maxFontScale >= 1)` clamp inside `PixelUtil` never fires
+ * and the leading keeps the system scale whole. (The old
+ * `views/text/TextAttributes.kt` does hand the multiplier to both, which is
+ * why the prop reads as though it should have worked; the new architecture
+ * never goes through that class.) So at Largest the letters stayed at 10.5
+ * while the two lines still asked for 36 points inside 28, and the overflow
+ * above — second line through the rail gap and into the next SectionHeader —
+ * was exactly as described, minus the bigger letters.
+ * `allowFontScaling={false}` sends both figures through `toPixelFromDIP`
+ * instead: 2 × 14 dp of text in a 2 × 14 dp box, at every font scale, which
+ * is the agreement this box exists to keep.
+ *
+ * Capping the text rather than growing the box, and not for want of trying
+ * it the other way. The box could be `… * PixelRatio.getFontScale()`, but a
+ * `themedStyles` sheet is built once and cached per palette, so that figure
+ * would be frozen at whatever the font scale was when the sheet was first
+ * read — and nothing invalidates it, since a font-size change recreates
+ * MainActivity (`fontScale` is not in its `configChanges`) while the JS
+ * context, and the cached sheet with it, lives on.
+ * Reading it live means a hook in every card of every rail — and `PosterCard`
+ * is memoised precisely so that a hundred of them do not rebuild to resize
+ * one hero (see `openFeatured`), which is the saving that hook would hand
+ * straight back. And what is being pinned is a 10.5-point caption under a
+ * 116×174 poster that does not scale either — a name growing by a third
+ * while its card stays put helps nobody read it, since it has no more room
+ * to grow into: the card is still 116 wide, so a third more ink fits *fewer*
+ * characters, and `numberOfLines={2}` would cut more names short than it
+ * does now. Every other label on this screen (the greeting, the section
+ * headings, the Continue Watching captions) is left scalable; none of them
+ * lives in a fixed box.
  */
 const CARD_TITLE_LINE_HEIGHT = 14;
 const CARD_TITLE_LINES = 2;
@@ -75,13 +129,74 @@ function formatRelativeTime(t: ReturnType<typeof useI18n>["t"], timestamp: numbe
  */
 const ROW_COUNT = 12;
 
+
+/**
+ * Whether this device can draw the Live card's logo at all.
+ *
+ * 2026-11-17: that card's artwork is not an image laid on the card, it is a
+ * `mixBlendMode: "multiply"` composite — the treatment the owner chose after
+ * turning down three others ("بس اعمل شفافية وخلص / لاول قناة مثل ما كنت
+ * عامل"), and the reason the white baked into every channel logo disappears
+ * instead of sitting on the card as a slab. React Native applies that style
+ * from Android 10 up and nowhere else: `BlendModeHelper.parseMixBlendMode`
+ * returns null below `Build.VERSION_CODES.Q` (API 29), so no blend tag is
+ * set, no isolated layer is made, and the style is dropped without a word.
+ * This app's `minSdkVersion` is 26 (app.config.js), so Android 8.0, 8.1 and
+ * 9 are three shipped versions on which it does nothing.
+ *
+ * Dropped does not leave the card as it was — it leaves the logo pasted on
+ * whole, white background and all, which is exactly the slab that was
+ * rejected: "لا مو حلوة". So those devices get no artwork rather than that
+ * artwork: `SectionCard` already draws nothing when `artUrl` is null, and
+ * what is left is flat section colour, glyph and label — how the card
+ * shipped before the logo was added, and a finished card either way.
+ *
+ * Only the Live card is gated. Movie and series posters are photographs
+ * drawn normally and look the same on every API level, and the card's own
+ * `isolation: "isolate"` costs these devices nothing: `needsIsolatedLayer`
+ * only answers yes when a child actually carries a blend tag, and below 29
+ * none ever does.
+ *
+ * The `Platform.OS` half is not ceremony: `Platform.Version` is typed
+ * `number | string` because it is a string on iOS, and the check narrows it
+ * to the Android number an API level actually means. There is no iOS target
+ * in app.config.js, so on everything this project builds today the test is
+ * the API level alone — but if one is ever added, come back here first:
+ * iOS draws `mixBlendMode` perfectly well and this line would hide the logo
+ * from it for no reason.
+ */
+const CAN_BLEND_LOGO = Platform.OS === "android" && Platform.Version >= 29;
+
+
+/* Hoisted so the three cards get a stable `onPress` and `memo` can do its job;
+   they capture nothing from the screen. */
+const openLive = () => router.push("/live-categories");
+const openMovies = () => router.push("/movies-categories");
+const openSeries = () => router.push("/series-categories");
+
 export default function HomeScreen() {
   // Repaints this screen — and everything it renders — when the theme changes.
   useThemeRerender();
   const { t } = useI18n();
-  const session = useMemo(() => getActiveSession(), []);
+  /* The bar floats over the screen, so the screen leaves room for it. */
+  const tabBarSpace = useTabBarSpace();
+  const { width: winWidth, height: winHeight } = useWindowDimensions();
+  const landscape = winWidth > winHeight;
+  /**
+   * Read live, never memoised.
+   *
+   * 2026-11-14: this was `useMemo(() => getActiveSession(), [])`, so `session`
+   * stayed whatever it was on the very first render of a tab screen that is
+   * mounted once and kept. The provider-switch reset below compares
+   * `builtForProvider` against it, so with a frozen value the two could never
+   * disagree and the reset was unreachable: after connecting a different
+   * provider, Home went on showing account A's name and rows while the app
+   * streamed B, and a tap in that state opened A's id against B's session.
+   * Every other screen reads it live — live-categories, movies-categories,
+   * series-categories, settings, search. This one now does too.
+   */
+  const session = getActiveSession();
   const [continueWatching, setContinueWatching] = useState<WatchProgressEntry[]>([]);
-  const [hero, setHero] = useState<HomeItem | null>(null);
   const [newRow, setNewRow] = useState<HomeItem[]>([]);
   const [featuredRow, setFeaturedRow] = useState<HomeItem[]>([]);
   const [topRow, setTopRow] = useState<HomeItem[]>([]);
@@ -92,6 +207,8 @@ export default function HomeScreen() {
   const [builtForProvider, setBuiltForProvider] = useState<string | null>(session?.provider.id ?? null);
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+  /** Set by `disconnect` so the effect below does not also navigate. */
+  const leavingOnPurpose = useRef(false);
 
   /**
    * Forget everything the moment the account underneath changes.
@@ -113,7 +230,6 @@ export default function HomeScreen() {
   if (builtForProvider !== (session?.provider.id ?? null)) {
     setBuiltForProvider(session?.provider.id ?? null);
     setContinueWatching([]);
-    setHero(null);
     setNewRow([]);
     setFeaturedRow([]);
     setTopRow([]);
@@ -122,6 +238,36 @@ export default function HomeScreen() {
     setFavouriteRow([]);
     setDownloadRow([]);
   }
+
+  /**
+   * The Live TV card's artwork: the first channel logo in the lineup.
+   *
+   * 2026-11-17: this card shipped with no picture, on the reasoning that home
+   * loads no live row and giving it one would cost a request per card on a
+   * panel that answers bursts with empty 404s. That reasoning was wrong about
+   * the facts — `getActiveSession().channels` is the whole lineup, already
+   * loaded, and every channel carries a `logoUrl`. Nothing is fetched here.
+   *
+   * It was briefly a pool of twelve that changed between visits, because
+   * always showing one channel looked frozen under a subtitle that says
+   * "Channels playing now". The owner asked for the single channel back the
+   * same day — "لاول قناة مثل ما كنت عامل" — so the loop stops at the first
+   * again.
+   *
+   * `artworkIsKnownBad` as well as `hasUsableArt`, because the two ask
+   * different questions. The first channel in a lineup is routinely one whose
+   * logo host has already 404'd — `hasUsableArt` only inspects the shape of
+   * the URL, so it says yes, `CachedImage` then renders nothing for a URL it
+   * has already recorded as dead, and the card sits blank while eleven
+   * thousand working logos go unasked.
+   */
+  const liveArt = useMemo(() => {
+    for (const channel of session?.channels ?? []) {
+      const url = channel.logoUrl;
+      if (url && hasUsableArt(url) && !artworkIsKnownBad(url)) return url;
+    }
+    return null;
+  }, [session]);
 
   const year = useMemo(() => currentYear(), []);
 
@@ -145,7 +291,6 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       refreshContinueWatching();
-      setHero(pickHero());
       setNewRow(pickNewThisYear(ROW_COUNT));
       setFeaturedRow(pickFeatured(ROW_COUNT));
       setTopRow(pickTopRated(ROW_COUNT));
@@ -160,8 +305,15 @@ export default function HomeScreen() {
     }, [refreshContinueWatching])
   );
 
+  /**
+   * The session can also go away for reasons the viewer did not ask for — a
+   * provider deleted from another screen, a restore that failed. Then the
+   * right place to be is "/", which works out where to send them.
+   *
+   * Not when they disconnected on purpose: see `disconnect` above.
+   */
   useEffect(() => {
-    if (!session) router.replace("/");
+    if (!session && !leavingOnPurpose.current) router.replace("/");
   }, [session]);
 
   /*
@@ -189,9 +341,33 @@ export default function HomeScreen() {
     return null;
   }
 
+  /**
+   * The viewer pressed the ✕ and confirmed.
+   *
+   * `leavingOnPurpose` is load-bearing. Clearing the session makes `session`
+   * null, which wakes the effect below — and that effect sends the app to "/",
+   * whose job is to find the active provider and reconnect it. Before
+   * `disconnectProvider` cleared the provider too, that reconnected to the one
+   * just disconnected from and landed back on this screen, so fast that the
+   * button looked dead: "كبست حرف الx ... واخترت ديسكونكت. ماصار شي".
+   *
+   * The provider is cleared now, so that path would at least end on /providers
+   * — but it would go there the long way, through a screen that re-reads the
+   * database. The flag keeps the effect out of the way and lets this function
+   * navigate once.
+   */
   function disconnect() {
-    clearActiveSession();
-    router.replace("/providers");
+    leavingOnPurpose.current = true;
+    void disconnectProvider().finally(() => {
+      /*
+       * The whole stack goes, not just this screen — the same reason Settings
+       * gives: `replace` alone leaves the other tabs mounted underneath, and
+       * one hardware back lands on a screen still showing the disconnected
+       * provider's rows.
+       */
+      router.dismissAll();
+      router.replace("/providers");
+    });
   }
 
   function resumeWatching(entry: WatchProgressEntry) {
@@ -221,10 +397,14 @@ export default function HomeScreen() {
        per frame), so they cost the scrolling rails below nothing. Kept to a
        low count regardless: this is a background accent, not an effect. */
     <ScreenBackground particles>
-      {/* No bottom edge: the tab bar below already clears the gesture area,
-          and asking for it here too leaves a second empty strip. */}
+      {/* No bottom edge, and that is what lets the bar's scoop show content.
+          The capsule floats over this screen rather than sitting below it, so
+          the screen has to run all the way down and pass under it; a bottom
+          inset here would stop the content short and put the page colour back
+          in the gap. The room the capsule needs comes from useTabBarSpace()
+          as padding inside the scroller instead. */}
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scrollContent, { paddingBottom: Spacing.xxl + tabBarSpace }]} showsVerticalScrollIndicator={false}>
           <Animated.View entering={FadeIn.duration(500)} style={styles.header}>
             <Image
               source={brandLogoSource()}
@@ -261,11 +441,50 @@ export default function HomeScreen() {
             </View>
           </Animated.View>
 
-          {hero && (
-            <Animated.View entering={FadeInDown.delay(40).duration(420)}>
-              <HeroCard item={hero} onPress={openFeatured} />
-            </Animated.View>
-          )}
+          {/*
+            The three doors.
+
+            The screen this replaces opened on one large recommendation. The
+            approved design opens on the three places the viewer can go
+            instead, because a home screen's first job is to say where things
+            are — the rows below still do the recommending. Each card wears its
+            section's colour, and the tab bar lights the same three, so the app
+            answers "where am I" without a word being read.
+          */}
+          <Animated.View
+            entering={FadeInDown.delay(40).duration(420)}
+            style={[styles.sectionCards, landscape && styles.sectionCardsWide]}
+          >
+            <SectionCard
+              wide={landscape}
+              colour={SECTION_LIVE}
+              Glyph={LiveGlyph}
+              title={t("home", "liveTV")}
+              subtitle={t("home", "liveTVSub")}
+              /* Nothing to blend with below Android 10 — see CAN_BLEND_LOGO. */
+              artUrl={CAN_BLEND_LOGO ? liveArt : null}
+              artKind="logo"
+              onPress={openLive}
+            />
+            <SectionCard
+              wide={landscape}
+              colour={SECTION_MOVIES}
+              Glyph={MoviesGlyph}
+              title={t("home", "movies")}
+              subtitle={t("home", "moviesSub")}
+              artUrl={movieRow[0]?.posterUrl ?? null}
+              onPress={openMovies}
+            />
+            <SectionCard
+              wide={landscape}
+              colour={SECTION_SERIES}
+              Glyph={SeriesGlyph}
+              title={t("home", "series")}
+              subtitle={t("home", "seriesSub")}
+              artUrl={seriesRow[0]?.posterUrl ?? null}
+              onPress={openSeries}
+            />
+          </Animated.View>
 
           {/*
             Rows, each of which disappears when it has nothing to say.
@@ -540,7 +759,16 @@ function SavedCard({
         )}
       </View>
       <View style={styles.featuredTitleBox}>
-        <Text style={styles.featuredTitle} numberOfLines={CARD_TITLE_LINES}>
+        <Text
+          style={styles.featuredTitle}
+          numberOfLines={CARD_TITLE_LINES}
+          /*
+            Size *and* line height in dp, the same unit as the box — a
+            multiplier cap would leave the leading scaling on its own. See
+            CARD_TITLE_LINE_HEIGHT.
+          */
+          allowFontScaling={false}
+        >
           {title}
         </Text>
       </View>
@@ -549,118 +777,122 @@ function SavedCard({
 }
 
 /**
- * The lead title, and the reason this screen stopped looking like a menu.
+ * One of the three doors at the top of the home screen.
  *
- * A home screen whose first element is a row of small cards reads as a
- * directory — everything the same size means nothing is being recommended.
- * One large still with a title over it is an editorial choice: it says
- * *this one*, and the rail underneath becomes "and these too" rather than
- * a list that happens to start somewhere.
+ * ## The gradient is an image, and it had to be
  *
- * The scrim is three stacked translucent views rather than a gradient.
- * `expo-linear-gradient` is a native module and this is the only place in
- * the app that would need it; three bands with rising alpha produce a step
- * nobody can see at this size, and the comment on CategoryColors records
- * the same decision being taken once before.
+ * The approved design puts artwork on the right of each card and fades the
+ * section's colour across it from the left, so the title sits on flat colour
+ * while the picture still shows beside it. React Native has no CSS gradients,
+ * and `expo-linear-gradient` is the one thing this project deliberately does
+ * not reach for — see the note in ArtScrim: it is a native module, and a few
+ * hundred bytes of asset does not justify one.
+ *
+ * So the ramp is painted into a file the same way, turned on its side.
+ * `assets/images/card-scrim.png` is 512 by 4 pixels of white whose alpha
+ * holds at 255 to 44% of the width, falls to 115 at 66% and to 0 at 92% —
+ * the design's own gradient stops, read off it. 152 bytes.
+ *
+ * White, because `tintColor` recolours what is opaque and leaves alpha
+ * alone: one asset serves all three cards, and any section added later, with
+ * no second file to keep in step.
+ *
+ * ## Where the artwork comes from
+ *
+ * All three take it from data already in memory, so none of them costs a
+ * request on a panel that answers a burst of them with empty 404s (AGENTS.md).
+ * The movie and series cards use the first poster of a row the screen has
+ * already built; the live card uses the first channel logo in the session's
+ * own lineup — see the note on `liveArt`.
  */
-function HeroCard({
-  item,
+const SectionCard = memo(function SectionCard({
+  wide,
+  colour,
+  Glyph,
+  title,
+  subtitle,
+  artUrl,
+  artKind = "poster",
   onPress,
 }: {
-  item: HomeItem;
-  /** Takes the item, like the cards below — one function for the screen. */
-  onPress: (item: HomeItem) => void;
-}) {
-  const { t } = useI18n();
-  const [failed, setFailed] = useState(false);
-  const press = useCallback(() => onPress(item), [onPress, item]);
-  const { width, height } = useWindowDimensions();
-
+  /** Laid out three across, because the phone is on its side. */
+  wide: boolean;
+  colour: string;
+  Glyph: typeof LiveGlyph;
+  title: string;
+  subtitle: string;
+  artUrl: string | null;
   /**
-   * A ceiling on the height — two of them, and the second one is about a
-   * single frame.
+   * What the artwork IS, which decides how it is drawn.
    *
-   * The first is the obvious one. The card is full width at 4:3, and on a
-   * phone turned sideways that is 1800pt of hero on a 1080pt screen: it
-   * swallowed the window, pushed every row off the bottom, and clipped its
-   * own title and play control out of view. 42% leaves the header, a row
-   * and the bar with room.
+   * `poster` — Movies and Series. A picture: it bleeds across its half of the
+   * card and the scrim fades it into the colour, the way every rail in the app
+   * treats a poster.
    *
-   * ## The second one, and why it is a fraction of the width
+   * `logo` — Live. A mark, not a picture, and it is composited onto the card
+   * with `mixBlendMode: "multiply"` instead of being drawn over it.
    *
-   * `useWindowDimensions` lags the window. Android resizes the activity
-   * and lays the view tree out at the new size immediately, but the new
-   * numbers reach JavaScript an event later — so for a frame or two after
-   * a rotation this hero is drawn *at the landscape width* while still
-   * being capped by the *portrait height*. Caught in a screenshot on
-   * 2026-11-08: 873dp of hero in a 393dp window, the greeting shoved under
-   * the status bar and nothing else on screen. That is the "لحظة الشاشة ما
-   * بتكون طبيعية" during a turn.
+   * That one word is the whole answer to a problem three other attempts did
+   * not solve. A channel logo almost never carries transparency — the lineup's
+   * are flattened onto white — so bleeding one across the card pasted a white
+   * slab on it, containing it made the slab a smaller white rectangle, and a
+   * white chip behind it only made the rectangle deliberate. The owner
+   * rejected each in turn: "لا مو حلوة".
    *
-   * The frame itself cannot be removed from here — every dimension this
-   * component can read is stale in it. What can be removed is how bad it
-   * looks, and the trick is to cap against the *width* as well, because
-   * after a turn the stale width is the new height.
+   * Multiply makes the white genuinely disappear, because white is multiply's
+   * identity: every channel multiplied by 1 is the backdrop unchanged. Only
+   * the ink survives, darkened into the card's own blue, so the mark reads as
+   * part of the card rather than as a sticker on it. No alpha channel needed,
+   * no download, no decode, and it works the same on every logo the provider
+   * sends.
    *
-   * It never bites in portrait, at any screen size: the hero's natural
-   * height is 0.75 of its container, the container is the window less the
-   * page padding, so the natural height is always below 0.78 of the window
-   * width. It only ever applies in the frame where the two disagree.
+   * The card sets `isolation: "isolate"` so the blend stops at the card. Without
+   * it the backdrop is whatever happens to be painted below, which on a
+   * scrolling screen is not a fixed thing.
+   *
+   * None of that reaches a device that cannot blend: React Native drops
+   * `mixBlendMode` below Android 10 and the Live card's caller withholds the
+   * URL there rather than let the slab back in, so `logo` only ever arrives
+   * with an `artUrl` on a device that draws it as described. See
+   * `CAN_BLEND_LOGO`.
    */
-  const maxHeight = Math.min(
-    Math.round(height * (width > height ? 0.42 : 0.6)),
-    Math.round(width * 0.78)
-  );
-
+  artKind?: "poster" | "logo";
+  onPress: () => void;
+}) {
   return (
-    <BouncePressable style={styles.heroCard} onPress={press}>
-      <View style={[styles.hero, { maxHeight }]}>
-        {!failed ? (
+    <BouncePressable
+      style={[styles.sectionCard, wide && styles.sectionCardWide, { backgroundColor: colour }]}
+      onPress={onPress}
+      accessibilityLabel={title}
+    >
+      {artUrl ? (
+        /* One width in both orientations, and it has to be — see `sectionArt`. */
+        <View style={styles.sectionArt}>
           <CachedImage
-            uri={item.posterUrl}
-            style={styles.heroImage}
+            uri={artUrl}
+            style={artKind === "logo" ? styles.sectionArtLogo : styles.sectionArtImage}
             resizeMode="cover"
-            priority="high"
-            onError={() => setFailed(true)}
           />
-        ) : (
-          <View style={[styles.heroImage, styles.heroFallback]} />
-        )}
-
-      </View>
-
-      {/*
-        Under the still, not over it.
-
-        The hero had the same collision as the cards, and worse for being
-        large: "They Fight (2026)" set across the poster's own THEY FIGHT.
-        Below the picture the title has the page to itself, the shade that
-        was holding it up is gone, and the still is a still.
-      */}
-      <View style={styles.heroBody}>
-        <View style={styles.heroMeta}>
-          <View style={styles.heroBadge}>
-            <Text style={styles.heroBadgeText}>
-              {item.contentType === "movie" ? t("home", "movies") : t("home", "series")}
-            </Text>
-          </View>
-          {item.rating !== null && (
-            <Text style={styles.heroRating}>★ {item.rating.toFixed(1)}</Text>
-          )}
         </View>
-
-        <Text style={styles.heroTitle} numberOfLines={2}>
-          {item.name}
-        </Text>
-
-        <View style={styles.heroPlay}>
-          <Text style={styles.heroPlayGlyph}>▶</Text>
-          <Text style={styles.heroPlayText}>{t("movieDetails", "play")}</Text>
+      ) : null}
+      <Image
+        source={require("../../../assets/images/card-scrim.png")}
+        style={[styles.sectionScrim, { tintColor: colour }]}
+        /* a ramp, not a picture: its aspect ratio means nothing */
+        resizeMode="stretch"
+        /* Android fades a decoded image in by default; a scrim must not arrive late */
+        fadeDuration={0}
+      />
+      <View style={[styles.sectionBody, wide && styles.sectionBodyWide]}>
+        <View style={styles.sectionTitleRow}>
+          <Glyph color="#FFFFFF" size={20} />
+          <Text style={styles.sectionTitle} numberOfLines={1}>{title}</Text>
         </View>
+        <Text style={styles.sectionSub} numberOfLines={1}>{subtitle}</Text>
       </View>
     </BouncePressable>
   );
-}
+});
 
 /**
  * No `entering` animation: the rails are horizontal FlatLists, so cards
@@ -714,6 +946,38 @@ const PosterCard = memo(function PosterCard({
   /** Takes the item, so one function serves every card — see openFeatured. */
   onPress: (item: HomeItem) => void;
 }) {
+  /*
+   * Subscribed to the theme individually, like CategoryTabs' chips.
+   *
+   * 2026-11-17: `memo` compares props and a theme change touches none of
+   * them — `item` comes out of a memoised row array and `onPress` is the
+   * stable `openFeatured` — so every card bailed out still holding the
+   * stylesheet it first resolved under. Switch to light in Settings and press
+   * back, and all five rails keep the dark palette: every poster tile
+   * #12121A, every failed tile #1C1C28, every name #9CA3AF, on a white page.
+   * That is the same measurement themedStyles.ts records for the bug it says
+   * it already fixed in the three browse grids. It happens the other way
+   * round too, and whenever "follow system" flips while Home is sitting in
+   * the stack.
+   *
+   * The grids answer it with a theme-dependent `key` on the list, which
+   * remounts the whole thing; they can afford that because they already
+   * remount on a column change and restore their scroll position. Doing the
+   * same here means five more keys to keep in step and five rails that jump
+   * back to their first card when the theme flips, so the rails take the
+   * subscription instead — the same trade, and the same reasoning, as the
+   * note above `Chip`.
+   *
+   * One `useSyncExternalStore` per mounted card is the price. On the phone
+   * that is whatever is on screen plus the window; on the television
+   * `NO_CLIP` keeps every cell of every rail mounted, so about sixty. The
+   * store is a plain `Set` walked once per theme flip — a flip the viewer
+   * caused — and CategoryTabs already pays the same per chip.
+   *
+   * `SectionCard` above needs nothing: its surfaces are the section colour
+   * and white, with no palette lookup in them at all.
+   */
+  useThemeRerender();
   const [failed, setFailed] = useState(false);
   const press = useCallback(() => onPress(item), [onPress, item]);
 
@@ -747,7 +1011,16 @@ const PosterCard = memo(function PosterCard({
         </View>
         {/* Under the poster, not on it — see the note above PosterCard. */}
         <View style={styles.featuredTitleBox}>
-          <Text style={styles.featuredTitle} numberOfLines={CARD_TITLE_LINES}>
+          <Text
+            style={styles.featuredTitle}
+            numberOfLines={CARD_TITLE_LINES}
+            /*
+              Size *and* line height in dp, the same unit as the box — a
+              multiplier cap would leave the leading scaling on its own. See
+              CARD_TITLE_LINE_HEIGHT.
+            */
+            allowFontScaling={false}
+          >
             {item.name}
           </Text>
         </View>
@@ -799,7 +1072,154 @@ function ContinueWatchingCard({ entry, onPress }: { entry: WatchProgressEntry; o
 
 const styles = themedStyles((C: ThemeColors) =>
   StyleSheet.create({
+    /* ── the three doors ── */
+    /**
+     * No horizontal padding of its own.
+     *
+     * 2026-11-17: it had `paddingHorizontal: Spacing.lg`, and so does the
+     * scroll container every row on this screen sits in — so the cards wore
+     * 32 of inset against everything else's 16 and read as a narrow column
+     * in a wide screen. The design draws them at 18 on a 390 stage, which is
+     * what the container alone already gives.
+     */
+    sectionCards: { paddingTop: Spacing.xs, gap: 13 },
+    /**
+     * Three across, turned sideways.
+     *
+     * 2026-11-17: stacked, the cards kept their 112 height and took the whole
+     * of a 2400px window — strips seven times wider than they are tall, with
+     * only two of them above the fold and the bar sitting over the third. The
+     * approved design is drawn for a phone held upright and says nothing about
+     * this; a row is what the same three things want when the space is wide
+     * and short rather than narrow and tall.
+     */
+    sectionCardsWide: { flexDirection: "row" },
+    sectionCardWide: { flex: 1, height: 132 },
+    sectionCard: {
+      /* Scopes the logo's multiply to this card. See `artKind`. */
+      isolation: "isolate", height: 112, borderRadius: 20, overflow: "hidden", justifyContent: "center" },
+    /**
+     * 56% of the card, not 205 of it — and not a different figure in
+     * landscape either.
+     *
+     * The design draws 205 on a 366 stage, which is 56% — and as a fixed
+     * number it was only ever right at that one width. On a landscape card it
+     * became a quarter, so the colour ran out long before the picture started
+     * and the soft edge the scrim exists to make turned hard again.
+     *
+     * 2026-11-18: that 56% is not a taste, it is where the scrim ends. The
+     * ramp's alpha holds at 255 to 44% of the width and only then begins to
+     * fall — the stops are read off the asset in the gradient note above
+     * `SectionCard` — so artwork pinned to the right 56% puts its hard left
+     * edge under the last fully opaque column of colour and is never seen to
+     * begin, which is the whole trick. Give the art any less and that edge
+     * lands inside the fade, where the colour over it is already half gone: a
+     * visible seam straight down the card, which is the same seam a fixed 205
+     * produces the moment the card is wider than the 366 it was measured on.
+     *
+     * Yesterday the landscape card was given its own 38% (a `sectionArtWide`)
+     * on the grounds that at 132 tall and a third of a screen wide, 56% is a
+     * box of about 1.05 aspect that cover-crops most of a 2:3 poster away.
+     * That is true, and it is an improvement that cannot be had here: 38%
+     * puts the edge at 62% of the width, between the asset's 44% and 66%
+     * stops, where its alpha is down to about 140. The crop is a preference,
+     * and the same one every rail in the app makes of a poster; the seam is a
+     * defect, on a card whose look the owner approved after turning down
+     * three others. So the crop stays and the seam goes, and both
+     * orientations draw 56%.
+     *
+     * The words lost nothing in the trade. The 38% was credited with "the
+     * room the words needed", and it never gave them any: this View is
+     * `position: "absolute"`, so its width has never fed the text column's
+     * layout at all. What widened the labels was letting the body out of its
+     * own `maxWidth` cap — see `sectionBodyWide`, which does that whole job
+     * on its own.
+     */
+    sectionArt: { position: "absolute", right: 0, top: 0, bottom: 0, width: "56%" },
+    /**
+     * The same box as a poster, multiplied instead of pasted.
+     *
+     * White is multiply's identity — every channel multiplied by 1 is the
+     * backdrop unchanged — so the logo's baked-on white background simply is
+     * not there, and only its ink survives, darkened into the card's own
+     * colour. Three other attempts at the same problem (bleeding it, containing
+     * it, putting it on a white chip) all ended with a white rectangle on a
+     * blue card, which is what the owner kept rejecting.
+     *
+     * The card sets `isolation: "isolate"` so the blend stops there. Without it
+     * the backdrop is whatever happens to be painted below, which on a
+     * scrolling screen is not a fixed thing.
+     */
+    sectionArtLogo: { width: "100%", height: "100%", mixBlendMode: "multiply" },
+    sectionArtImage: { width: "100%", height: "100%" },
+    /**
+     * The explicit width and height are load-bearing, not decoration.
+     *
+     * 2026-11-17: without them this drew nothing at all. Measured off the
+     * device, the pixels under the artwork came back as the raw photo with no
+     * tint on them whatsoever, while the bare left of the card was exactly
+     * #6D28D9 — the card's own backgroundColor, with no scrim over it. An
+     * Image given only left/right/top/bottom lays out, but does not paint;
+     * every other absolutely-filled image in this file carries the same pair
+     * (featuredImage), which is the clue that found it.
+     *
+     * No zIndex on any of the three layers, deliberately: child order already
+     * gives artwork, then scrim, then title, and an explicit stack here pushed
+     * BouncePressable's focus ring underneath the artwork — which costs the
+     * television its focus state on the only control on the screen.
+     */
+    sectionScrim: {
+      position: "absolute",
+      left: 0,
+      top: 0,
+      width: "100%",
+      height: "100%",
+    },
+    /* capped so a long translation cannot run under the artwork — in
+       portrait; the landscape card trades that cap away, see `sectionBodyWide` */
+    sectionBody: { paddingHorizontal: 18, maxWidth: "62%" },
+    /**
+     * Three across, so the text column has to give.
+     *
+     * 2026-11-17: `sectionCardsWide` lays the cards side by side at flex:1,
+     * but the body kept the portrait `maxWidth: "62%"` and its 18 of padding
+     * on each side while the type stayed at 21 and 12.5. The text column is
+     * then 0.62·((W − 32 − 2·13)/3) − 36 — about 130 points on a landscape
+     * phone before the left and right safe-area insets take their cut, where
+     * the same formula gives about 185 in portrait, 0.62·(W − 32) − 36 on one
+     * card instead of a third of one — so `numberOfLines={1}` cut the Arabic
+     * default short on both lines ("البث المباشر", "كامل كتالوج الأفلام"), and
+     * took French ("Tout le catalogue de films") and Kurmanji ("TV ya Zindî")
+     * with it.
+     *
+     * Not a rotation edge case. The television build is locked to landscape
+     * (`orientation: isTV ? "landscape"` in app.config.js), so the wide card
+     * *is* the home screen on the TV box — three clipped labels, read from
+     * across a room.
+     *
+     * So the wide card lets the body out of the cap altogether, which is safe
+     * because the scrim fades the colour out *over* the artwork rather than
+     * ending at it: a long label reaching into that fade is far less wrong
+     * than a label with its end chopped off. This is the whole of the
+     * landscape fix — the artwork's width was briefly part of it and is not
+     * (see `sectionArt`), because an absolutely positioned sibling never
+     * bounded this column in the first place.
+     *
+     * Portrait is untouched — the approved design is drawn for a phone held
+     * upright and still gets exactly the 56/62 split it asks for.
+     */
+    sectionBodyWide: { maxWidth: "100%" },
+    sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 9 },
+    sectionTitle: { color: "#FFFFFF", fontSize: 21, fontFamily: FontFamily.bold, ...AndroidTextFix },
+    sectionSub: {
+      color: "rgba(255,255,255,0.82)",
+      fontSize: 12.5,
+      marginTop: 6,
+      fontFamily: FontFamily.regular,
+      ...AndroidTextFix,
+    },
   safeArea: { flex: 1 },
+  /* paddingBottom is added inline from useTabBarSpace(), which needs the insets. */
   scrollContent: { padding: Spacing.lg, paddingBottom: Spacing.xxl, gap: Spacing.lg },
 
   /**
@@ -914,78 +1334,6 @@ const styles = themedStyles((C: ThemeColors) =>
    * together.
    */
   /** Four across, and shorter: landscape has height to spare nowhere. */
-  /**
-   * The card shrank; the symbol did not — it grew. What the smaller card
-   * reclaimed was the empty frame around the icon, not the icon itself,
-   * which is the part that has to be readable at a glance.
-   */
-
-  hero: {
-    width: "100%",
-    /*
-     * 4:3, not 16:10. The lead title is the one picture on the screen that
-     * is allowed to be a picture rather than a thumbnail, and at 16:10 a
-     * poster — which is portrait — was being cropped to a letterbox strip
-     * of its middle. Taller gives back the part of the frame the artwork
-     * was composed around, and gives the screen something to open on.
-     */
-    aspectRatio: 4 / 3,
-    borderRadius: Radii.xl,
-    overflow: "hidden",
-    /* No marginBottom: scrollContent already puts a gap between its
-       children, and the two together left a visible hole under the hero. */
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  heroImage: { ...StyleSheet.absoluteFill, width: "100%", height: "100%" },
-  heroFallback: { backgroundColor: C.surfaceElevated },
-  /** The picture and the block under it, as one pressable. */
-  heroCard: { width: "100%" },
-  /*
-   * In flow now rather than absolutely placed over the picture. No side
-   * padding either: the title lines up with the section headings below it
-   * instead of being inset from the artwork's edge, which is what tells
-   * the eye it belongs to the page rather than to the image.
-   */
-  heroBody: { paddingTop: Spacing.sm, gap: Spacing.xs },
-  heroMeta: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
-  heroBadge: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: Radii.sm,
-    backgroundColor: Brand.primary,
-  },
-  heroBadgeText: { color: "#02121F", fontFamily: FontFamily.bold, fontSize: 10.5, ...AndroidTextFix },
-  heroRating: { color: "#F6C445", fontFamily: FontFamily.semiBold, fontSize: 12, ...AndroidTextFix },
-  heroTitle: {
-    /* On the page now, so it takes the page's ink rather than a hard white. */
-    color: C.text,
-    fontFamily: FontFamily.bold,
-    fontSize: 22,
-    lineHeight: 30,
-    ...AndroidTextFix,
-  },
-  /*
-   * A solid button now, not a frosted panel. The translucent white was
-   * reading as glass over a picture; on the page it would just be a grey
-   * box, and the one thing on this screen the viewer is being invited to
-   * press should look pressable.
-   */
-  heroPlay: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: Spacing.xs,
-    alignSelf: "flex-start",
-    marginTop: Spacing.xs,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 9,
-    borderRadius: Radii.md,
-    backgroundColor: Brand.primary,
-  },
-  heroPlayGlyph: { color: "#02121F", fontSize: 11, ...AndroidTextFix },
-  heroPlayText: { color: "#02121F", fontFamily: FontFamily.bold, fontSize: 13, ...AndroidTextFix },
 
   rail: { gap: Spacing.md, paddingEnd: Spacing.lg },
 
@@ -1036,6 +1384,11 @@ const styles = themedStyles((C: ThemeColors) =>
    * A fixed height, not a minimum. Two lines whether the name needs one or
    * two, so every card in a rail ends at the same place — see the note
    * above PosterCard for what a ragged rail looks like.
+   *
+   * dp, like every height in a stylesheet, and only honest because both
+   * Texts that sit in it carry `allowFontScaling={false}`: the two lines
+   * inside are then 2 × CARD_TITLE_LINE_HEIGHT in the same unit, at any
+   * system font size. See CARD_TITLE_LINE_HEIGHT for the day that cost.
    */
   featuredTitleBox: {
     height: CARD_TITLE_LINE_HEIGHT * CARD_TITLE_LINES,

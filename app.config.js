@@ -68,7 +68,7 @@ const ANDROID_PACKAGE = isDevId ? BRAND.packageId + ".dev" : BRAND.packageId;
  * refused the upload — a build had reached a test track and left no trace
  * in git.
  */
-const VERSION_CODE_BASE = 1;
+const VERSION_CODE_BASE = 3;
 
 /*
  * Phone and TV are one app on Play — same listing, same package id, with
@@ -101,7 +101,7 @@ module.exports = {
      *
      * Nothing is published yet, so this is the first one.
      */
-    version: "1.0",
+    version: "1.1",
     orientation: isTV ? "landscape" : "default",
     icon: "./assets/images/icon.png",
     /*
@@ -117,6 +117,40 @@ module.exports = {
     android: {
       package: ANDROID_PACKAGE,
       versionCode: ANDROID_VERSION_CODE,
+      /*
+       * The colour of the window itself, before React draws anything into
+       * it.
+       *
+       * Nothing set this, so `AppTheme` inherited AppCompat DayNight's own
+       * default — white on a device whose system is in light mode, which is
+       * most of them. That white is what is on screen for the whole gap
+       * between the native splash coming down and the first JS frame:
+       * src/app/_layout.tsx hides the splash the moment the fonts resolve,
+       * and `ThemeProvider` then renders nothing until `getAppState()` comes
+       * back, which on a first install means opening the database and
+       * running every pending migration. So a dark-first app opened on a
+       * white page — longest on the very first launch, which is exactly
+       * what a Play reviewer and every new installer sees.
+       *
+       * #0A0A0F is `darkColors.background` (src/core/theme/palettes.ts):
+       * the colour of every themed page in the app's default theme, the
+       * colour of the native splash configured below, and the colour the
+       * brand intro plays over (BrandSplash's root is `C.background`). With
+       * it set, every frame from launch to the first list is the same
+       * near-black and there is no handoff left to see.
+       *
+       * It is **not** `Colors.background` in src/core/theme/tokens.ts,
+       * which is #050A14 — that object is the palette for the surfaces that
+       * stay dark in *both* themes (the controls over a running video),
+       * not the page.
+       *
+       * expo-system-ui turns this into an `activityBackground` colour and
+       * an `android:windowBackground` item on AppTheme. Its plugin runs
+       * automatically as one of prebuild's versioned SDK plugins, so it
+       * needs no entry in `plugins` below — but android/ is checked in, so
+       * it does need an `npm run prebuild` before it is in the manifest.
+       */
+      backgroundColor: "#0A0A0F",
       /*
        * SYSTEM_ALERT_WINDOW — "Display over other apps" — was in the merged
        * manifest and nothing in this app has ever asked for it. It arrives
@@ -230,10 +264,23 @@ module.exports = {
           image: "./assets/images/splash-blank.png",
           imageWidth: 200,
           resizeMode: "contain",
-          // Must exactly match Colors.background (src/core/theme/tokens.ts) —
-          // this is the native splash screen's background, and any mismatch
-          // with the JS screen that appears right after it (the startup gate,
-          // src/app/index.tsx) reads as a visible flash at handoff.
+          /*
+           * Must exactly match the app's own page colour — this is the
+           * native splash screen's background, and any mismatch with the JS
+           * screen that appears right after it (the startup gate,
+           * src/app/index.tsx) reads as a visible flash at handoff.
+           *
+           * That colour is `darkColors.background` in
+           * src/core/theme/palettes.ts, which is what the startup gate's
+           * `C.background` resolves to in the default theme. The note that
+           * used to sit here pointed at `Colors.background` in
+           * src/core/theme/tokens.ts: that object was split into the two
+           * palettes and now holds #050A14 for the surfaces that stay dark
+           * in both themes, so the instruction had quietly stopped
+           * describing the value under it. Corrected 2026-11-17, while the
+           * window background in the `android` block above was being set to
+           * the same near-black.
+           */
           backgroundColor: "#0A0A0F",
         },
       ],
@@ -271,6 +318,7 @@ module.exports = {
       "./plugins/withDecoderFfmpegMp2",
       "./plugins/withReleaseSigning",
       "./plugins/withGradleMemory",
+      "./plugins/withAbiFilters",
       /*
        * `enforceContrast: false` is load-bearing, not a preference.
        *

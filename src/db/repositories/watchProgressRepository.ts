@@ -1,3 +1,4 @@
+import { dataScope } from "@/db/dataScope";
 import { getDatabase } from "@/db/client";
 
 export type WatchContentType = "movie" | "episode";
@@ -58,12 +59,15 @@ function fromRow(row: WatchProgressRow): WatchProgressEntry {
 }
 
 export async function saveWatchProgress(entry: WatchProgressEntry): Promise<void> {
+  const providerId = dataScope();
+  /* Nothing is connected, so there is no provider for this row to belong to. */
+  if (!providerId) return;
   const db = await getDatabase();
   await db.runAsync(
     `INSERT INTO watch_progress
-       (content_type, provider_item_id, position_seconds, duration_seconds, updated_at, title, subtitle, image_url, container_extension, series_id, season_number, episode_number)
-     VALUES ($contentType, $providerItemId, $positionSeconds, $durationSeconds, $updatedAt, $title, $subtitle, $imageUrl, $containerExtension, $seriesId, $seasonNumber, $episodeNumber)
-     ON CONFLICT (content_type, provider_item_id) DO UPDATE SET
+       (provider_id, content_type, provider_item_id, position_seconds, duration_seconds, updated_at, title, subtitle, image_url, container_extension, series_id, season_number, episode_number)
+     VALUES ($providerId, $contentType, $providerItemId, $positionSeconds, $durationSeconds, $updatedAt, $title, $subtitle, $imageUrl, $containerExtension, $seriesId, $seasonNumber, $episodeNumber)
+     ON CONFLICT (provider_id, content_type, provider_item_id) DO UPDATE SET
        position_seconds = excluded.position_seconds,
        duration_seconds = excluded.duration_seconds,
        updated_at = excluded.updated_at,
@@ -75,6 +79,7 @@ export async function saveWatchProgress(entry: WatchProgressEntry): Promise<void
        season_number = excluded.season_number,
        episode_number = excluded.episode_number;`,
     {
+      $providerId: providerId,
       $contentType: entry.contentType,
       $providerItemId: entry.providerItemId,
       $positionSeconds: entry.positionSeconds,
@@ -97,8 +102,8 @@ export async function getWatchProgress(
 ): Promise<WatchProgressEntry | null> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<WatchProgressRow>(
-    "SELECT * FROM watch_progress WHERE content_type = $contentType AND provider_item_id = $providerItemId;",
-    { $contentType: contentType, $providerItemId: providerItemId }
+    "SELECT * FROM watch_progress WHERE provider_id = $providerId AND content_type = $contentType AND provider_item_id = $providerItemId;",
+    { $providerId: dataScope(), $contentType: contentType, $providerItemId: providerItemId }
   );
   return row ? fromRow(row) : null;
 }
@@ -110,11 +115,11 @@ export async function getMostRecentIncompleteEpisodeForSeries(
   const db = await getDatabase();
   const row = await db.getFirstAsync<WatchProgressRow>(
     `SELECT * FROM watch_progress
-     WHERE content_type = 'episode' AND series_id = $seriesId
+     WHERE provider_id = $providerId AND content_type = 'episode' AND series_id = $seriesId
        AND position_seconds < duration_seconds * 0.95
      ORDER BY updated_at DESC
      LIMIT 1;`,
-    { $seriesId: seriesId }
+    { $providerId: dataScope(), $seriesId: seriesId }
   );
   return row ? fromRow(row) : null;
 }
@@ -122,21 +127,23 @@ export async function getMostRecentIncompleteEpisodeForSeries(
 export async function getRecentWatchProgress(limit = 10): Promise<WatchProgressEntry[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<WatchProgressRow>(
-    "SELECT * FROM watch_progress ORDER BY updated_at DESC LIMIT $limit;",
-    { $limit: limit }
+    "SELECT * FROM watch_progress WHERE provider_id = $providerId ORDER BY updated_at DESC LIMIT $limit;",
+    { $providerId: dataScope(), $limit: limit }
   );
   return rows.map(fromRow);
 }
 
 export async function clearWatchProgress(contentType: WatchContentType, providerItemId: string): Promise<void> {
   const db = await getDatabase();
-  await db.runAsync("DELETE FROM watch_progress WHERE content_type = $contentType AND provider_item_id = $providerItemId;", {
+  await db.runAsync("DELETE FROM watch_progress WHERE provider_id = $providerId AND content_type = $contentType AND provider_item_id = $providerItemId;", {
+    $providerId: dataScope(),
     $contentType: contentType,
     $providerItemId: providerItemId,
   });
 }
 
+/** "Clear watch history" clears THIS provider's history, not every provider's. */
 export async function clearAllWatchProgress(): Promise<void> {
   const db = await getDatabase();
-  await db.execAsync("DELETE FROM watch_progress;");
+  await db.runAsync("DELETE FROM watch_progress WHERE provider_id = $providerId;", { $providerId: dataScope() });
 }

@@ -205,19 +205,6 @@ export function seriesOnly(limit: number): HomeItem[] {
 }
 
 /**
- * One title to lead the screen, preferring something from this year.
- *
- * Falls through to the general pool when the provider has nothing current —
- * an empty hero would be a worse answer than an older film.
- */
-export function hero(): HomeItem | null {
-  const s = scan();
-  const pool = s.newThisYear.length > 0 ? s.newThisYear : s.withArt;
-  if (pool.length === 0) return null;
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-/**
  * `limit` items drawn from across the whole pool rather than off the front.
  *
  * Taking the first N would show the same titles every launch, and they

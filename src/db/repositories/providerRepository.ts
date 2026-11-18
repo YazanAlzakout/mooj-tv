@@ -84,6 +84,25 @@ export async function setActiveProvider(providerId: string): Promise<void> {
   });
 }
 
+/**
+ * Leaves no provider active, which is what disconnecting is supposed to mean.
+ *
+ * `clearActiveSession()` empties the catalogue held in memory and nothing else
+ * — the row in `providers` stays `is_active = 1`. So the app's own launch
+ * path, which asks `getActiveProvider()` and reconnects whatever it finds,
+ * connected straight back to the provider the viewer had just disconnected
+ * from. From the home screen that round trip was invisible and instant, and
+ * the owner reported it on 2026-11-17 as the button doing nothing at all.
+ *
+ * Deactivating rather than deleting: the viewer disconnected, they did not ask
+ * to forget the provider. It stays in the list, with its credentials, ready to
+ * be picked again on the providers screen they land on.
+ */
+export async function clearActiveProvider(): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("UPDATE providers SET is_active = 0;");
+}
+
 export async function deleteProvider(providerId: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync("DELETE FROM providers WHERE id = $id;", { $id: providerId });

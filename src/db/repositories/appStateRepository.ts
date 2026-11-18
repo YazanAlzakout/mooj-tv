@@ -1,7 +1,6 @@
 import { getDatabase } from "@/db/client";
 
 export type ThemePreference = "dark" | "light" | "system";
-export type ContentSection = "live" | "movies" | "series";
 
 export interface AppState {
   legalAcceptedAt: number | null;
@@ -9,11 +8,31 @@ export interface AppState {
   language: string | null;
   theme: ThemePreference;
   onboardingSeenAt: number | null;
-  liveSectionVisible: boolean;
-  moviesSectionVisible: boolean;
-  seriesSectionVisible: boolean;
   resumeEnabled: boolean;
   autoplayNextEpisode: boolean;
+  /**
+   * Read-only as of 2026-11-18, and read by the three player screens alone.
+   *
+   * The owner asked for both Settings rows to go, on 2026-11-17: "لغة الصوت
+   * المفضل الغيها / لغة الترجمة الغيها". The rows, `LanguageCodeRow` and the
+   * six locales' strings are gone, and with them the only callers the two
+   * setters that used to sit below `setAutoplayNextEpisode` ever had — so
+   * those setters are gone too.
+   *
+   * What is deliberately still here: these two fields, the columns behind
+   * them, and `usePlaybackTracks`' auto-selection. The three players read
+   * them, and the player was excluded from this pass because the owner tested
+   * it himself. So the value is whatever SQLite already holds and nothing in
+   * the app can change it: null on every install, since nothing has been
+   * released from this tree, and frozen at the old value on a test device that
+   * set one before the rows went on 2026-11-17.
+   *
+   * Finishing it is the treatment migration 22 gave the three "Show X section"
+   * switches — DROP COLUMN, fields deleted — and it needs the three player
+   * screens, `usePlaybackTracks`, `src/db/migrations/index.ts` and this file in
+   * one pass. See docs/DECISIONS.md, "Preferred audio/subtitle language
+   * settings removed (2026-11-18)".
+   */
   preferredAudioLang: string | null;
   preferredSubtitleLang: string | null;
   /** Remembered aspect choice for the player — a preference about the viewer's own screen, not the session. */
@@ -46,9 +65,6 @@ interface AppStateRow {
   language: string | null;
   theme: ThemePreference;
   onboarding_seen_at: number | null;
-  live_section_visible: number;
-  movies_section_visible: number;
-  series_section_visible: number;
   resume_enabled: number;
   autoplay_next_episode: number;
   preferred_audio_lang: string | null;
@@ -67,9 +83,6 @@ function toAppState(row: AppStateRow): AppState {
     language: row.language,
     theme: row.theme,
     onboardingSeenAt: row.onboarding_seen_at,
-    liveSectionVisible: row.live_section_visible === 1,
-    moviesSectionVisible: row.movies_section_visible === 1,
-    seriesSectionVisible: row.series_section_visible === 1,
     resumeEnabled: row.resume_enabled === 1,
     autoplayNextEpisode: row.autoplay_next_episode === 1,
     preferredAudioLang: row.preferred_audio_lang,
@@ -112,18 +125,6 @@ export async function setOnboardingSeen(): Promise<void> {
   await db.runAsync("UPDATE app_state SET onboarding_seen_at = $now WHERE id = 1;", { $now: Date.now() });
 }
 
-const SECTION_COLUMN: Record<ContentSection, string> = {
-  live: "live_section_visible",
-  movies: "movies_section_visible",
-  series: "series_section_visible",
-};
-
-export async function setSectionVisible(section: ContentSection, visible: boolean): Promise<void> {
-  const db = await getDatabase();
-  const column = SECTION_COLUMN[section];
-  await db.runAsync(`UPDATE app_state SET ${column} = $visible WHERE id = 1;`, { $visible: visible ? 1 : 0 });
-}
-
 export async function setResumeEnabled(enabled: boolean): Promise<void> {
   const db = await getDatabase();
   await db.runAsync("UPDATE app_state SET resume_enabled = $enabled WHERE id = 1;", { $enabled: enabled ? 1 : 0 });
@@ -136,15 +137,14 @@ export async function setAutoplayNextEpisode(enabled: boolean): Promise<void> {
   });
 }
 
-export async function setPreferredAudioLang(lang: string | null): Promise<void> {
-  const db = await getDatabase();
-  await db.runAsync("UPDATE app_state SET preferred_audio_lang = $lang WHERE id = 1;", { $lang: lang });
-}
-
-export async function setPreferredSubtitleLang(lang: string | null): Promise<void> {
-  const db = await getDatabase();
-  await db.runAsync("UPDATE app_state SET preferred_subtitle_lang = $lang WHERE id = 1;", { $lang: lang });
-}
+/*
+ * `setPreferredAudioLang` / `setPreferredSubtitleLang` stood here until
+ * 2026-11-18. Both lost their last caller when the Settings rows were removed
+ * on the owner's instruction (see `preferredAudioLang` above), and a setter
+ * with no caller is worse than no setter: it reads as a feature that is still
+ * wired up. The columns they wrote are still read — see above for why, and for
+ * what a later pass has to touch to finish the job.
+ */
 
 export async function setPlayerFitMode(mode: AppState["playerFitMode"]): Promise<void> {
   const db = await getDatabase();

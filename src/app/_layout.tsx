@@ -1,7 +1,7 @@
 import { useNetworkReconnect } from "@/core/network/useNetworkReconnect";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, type ErrorBoundaryProps } from "expo-router";
 import { useEffect, useState } from "react";
 import * as SplashScreen from "expo-splash-screen";
 import { NavigationBar } from "expo-navigation-bar";
@@ -9,6 +9,7 @@ import { StatusBar } from "expo-status-bar";
 import { InteractionManager, View } from "react-native";
 
 import { BrandSplash } from "@/components/BrandSplash";
+import { CrashScreen } from "@/components/CrashScreen";
 import { I18nProvider } from "@/core/i18n/I18nContext";
 import { primeCacheIndex } from "@/core/media/imageCache";
 import { ThemeProvider, useTheme } from "@/core/theme/ThemeContext";
@@ -178,10 +179,27 @@ function ThemedRoot() {
           <Stack.Screen name="downloads" />
           <Stack.Screen name="legal" />
           <Stack.Screen name="privacy" />
+          <Stack.Screen name="licences" />
         </Stack>
 
         {!introDone && <BrandSplash onFinish={() => setIntroDone(true)} />}
       </View>
     </>
   );
+}
+
+/**
+ * The app's error containment, and the only one it has.
+ *
+ * expo-router renders an exported ErrorBoundary in place of the subtree that
+ * threw, so putting it on the ROOT layout covers every screen — a boundary on
+ * one route would leave the other twenty uncovered. Exported here rather than
+ * written here because the screen must not touch the theme, the translations
+ * or anything else that might be what failed; see the note in CrashScreen.
+ *
+ * Added 2026-11-14. Before it, a single render throw anywhere took the whole
+ * app to the launcher with nothing left behind to diagnose it.
+ */
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return <CrashScreen {...props} />;
 }

@@ -73,10 +73,11 @@ export default function TabsLayout() {
        * The bar is drawn here rather than configured.
        *
        * What the design needs — a capsule floating clear of the screen
-       * edges, a spotlight that slides to the tab you press, a click and
-       * a haptic tick — is not a set of options on the stock bar. It is a
-       * different bar, so this is one. See MoojTabBar for how the cone is
-       * drawn without a gradient or an SVG renderer.
+       * edges, a scoop that opens under the tab you press and a disc that
+       * climbs out of it, a click and a haptic tick — is not a set of
+       * options on the stock bar. It is a different bar, so this is one.
+       * See MoojTabBar for how the scoop is cut as a real hole with no
+       * mask and no SVG renderer.
        */
       tabBar={(props) => <MoojTabBar {...props} />}
     >

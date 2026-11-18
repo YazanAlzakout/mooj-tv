@@ -1,3 +1,4 @@
+import { dataScope } from "@/db/dataScope";
 import { getDatabase } from "@/db/client";
 
 export type DownloadContentType = "movie" | "episode";
@@ -152,18 +153,72 @@ export async function getDownloadTask(id: string): Promise<DownloadTask | null> 
   return row ? fromRow(row) : null;
 }
 
+/**
+ * "Is THIS item, on the provider connected right now, downloaded?"
+ *
+ * Scoped by provider, and that is the 2026-11-18 fix. `download_tasks` has
+ * carried `provider_id` since migration 9, but this lookup matched on
+ * `(content_type, provider_item_id)` alone — and a provider item id is a small
+ * integer that every Xtream panel numbers from its own 1, so provider A's
+ * completed movie 1182 answered provider B's question about B's own 1182,
+ * which is a different film. B's detail screen drew the item as downloaded and
+ * handed A's `local_uri` to the player: the viewer taps Play on B's film and
+ * watches A's. Tapping Download instead was dead too — `startDownload` found
+ * this row in `existing` and returned without a word. Episodes went the same
+ * way through the same lookup.
+ *
+ * The same mistake migration 23 fixed for `watch_progress` and `library_items`
+ * on 2026-11-17 — except that here no migration was needed and none is: this
+ * table has had the column all along and simply never asked about it.
+ *
+ * A null scope matches no row, exactly as in watchProgressRepository: nothing
+ * is connected, so there is no provider for this item to belong to, and an
+ * empty answer is the safe direction. Migration 20's index still serves this
+ * query — SQLite seeks on `(content_type, provider_item_id)` and tests
+ * `provider_id` off the row it already fetched, so the extra clause costs
+ * nothing (verified with EXPLAIN QUERY PLAN against sqlite3 3.50.6).
+ */
 export async function getDownloadByContent(
   contentType: DownloadContentType,
   providerItemId: string
 ): Promise<DownloadTask | null> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<DownloadTaskRow>(
-    "SELECT * FROM download_tasks WHERE content_type = $contentType AND provider_item_id = $providerItemId;",
-    { $contentType: contentType, $providerItemId: providerItemId }
+    "SELECT * FROM download_tasks WHERE provider_id = $providerId AND content_type = $contentType AND provider_item_id = $providerItemId;",
+    { $providerId: dataScope(), $contentType: contentType, $providerItemId: providerItemId }
   );
   return row ? fromRow(row) : null;
 }
 
+/**
+ * Every download row on the device, whichever provider it came from — and
+ * deliberately NOT scoped, unlike `getDownloadByContent` above.
+ *
+ * A download is a file sitting in the device's own storage. Its megabytes are
+ * spent whoever is connected, and the player takes it as a `localUri` and
+ * never builds a stream URL for it, so it needs no line of its own to play
+ * (the one thing it does still need is a session to navigate through — the
+ * scope boundary written down in docs/DECISIONS.md §27). The honest answer to
+ * "what have I downloaded" is therefore all of it. Scoping this would have
+ * hidden provider A's finished films from the downloads screen the moment B
+ * was connected, with the space still gone and nothing left in the app that
+ * could delete them.
+ *
+ * The machinery depends on it too, and this is the stronger half of the
+ * argument. downloadManager's `deleteAndCleanupFile` finds a row BY ID through
+ * this function to delete its file before dropping the row: scoped, it would
+ * find nothing for another provider's download, delete the row, and leave the
+ * file on disk forever. `pumpQueue` would strand A's queued rows the moment B
+ * connected, `parkQueuedDownloads` would leave them queued behind a transfer
+ * that is not running, and a row carrying a `provider_id` that no longer
+ * exists in `providers` — a provider the viewer deleted — would become
+ * unreachable by every path at once.
+ *
+ * What makes the split safe is that nothing identifies content through this
+ * function. It is read by id (the manager) or listed as rows (the downloads
+ * screen, the Home shelf, the count on More), and "is B's 1182 downloaded" is
+ * asked only of `getDownloadByContent`, which is scoped.
+ */
 export async function getAllDownloadTasks(): Promise<DownloadTask[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<DownloadTaskRow>("SELECT * FROM download_tasks ORDER BY created_at DESC;");
@@ -179,6 +234,14 @@ export async function recoverInterruptedDownloads(): Promise<void> {
   );
 }
 
+/**
+ * What the finished downloads cost in storage, for the Settings row.
+ *
+ * Unscoped for the reason `getAllDownloadTasks` gives at length: these are
+ * bytes on this device, and they do not stop being spent because a different
+ * provider happens to be connected. A figure a viewer reads before deciding
+ * to free space has to be the whole of it.
+ */
 export async function getDownloadsSummary(): Promise<{ count: number; totalBytes: number }> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<{ count: number; total_bytes: number | null }>(

@@ -98,8 +98,36 @@ function sanitizeSegment(input: string): string {
   return input.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80);
 }
 
-function destinationFile(item: Pick<NewDownloadInput, "contentType" | "providerItemId" | "containerExtension">): File {
-  const name = `${item.contentType}_${sanitizeSegment(item.providerItemId)}.${sanitizeSegment(item.containerExtension)}`;
+/**
+ * Where one download's bytes land.
+ *
+ * The provider id is in the name, and it has to be. The name used to be
+ * `${contentType}_${providerItemId}`, which is not unique: every Xtream panel
+ * numbers its catalogue from 1, so provider A's film 1182 and provider B's film
+ * 1182 — two entirely different films — both resolved to `movie_1182.mp4`.
+ *
+ * That collision was unreachable until 2026-11-18, which is why it sat here
+ * unnoticed. `getDownloadByContent` was unscoped, so asking "is B's 1182
+ * downloaded?" returned A's completed row and B's Download button returned
+ * early without ever starting a transfer. Scoping that query fixed the worse
+ * half of the bug — B's film no longer plays A's file — and in doing so made
+ * this half reachable for the first time: B can now genuinely download its own
+ * 1182, straight over A's finished file, leaving A's completed row pointing at
+ * B's film.
+ *
+ * Rows written before this change keep working. A completed download is played
+ * from the `local_uri` stored on its row, and deletion reads that same column
+ * (see `deleteAndCleanupFile`); nothing recomputes the path for a file that
+ * already exists. The one casualty is a transfer that was paused or interrupted
+ * when the app was updated and then has to restart from scratch: it restarts
+ * into the new name and abandons its old partial file on disk. That is bounded
+ * — partials only, only across this one upgrade — and the alternative is
+ * keeping a naming scheme that can destroy a finished download.
+ */
+function destinationFile(
+  item: Pick<NewDownloadInput, "contentType" | "providerItemId" | "providerId" | "containerExtension">
+): File {
+  const name = `${item.contentType}_${sanitizeSegment(item.providerId)}_${sanitizeSegment(item.providerItemId)}.${sanitizeSegment(item.containerExtension)}`;
   return new File(downloadsDirectory(), name);
 }
 

@@ -73,3 +73,11 @@ modules/*/android/.cxx/
 # diagnostics for one run on one machine, never source.
 hs_err_pid*.log
 replay_pid*.log
+
+# AF_UNIX socket files for the Gradle daemon's NIO selector; see
+# tools/build-release.cmd for why this directory has to be a short path.
+/.gradle-tmp
+
+# The brand kit duplicates assets/fonts/ byte for byte so the folder can be
+# handed over whole; the repository only needs one copy of the nine files.
+/store/raw/fonts/

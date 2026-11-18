@@ -24,6 +24,7 @@ import { getActiveProvider } from "@/db/repositories/providerRepository";
 import { PreparingLibrary } from "@/components/PreparingLibrary";
 import { UpdateRequiredScreen } from "@/components/UpdateRequiredScreen";
 import type { PreloadProgress } from "@/state/catalogCache";
+import { clearActiveSession } from "@/state/activeSessionStore";
 import { restoreSession } from "@/state/sessionRestore";
 
 /**
@@ -166,6 +167,31 @@ export default function StartupGateScreen() {
         });
         if (!cancelled) router.replace("/home");
       } catch {
+        /*
+         * Say out loud that nothing is connected, before routing.
+         *
+         * 2026-11-18. This catch used to only navigate, which left the app in
+         * two minds: `providers.is_active` still named the provider whose
+         * restore had just failed, while the in-memory session was null
+         * because it had never been built. `setActiveSession`'s guard against
+         * leaking one provider's data into another's session is
+         * `session !== null && session.provider.id !== next.provider.id`, so
+         * from here it read false and the previous provider's guide was never
+         * cleared — and the commonest reason to connect a different line is
+         * the old one expiring, which is exactly the rejected login that
+         * lands here (`sessionRestore.ts` rethrows `XtreamAuthError` even
+         * when a catalogue is cached). The viewer then saw provider A's
+         * programme titles against provider B's channels for up to six hours.
+         *
+         * Called outside the `cancelled` check on purpose: this is state, not
+         * screen. If the gate is already gone the routing is pointless, but
+         * "no provider is connected" is still true and still has to be
+         * recorded. And nothing reaching here can have built a session to
+         * tear down by mistake: `restoreSession` builds one as its last act,
+         * the two calls after it are synchronous state writes, and the
+         * background catalogue refresh swallows its own failures.
+         */
+        clearActiveSession();
         if (!cancelled) {
           setFailed(true);
           router.replace("/providers");

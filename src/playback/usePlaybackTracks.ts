@@ -17,7 +17,12 @@ interface TracksState {
   subtitleTracks: SubtitleTrack[];
   currentAudioTrack: AudioTrack | null;
   currentSubtitleTrack: SubtitleTrack | null;
-  /** Whether the user's preferred-language auto-selection has already been applied for this source. */
+  /**
+   * Whether the track for this source has already been decided — by the
+   * preferred-language pass (inert since 2026-11-18, see the hook's doc
+   * comment) or by the viewer picking one in the selector. Either way the
+   * next track list to arrive must not overrule it.
+   */
   autoAudioApplied: boolean;
   autoSubtitleApplied: boolean;
 }
@@ -90,15 +95,34 @@ export function findPreferredTrack<T extends AudioTrack | SubtitleTrack>(
  * (one source per screen instance) and can leave it at its default, but
  * the live player reuses a single `VideoPlayer` across every channel
  * switch: passing the channel id there discards the previous channel's
- * track list and re-arms the preferred-language auto-selection, so the
+ * track list and clears `TracksState`'s "already decided" flags, so the
  * chrome never offers a track that belongs to a stream that is no longer
  * playing.
  *
- * `preferredAudioLang`/`preferredSubtitleLang` (Settings → Playback, free
- * text since provider track languages aren't limited to the app's own UI
- * locales) are applied at most once per source, the first time each track
- * list populates — after that the user's own manual selection is never
- * overridden by this hook again until the source changes.
+ * `preferredAudioLang`/`preferredSubtitleLang` are applied at most once per
+ * source, the first time each track list populates — after that the user's
+ * own manual selection is never overridden by this hook again until the
+ * source changes.
+ *
+ * Both of those arms are inert as of 2026-11-18, and this is the honest
+ * reading of them. They were fed by two free-text rows in Settings →
+ * Playback; the owner asked for those rows to go on 2026-11-17 ("لغة الصوت
+ * المفضل الغيها / لغة الترجمة الغيها") and they went, and so did the two
+ * repository setters that wrote the columns. The players still pass what
+ * `getAppState()` returns, but nothing in the app can write a value there
+ * any more, and nothing has been released from this tree — so the columns
+ * are null on every install bar a test device that set one before the rows
+ * went, and in practice neither `if` below is entered. What the viewer picks
+ * by hand in the track selector is unaffected; that was never this path.
+ *
+ * Left standing rather than deleted because the deletion cannot be finished
+ * from here: the three player screens pass these two positionally, ahead of
+ * `sourceKey`, and the player screens are excluded from this pass (the owner
+ * tested the player himself). Dropping the parameters without editing those
+ * three call sites would silently slide the channel id into
+ * `preferredAudioLang`. See appStateRepository.ts's `preferredAudioLang`
+ * comment, and docs/DECISIONS.md, "Preferred audio/subtitle language
+ * settings removed (2026-11-18)".
  */
 export function usePlaybackTracks(
   player: VideoPlayer,

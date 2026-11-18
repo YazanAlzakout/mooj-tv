@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FlatList, StyleSheet, Text } from "react-native";
+import { FlatList, StyleSheet, Text, View } from "react-native";
+
+import { router, usePathname } from "expo-router";
 
 import { NO_CLIP } from "@/core/layout/listWindow";
 
 import { Focusable } from "@/components/Focusable";
+import { useTabBarSpace } from "@/components/MoojTabBar";
 import type { CategoryTabItem } from "@/components/CategoryTabs";
+import { useI18n } from "@/core/i18n/I18nContext";
+import { isTvBuild } from "@/core/platform/isTvBuild";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles } from "@/core/theme/themedStyles";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
@@ -40,6 +45,21 @@ import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/
  * without a burst of commits.
  */
 const COMMIT_DELAY_MS = 200;
+
+/**
+ * The app's five sections, named exactly as the tab bar names them.
+ *
+ * Same i18n keys as `(tabs)/_layout.tsx` on purpose: the rail and the bar are
+ * two ways into the same five places, and a television calling Live TV
+ * something a phone does not is a bug in both.
+ */
+const SECTIONS = [
+  { route: "/home" },
+  { route: "/live-categories" },
+  { route: "/movies-categories" },
+  { route: "/series-categories" },
+  { route: "/more" },
+] as const;
 
 /**
  * The rail's full horizontal footprint: its fixed width plus the hairline
@@ -78,6 +98,16 @@ export function CategorySidebar({
   activeId: string;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useI18n();
+  const pathname = usePathname();
+  /**
+   * The rail runs the full height of the screen, and the tab bar now floats
+   * over the bottom of it rather than reserving a band below it — so without
+   * this the last category in the list sits behind an opaque bar and cannot be
+   * reached by the D-pad at all. The three browse grids were given the same
+   * allowance; this list was missed.
+   */
+  const tabBarSpace = useTabBarSpace();
   /**
    * The row the D-pad is on right now, which is what the viewer reads as
    * "selected".
@@ -146,14 +176,74 @@ export function CategorySidebar({
    * before the viewer had asked for anything.
    */
 
+  /*
+   * The five sections, at the head of the rail, on the television only.
+   *
+   * Added 2026-11-14 from the pre-release audit. The floating tab bar is
+   * rendered by the navigator *below* the screen, and the screen here is a
+   * virtualised grid — with the real test lineup, about 2,700 rows of it.
+   * Android offers DPAD_DOWN to the grid first, so the bar was only reachable
+   * by scrolling to the very bottom of the catalogue, which nobody will do.
+   * On a television that left Live TV and More with no entry point at all.
+   *
+   * They go here because Left already reaches this rail from the grid: it is
+   * the one control a remote can get to from anywhere on these screens. The
+   * bar keeps its place on the phone, where a thumb reaches it directly.
+   *
+   * No `onFocus` on these, deliberately. Selection follows focus for the
+   * categories below — that is what makes the rail one press instead of two —
+   * but a section is a navigation away from this screen, and doing that
+   * because the remote passed over it would be indefensible. Select only.
+   */
+  const sections = !isTvBuild ? null : (
+    <View style={styles.sections}>
+      {SECTIONS.map((s) => {
+        const here = pathname === s.route;
+        /* `t` is typed per group, so the key has to be resolved against a
+           known group rather than a union of them — hence the switch rather
+           than `t(s.group, s.key)`, which types the key as `never`. */
+        const label =
+          s.route === "/home"
+            ? t("tabs", "home")
+            : s.route === "/live-categories"
+              ? t("home", "liveTV")
+              : s.route === "/movies-categories"
+                ? t("home", "movies")
+                : s.route === "/series-categories"
+                  ? t("home", "series")
+                  : t("tabs", "more");
+        return (
+          <Focusable
+            key={s.route}
+            style={[styles.section, here && styles.sectionActive]}
+            accessibilityLabel={label}
+            accessibilityState={here ? { selected: true } : {}}
+            onPress={() => {
+              if (!here) router.replace(s.route);
+            }}
+          >
+            <Text
+              style={[styles.sectionLabel, here && styles.sectionLabelActive]}
+              numberOfLines={1}
+            >
+              {label}
+            </Text>
+          </Focusable>
+        );
+      })}
+      <View style={styles.sectionRule} />
+    </View>
+  );
+
   return (
     <FlatList
         {...NO_CLIP}
       data={categories}
       keyExtractor={(item) => item.id}
       style={styles.rail}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={[styles.list, { paddingBottom: Spacing.sm + tabBarSpace }]}
       showsVerticalScrollIndicator={false}
+      ListHeaderComponent={sections}
       renderItem={({ item }) => (
         <Focusable
           style={[styles.row, selectedId === item.id && styles.rowActive]}
@@ -206,5 +296,36 @@ const styles = themedStyles((C: ThemeColors) =>
       ...AndroidTextFix,
     },
     labelActive: { color: C.onAccent, fontFamily: FontFamily.bold },
+
+    /* The sections at the head of the rail — television only. */
+    sections: { gap: Spacing.xs },
+    /**
+     * Deliberately shorter and quieter than a category row. These are the
+     * way out of the screen, not the thing the screen is for, and a rail
+     * whose first five rows shout louder than the list under them reads as
+     * five categories with odd names.
+     */
+    section: {
+      minHeight: 40,
+      justifyContent: "center",
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.xs,
+      borderRadius: Radii.md,
+    },
+    sectionActive: { backgroundColor: C.fillSubtle },
+    sectionLabel: {
+      color: C.textMuted,
+      fontSize: 14,
+      lineHeight: 20,
+      fontFamily: FontFamily.semiBold,
+      ...AndroidTextFix,
+    },
+    sectionLabelActive: { color: C.text, fontFamily: FontFamily.bold },
+    /** Separates where you can go from what you can filter. */
+    sectionRule: {
+      height: 1,
+      backgroundColor: C.border,
+      marginVertical: Spacing.sm,
+    },
   })
 );

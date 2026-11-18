@@ -21,9 +21,20 @@ export function ScreenHeader({
   right,
   onBack,
   showBack = true,
+  badge,
 }: {
   title: string;
   subtitle?: string;
+  /**
+   * The section's own mark, in the section's own colour, before the title.
+   *
+   * 2026-11-17: the approved Movies, Series and Channels screens all open with
+   * a small coloured tile carrying the section's glyph, and the subtitle under
+   * the title is the same sentence that section's card wears on the home
+   * screen. That pairing is the point — the card and the screen are two halves
+   * of one thing, and the colour is what says so.
+   */
+  badge?: { colour: string; glyph: ReactNode };
   /**
    * False on a screen that is a tab.
    *
@@ -48,6 +59,47 @@ export function ScreenHeader({
       */}
       {showBack && <BackButton onPress={onBack} />}
 
+      {/*
+        2026-11-17: the counterweight for a header that opens with neither a
+        back button nor a section badge.
+
+        This row balances its title between a 38dp leading control and the
+        38dp `rightSlot`, and `rightSlot` is rendered whether or not anything
+        was passed into it. Take the leading control away and only the
+        trailing 38 and the row's own 12dp gap are left, so `titleWrap`
+        (flex: 1) centres its text inside a box running from the 16dp padding
+        to 38 + 12 short of the far edge: 16 + (W - 82) / 2, which is
+        W / 2 - 25. That is the More tab, which is where it was seen:
+        "المزيد" sat 25dp off the window's centre line,
+        which on a title centred on purpose is visible against the two screen
+        edges by itself.
+
+        2026-11-18: the first version of this note gave the symptom as the
+        word drifting from where the three browse tabs put theirs, "so the
+        word jumped sideways as you moved along the bar". It cannot do that
+        on the phone — live-categories, movies-categories and
+        series-categories each render their ScreenHeader inside
+        `{isTvBuild && …}`, so on a phone More's is the only header in the tab
+        group and there is no neighbour to drift from. Side by side is a
+        television observation, where those three do exist and arrive with a
+        badge in the slot More leaves empty. The fix is the same on both: the
+        row is 25dp lopsided whenever a leading element is missing, with or
+        without something next door to measure it against.
+
+        An empty box of the same 38 puts the missing half of the pair back.
+        It is keyed on "there is no leading element" rather than on "this is
+        the More screen", so a header that opts out of the back button
+        because there is nothing behind it — the Terms page in gate mode, the
+        provider list on first run, and the same list while a connect runs —
+        is centred too, instead of each one needing to discover this
+        separately.
+      */}
+      {!showBack && !badge && <View style={styles.leadingSpacer} />}
+
+      {badge && (
+        <View style={[styles.badge, { backgroundColor: badge.colour }]}>{badge.glyph}</View>
+      )}
+
       <View style={styles.titleWrap}>
         <Text style={styles.title} numberOfLines={1}>
           {title}
@@ -66,6 +118,14 @@ export function ScreenHeader({
 
 const styles = themedStyles((C: ThemeColors) =>
   StyleSheet.create({
+  /** 38 square, as the approved screens draw it. */
+  badge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -78,5 +138,13 @@ const styles = themedStyles((C: ThemeColors) =>
   title: { color: C.text, fontSize: 17, fontFamily: FontFamily.extraBold },
   subtitle: { color: C.textMuted, fontSize: 11, fontFamily: FontFamily.regular, marginTop: 1 },
   rightSlot: { minWidth: 38, alignItems: "flex-end", justifyContent: "center" },
+  /*
+   * `rightSlot`'s opposite number, not `rightSlot` itself: an empty view
+   * with `minWidth: 38` would measure the same 38 and render identically,
+   * but a box named for the trailing side sitting at the *start* of the row
+   * would be wrong twice over — and in Arabic, the default locale, "right"
+   * is where this one is not.
+   */
+  leadingSpacer: { width: 38 },
   })
 );

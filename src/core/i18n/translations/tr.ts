@@ -9,7 +9,7 @@ const tr: TranslationShape = {
     search: "Ara",
     loading: "Yükleniyor…",
     retry: "Tekrar dene",
-    refreshFailed: "Şu anda yenilenemedi — tekrar denemek için aşağı çekin.",
+    refreshFailed: "Şu anda yenilenemedi — tekrar deneyin.",
     noInternet: "İnternet bağlantısı yok.",
     providerUnreachable: "Sağlayıcı sunucusu şu anda yanıt vermiyor. Birazdan tekrar deneyin.",
     confirm: "Onayla",
@@ -247,7 +247,7 @@ const tr: TranslationShape = {
         body: [
           "Bu politika veya Mooj TV'de gizlilik hakkındaki sorularınız için iletişim:",
           "E-posta: support@mooj-player.com",
-          "Web: https://mooj-player.com/privacy",
+          "Web: https://mooj-player.com/privacy.html",
         ],
       },
     },
@@ -290,7 +290,7 @@ const tr: TranslationShape = {
     m3uUrlPlaceholder: "http://ornek.com/playlist.m3u8",
     chooseFileButton: "Dosya seç",
     noFileChosen: "Dosya seçilmedi",
-    noVodEmpty: "Bağlandı, ancak bu sağlayıcı hiçbir canlı kanal döndürmedi.",
+    catalogEmpty: "Bağlanıldı, ancak bu sağlayıcı hiçbir içerik döndürmedi — ne kanal, ne film, ne dizi.",
   },
 
   /*
@@ -311,6 +311,9 @@ const tr: TranslationShape = {
     liveTV: "Canlı TV",
     movies: "Filmler",
     series: "Diziler",
+    liveTVSub: "Şu an yayında",
+    moviesSub: "Tüm film kataloğu",
+    seriesSub: "Diziler ve bölümler",
     quickActions: "Hızlı İşlemler",
     favorites: "Favoriler",
     watchLater: "Sonra İzle",
@@ -390,6 +393,7 @@ const tr: TranslationShape = {
   moviesGrid: {
     title: "Filmler",
     moviesCountSuffix: "film",
+    noMoviesAvailable: "Kullanılabilir film yok.",
     searchPlaceholder: "Film ara",
   },
 
@@ -413,6 +417,7 @@ const tr: TranslationShape = {
   seriesGrid: {
     title: "Diziler",
     seriesCountSuffix: "dizi",
+    noSeriesAvailable: "Kullanılabilir dizi yok.",
     searchPlaceholder: "Dizi ara",
   },
 
@@ -459,6 +464,7 @@ const tr: TranslationShape = {
     preparingSearch: "Arama hazırlanıyor…",
     typeToSearch: "Canlı TV, Filmler ve Dizilerde aramak için yazın.",
     noResultsFor: '"{query}" için sonuç bulunamadı.',
+    resultsCountSuffix: "sonuç",
     live: "CANLI",
     movie: "FİLM",
     series: "DİZİ",
@@ -496,9 +502,11 @@ const tr: TranslationShape = {
     setPin: "4 haneli bir PIN belirleyin",
     changePin: "PIN'i değiştir",
     removePin: "PIN'i kaldır",
+    removePinConfirmBody: "PIN'i kaldırmak kategori kilidini de kapatır; gizlenen her kategori PIN olmadan geri açılabilir.",
     wrongPin: "Yanlış PIN",
     lockCategories: "Kategori görünürlüğü için PIN iste",
     lockCategoriesNote: "Gizlenen kategoriler yalnızca PIN ile geri açılabilir.",
+    forgotPinNote: "PIN'i mi unuttunuz? Yalnızca \"Sağlayıcıları yönet\" bölümünden tüm sağlayıcıları kaldırarak silinebilir — bu, kayıtlı parolalarını ve gizlediğiniz her şeyi de siler. Sonra sağlayıcınızı yeniden ekleyip yeni bir PIN belirleyin.",
     noPinYet: "Önce bir PIN belirleyin",
   },
 
@@ -521,9 +529,6 @@ const tr: TranslationShape = {
     themeLight: "Açık",
     themeSystem: "Sistemi izle",
     content: "İçerik",
-    showLiveSection: "Canlı TV bölümünü göster",
-    showMoviesSection: "Filmler bölümünü göster",
-    showSeriesSection: "Diziler bölümünü göster",
     manageCategoryVisibility: "Kategori görünürlüğünü yönet",
     accountProvider: "Hesap / Sağlayıcı",
     provider: "Sağlayıcı",
@@ -543,8 +548,6 @@ const tr: TranslationShape = {
     modernChannelViewNote: "Kanallara göz atarken görüntü ekranda kalır; tam ekran oynatıcı yerine.",
     resumePlayback: "Oynatmayı sürdür",
     autoplayNextEpisode: "Sonraki bölümü otomatik oynat",
-    preferredAudio: "Tercih edilen ses dili",
-    preferredSubtitle: "Tercih edilen altyazı dili",
     storage: "Depolama",
     downloadedContent: "İndirilen içerik",
     manageDownloads: "İndirmeleri yönet",
@@ -556,6 +559,8 @@ const tr: TranslationShape = {
     legal: "Yasal",
     termsConditions: "Şartlar ve Koşullar",
     privacyPolicy: "Gizlilik Politikası",
+    licences: "Açık kaynak lisansları",
+    licencesIntro: "Bu uygulama aşağıdaki açık kaynak bileşenleri kullanır. Lisansların tam metinleri kendi projelerinden edinilebilir.",
     diagnostics: "Tanılama",
     playerDiagnostics: "Oynatıcı tanılaması",
     about: "Hakkında",
@@ -574,6 +579,7 @@ const tr: TranslationShape = {
   categoryVisibility: {
     title: "Kategoriler",
     searchPlaceholder: "Kategori ara",
+    empty: "Bu bölümde kategori yok.",
   },
 };
 

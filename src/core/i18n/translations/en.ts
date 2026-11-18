@@ -12,7 +12,7 @@ const en = {
     search: "Search",
     loading: "Loading…",
     retry: "Retry",
-    refreshFailed: "Couldn't refresh just now — pull down to try again.",
+    refreshFailed: "Couldn't refresh just now — try again.",
     noInternet: "No internet connection.",
     providerUnreachable: "The provider server isn't answering right now. Try again in a moment.",
     confirm: "Confirm",
@@ -250,7 +250,7 @@ const en = {
         body: [
           "For questions about this policy or about privacy in Mooj TV, contact:",
           "Email: support@mooj-player.com",
-          "Web: https://mooj-player.com/privacy",
+          "Web: https://mooj-player.com/privacy.html",
         ],
       },
     },
@@ -293,7 +293,7 @@ const en = {
     m3uUrlPlaceholder: "http://example.com/playlist.m3u8",
     chooseFileButton: "Choose file",
     noFileChosen: "No file chosen",
-    noVodEmpty: "Connected, but this provider returned no live channels.",
+    catalogEmpty: "Connected, but this provider returned nothing at all — no channels, no films, no series.",
   },
 
   /*
@@ -314,6 +314,9 @@ const en = {
     liveTV: "Live TV",
     movies: "Movies",
     series: "Series",
+    liveTVSub: "Channels playing now",
+    moviesSub: "The whole film catalogue",
+    seriesSub: "Shows and episodes",
     quickActions: "Quick Actions",
     favorites: "Favorites",
     watchLater: "Watch Later",
@@ -393,6 +396,7 @@ const en = {
   moviesGrid: {
     title: "Movies",
     moviesCountSuffix: "movies",
+    noMoviesAvailable: "No movies available.",
     searchPlaceholder: "Search movies",
   },
 
@@ -416,6 +420,7 @@ const en = {
   seriesGrid: {
     title: "Series",
     seriesCountSuffix: "series",
+    noSeriesAvailable: "No series available.",
     searchPlaceholder: "Search series",
   },
 
@@ -462,6 +467,7 @@ const en = {
     preparingSearch: "Preparing search…",
     typeToSearch: "Type to search across Live TV, Movies, and Series.",
     noResultsFor: 'No results for "{query}".',
+    resultsCountSuffix: "results",
     live: "LIVE",
     movie: "MOVIE",
     series: "SERIES",
@@ -499,9 +505,11 @@ const en = {
     setPin: "Set a 4-digit PIN",
     changePin: "Change PIN",
     removePin: "Remove PIN",
+    removePinConfirmBody: "Removing the PIN also turns off the category lock, and every hidden category can be turned back on without it.",
     wrongPin: "Wrong PIN",
     lockCategories: "Require PIN for category visibility",
     lockCategoriesNote: "Hidden categories can only be turned back on with the PIN.",
+    forgotPinNote: "Forgotten the PIN? It can only be cleared by removing every provider under Manage providers — which also deletes their saved passwords and everything you have hidden. Add your provider again afterwards and set a new PIN.",
     noPinYet: "Set a PIN first",
   },
 
@@ -524,9 +532,6 @@ const en = {
     themeLight: "Light",
     themeSystem: "Follow system",
     content: "Content",
-    showLiveSection: "Show Live TV section",
-    showMoviesSection: "Show Movies section",
-    showSeriesSection: "Show Series section",
     manageCategoryVisibility: "Manage category visibility",
     accountProvider: "Account / Provider",
     provider: "Provider",
@@ -546,8 +551,6 @@ const en = {
     modernChannelViewNote: "Keep the picture on screen while you browse channels, instead of a fullscreen player.",
     resumePlayback: "Resume playback",
     autoplayNextEpisode: "Autoplay next episode",
-    preferredAudio: "Preferred audio language",
-    preferredSubtitle: "Preferred subtitle language",
     storage: "Storage",
     downloadedContent: "Downloaded content",
     manageDownloads: "Manage downloads",
@@ -559,6 +562,8 @@ const en = {
     legal: "Legal",
     termsConditions: "Terms & Conditions",
     privacyPolicy: "Privacy Policy",
+    licences: "Open source licences",
+    licencesIntro: "This app uses the open source components below. Full licence texts are available from their projects.",
     diagnostics: "Diagnostics",
     playerDiagnostics: "Player diagnostics",
     about: "About",
@@ -577,6 +582,7 @@ const en = {
   categoryVisibility: {
     title: "Categories",
     searchPlaceholder: "Search categories",
+    empty: "No categories in this section.",
   },
 };
 

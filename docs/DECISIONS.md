@@ -26,6 +26,20 @@ copied blind.
 
 ## Package id — replaces the existing listing (decided 2026-08-31)
 
+> **SUPERSEDED for this project — do not act on this section.** It was written
+> for the player Mooj TV was cloned from, and it survived the clone. Mooj TV is
+> a **new listing** under **`com.moojtv.player`**, signed with **its own key**
+> (`MOOJ_UPLOAD_*`, `CN=Mooj TV`), and it replaces nothing. `brand.config.js`
+> and `app.config.js` are the authority; `docs/RELEASE.md` is the runbook.
+>
+> Following the text below points `MOOJ_UPLOAD_STORE_FILE` at the other app's
+> keystore. Every check still passes — `tools/verify-brand.js` compares
+> property *names*, not which key signed the artifact — and the first upload
+> then locks the wrong upload key to `com.moojtv.player`, permanently. Kept
+> here only because the reasoning about ids and signing identity is sound in
+> general, and because deleting it would lose why the rule exists.
+> (Marked 2026-11-14, from the pre-release audit.)
+
 This app will eventually replace the live Google Play listing, keeping `com.albasera.player` and
 its existing signing identity at release time (master prompt §36).
 
@@ -962,6 +976,14 @@ exists:
   cannot actually implement"). `usePlaybackTracks` now accepts the two preferences and auto-selects
   a matching track the first time each track list populates, then never overrides a manual choice
   again for that screen instance.
+
+  > **No longer true — the two settings are gone, the consumer is not.** Both rows were removed
+  > from Settings on the owner's instruction of 2026-11-17, so nothing writes the columns any more
+  > and the auto-selection they fed can never fire. §41 is satisfied in the letter — no setting is
+  > exposed that the player cannot implement — by the opposite arrangement to the one described
+  > above. (Marked 2026-11-18, from the verification pass; see "Preferred audio/subtitle language
+  > settings removed" at the end of this log.)
+
 - **Watch History screen (§26)** — §26 separately calls for a bounded (50–100) History list, distinct
   from Home's ~10-item Continue Watching preview shelf. Added `src/app/history.tsx` (capped at 100,
   per-item remove + clear-all, reusing `watchProgressRepository`'s existing functions), reachable
@@ -980,3 +1002,50 @@ splitting one honest placeholder into four fabricated-sounding separate document
 not better). Automated unit tests / CI quality gates (§33/§37) were not built in this pass — the
 user's own repeated instruction this session has been about the on-device manual verification pass
 specifically, not an automated test suite; treating that as a separate, not-yet-requested scope.
+
+## Preferred audio/subtitle language settings removed (2026-11-18)
+
+Settings' Playback section had two free-text rows, preferred audio language and preferred subtitle
+language, each taking a language code typed by hand. The owner asked for both to go, 2026-11-17:
+"لغة الصوت المفضل الغيها / لغة الترجمة الغيها". He gave no reason and none is needed, but the rows
+were a poor use of the one screen a remote reaches awkwardly, and the player's own track selector
+already does the useful version of the same thing — per source, with the real track names the
+provider sent, instead of a code the viewer has to know.
+
+Removed 2026-11-17: both rows and the `LanguageCodeRow` component from `src/app/settings.tsx`, and
+the `preferredAudio`/`preferredSubtitle` strings from all six locale files.
+
+Removed 2026-11-18, the half the verification pass found still standing: `setPreferredAudioLang`
+and `setPreferredSubtitleLang` in `appStateRepository.ts`. Both had already lost their only
+callers with the rows — confirmed by a repo-wide grep, not assumed — so deleting them changes no
+behaviour. A setter with no caller is worse than no setter: read from the repository alone, it
+says the feature is still wired up.
+
+**Still standing, deliberately.** `AppState.preferredAudioLang`/`preferredSubtitleLang`, the
+`preferred_audio_lang`/`preferred_subtitle_lang` columns added by migration 7, the three players'
+reads of them, and `usePlaybackTracks`' two auto-selection arms. The end state this wants is the
+one migration 22 gave the three "Show X section" switches — DROP COLUMN, fields deleted, consumer
+deleted — and it cannot be reached from one side. The players pass the two preferences
+positionally, ahead of `sourceKey`, so dropping the parameters without editing the players would
+slide a channel id into `preferredAudioLang`. The player screens were excluded from this pass
+because the owner tested the player himself.
+
+So, one later pass, these files together:
+
+- `src/app/live/player/[channelId].tsx` and `src/app/series/player/[episodeId].tsx` — drop
+  `preferredTracks` and the two arguments. Their `getAppState()` effects stay: the live one also
+  reads `playerFitMode` and `splitChannelView`, the series one `autoplayNextEpisode`.
+- `src/app/movies/player/[movieId].tsx` — the same, and there the whole effect goes, plus the
+  `getAppState` import, which that file uses for nothing else.
+- `src/playback/usePlaybackTracks.ts` — the two parameters, the two `if` arms, and
+  `findPreferredTrack` with its two-pass language matching. The `*Applied` flags stay; the
+  selector sets them too.
+- `src/db/migrations/index.ts` — a new migration at the next free version, DROP COLUMN for both.
+- `src/db/repositories/appStateRepository.ts` — the two fields off `AppState` and `AppStateRow`.
+
+Until that pass the arms are inert rather than wrong, and the comments at both ends now say so.
+Nothing has been released from this tree, so on every install but one the columns are null and
+neither `if` is entered. The exception is a test device that set a preference before 2026-11-17:
+there the old value is frozen, and no control anywhere in the app changes or clears it. That is a
+defect of the record more than of playback, which is why it is written down here rather than
+half-fixed from one side.

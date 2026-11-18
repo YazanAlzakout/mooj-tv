@@ -71,21 +71,29 @@ export const Brand = {
    */
   wave: {
     /*
-     * An order of magnitude fainter than the first attempt, after seeing it
-     * on a device.
+     * The peak of each band's ramp, not a flat fill.
      *
-     * A band is a very long rounded rectangle, which means its top and
-     * bottom edges are straight across almost all of their width. At
-     * 0.55 alpha that edge is a visible horizontal line drawn across the
-     * screen, and three of them read as banding in the panel rather than
-     * as anything deliberate. The shape cannot be softened without a blur
-     * this project has no way to draw, so the only lever is the alpha:
-     * below about 0.06 the edge stops being findable and what is left is
-     * the depth the bands were there for.
+     * History, because the number moved twice for opposite reasons. A band
+     * began as a plain rounded rectangle at 0.55 alpha; far wider than the
+     * screen, the only part of it anyone ever saw was its dead-straight top
+     * edge, drawn as a one-pixel step across the whole width. The answer
+     * then was to drop the alpha to 0.055 and declare the edge unfindable.
+     *
+     * It was findable. The owner spotted the top band's edge on the device
+     * on 2026-11-17 with nobody pointing at it. Ten parts in 255 spread over
+     * a hundred rows is invisible; the same ten parts in one row is a line,
+     * and there is no alpha that hides a line while leaving a band.
+     *
+     * So the edge was removed instead of hidden — WaveBands now draws each
+     * band through a sin² alpha ramp, the way ArtScrim and the home cards'
+     * scrim already soften their edges. A ramp averages half its peak, so
+     * these went back up to keep the same presence, and that is safe to
+     * spend now that the strongest part of each band is its middle rather
+     * than its edge.
      */
-    deep: "rgba(25, 137, 198, 0.055)",
-    mid: "rgba(25, 137, 198, 0.04)",
-    soft: "rgba(62, 185, 235, 0.03)",
+    deep: "rgba(25, 137, 198, 0.1)",
+    mid: "rgba(25, 137, 198, 0.075)",
+    soft: "rgba(62, 185, 235, 0.06)",
   },
 } as const;
 

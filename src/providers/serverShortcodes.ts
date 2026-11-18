@@ -70,18 +70,32 @@ export const SERVER_SHORTCODES: Record<string, string> = {
  * untouched when it is not one.
  *
  * Matching is exact after trimming, which is deliberately strict: a real
- * address is never `33`, so there is no input a viewer could reasonably
- * mean as a URL that this would swallow. Nothing is guessed and no prefixes
- * are matched — a typo produces the ordinary "couldn't reach the server"
- * error rather than silently connecting somewhere unintended.
+ * address never looks like one of these codes, so there is no input a viewer
+ * could reasonably mean as a URL that this would swallow. Nothing is guessed
+ * and no prefixes are matched — a typo produces the ordinary "couldn't reach
+ * the server" error rather than silently connecting somewhere unintended.
  *
- * Note the *absence* of a code that is easy to stumble onto. The table this
- * was carried over from began with `1` and dropped it as soon as a second
- * code existed, rather than keeping both: single digits are the first
- * thing anyone poking at a numeric field tries, so leaving one in place
- * would have undone the only property this whole arrangement provides —
- * that the address is reached by people who were told it, and by nobody
- * else. One door, and not an obvious one.
+ * ## Why the code is still two digits
+ *
+ * It was changed to eight random characters on 2026-11-17 and changed straight
+ * back, on the owner's instruction: "خليه 33".
+ *
+ * The reasoning that made a long code worth having was that the address should
+ * not be reachable by a customer poking at the field. That still holds, but it
+ * is no longer the binding constraint: the same address is being handed to
+ * Google openly, as the server behind the review account, so nothing about it
+ * is being kept from anyone who matters. And the whole table is meant to be
+ * temporary — the owner's plan is to delete it once the app is approved.
+ *
+ * ## What this never did
+ *
+ * It never hid the address from anyone who opens the APK, at any code length.
+ * The JavaScript bundle's strings come out of a release build with public
+ * tools, and no amount of splitting, encoding or renaming changes that — it
+ * only makes the code harder to read for the person doing it, which is not the
+ * same thing. Not shipping the address at all is the only thing that would,
+ * and that means resolving the code against a server at run time, which is a
+ * different feature with a network call and an offline failure mode.
  */
 export function resolveServerShortcode(input: string): string {
   return SERVER_SHORTCODES[input.trim()] ?? input;

@@ -9,7 +9,7 @@ const fr: TranslationShape = {
     search: "Rechercher",
     loading: "Chargement…",
     retry: "Réessayer",
-    refreshFailed: "Actualisation impossible pour le moment — tirez vers le bas pour réessayer.",
+    refreshFailed: "Actualisation impossible pour le moment — réessayez.",
     noInternet: "Aucune connexion Internet.",
     providerUnreachable: "Le serveur du fournisseur ne répond pas pour le moment. Réessayez dans un instant.",
     confirm: "Confirmer",
@@ -247,7 +247,7 @@ const fr: TranslationShape = {
         body: [
           "Pour toute question concernant la présente politique ou la confidentialité dans Mooj TV, contactez :",
           "Email : support@mooj-player.com",
-          "Web : https://mooj-player.com/privacy",
+          "Web : https://mooj-player.com/privacy.html",
         ],
       },
     },
@@ -290,7 +290,7 @@ const fr: TranslationShape = {
     m3uUrlPlaceholder: "http://exemple.com/playlist.m3u8",
     chooseFileButton: "Choisir un fichier",
     noFileChosen: "Aucun fichier choisi",
-    noVodEmpty: "Connecté, mais ce fournisseur n'a renvoyé aucune chaîne en direct.",
+    catalogEmpty: "Connexion établie, mais ce fournisseur n'a renvoyé aucun contenu — ni chaînes, ni films, ni séries.",
   },
 
   /*
@@ -311,6 +311,9 @@ const fr: TranslationShape = {
     liveTV: "TV en direct",
     movies: "Films",
     series: "Séries",
+    liveTVSub: "Chaînes en direct",
+    moviesSub: "Tout le catalogue de films",
+    seriesSub: "Séries et épisodes",
     quickActions: "Actions rapides",
     favorites: "Favoris",
     watchLater: "À regarder plus tard",
@@ -390,6 +393,7 @@ const fr: TranslationShape = {
   moviesGrid: {
     title: "Films",
     moviesCountSuffix: "films",
+    noMoviesAvailable: "Aucun film disponible.",
     searchPlaceholder: "Rechercher des films",
   },
 
@@ -413,6 +417,7 @@ const fr: TranslationShape = {
   seriesGrid: {
     title: "Séries",
     seriesCountSuffix: "séries",
+    noSeriesAvailable: "Aucune série disponible.",
     searchPlaceholder: "Rechercher des séries",
   },
 
@@ -459,6 +464,7 @@ const fr: TranslationShape = {
     preparingSearch: "Préparation de la recherche…",
     typeToSearch: "Tapez pour rechercher parmi la TV en direct, les films et les séries.",
     noResultsFor: 'Aucun résultat pour « {query} ».',
+    resultsCountSuffix: "résultats",
     live: "DIRECT",
     movie: "FILM",
     series: "SÉRIE",
@@ -496,9 +502,11 @@ const fr: TranslationShape = {
     setPin: "Définir un code à 4 chiffres",
     changePin: "Modifier le code",
     removePin: "Supprimer le code",
+    removePinConfirmBody: "Supprimer le code désactive aussi le verrouillage des catégories : chaque catégorie masquée pourra être réaffichée sans code.",
     wrongPin: "Code incorrect",
     lockCategories: "Exiger le code pour la visibilité des catégories",
     lockCategoriesNote: "Les catégories masquées ne peuvent être réaffichées qu'avec le code.",
+    forgotPinNote: "Code oublié ? Il ne peut être effacé qu'en supprimant tous les fournisseurs depuis « Gérer les fournisseurs » — ce qui efface aussi leurs mots de passe enregistrés et tout ce que vous avez masqué. Rajoutez ensuite votre fournisseur et choisissez un nouveau code.",
     noPinYet: "Définissez d'abord un code",
   },
 
@@ -521,9 +529,6 @@ const fr: TranslationShape = {
     themeLight: "Clair",
     themeSystem: "Suivre le système",
     content: "Contenu",
-    showLiveSection: "Afficher la section TV en direct",
-    showMoviesSection: "Afficher la section Films",
-    showSeriesSection: "Afficher la section Séries",
     manageCategoryVisibility: "Gérer la visibilité des catégories",
     accountProvider: "Compte / Fournisseur",
     provider: "Fournisseur",
@@ -543,8 +548,6 @@ const fr: TranslationShape = {
     modernChannelViewNote: "Gardez l'image à l'écran pendant que vous parcourez les chaînes, au lieu d'un lecteur plein écran.",
     resumePlayback: "Reprendre la lecture",
     autoplayNextEpisode: "Lecture automatique de l'épisode suivant",
-    preferredAudio: "Langue audio préférée",
-    preferredSubtitle: "Langue des sous-titres préférée",
     storage: "Stockage",
     downloadedContent: "Contenu téléchargé",
     manageDownloads: "Gérer les téléchargements",
@@ -556,6 +559,8 @@ const fr: TranslationShape = {
     legal: "Mentions légales",
     termsConditions: "Conditions générales",
     privacyPolicy: "Politique de confidentialité",
+    licences: "Licences open source",
+    licencesIntro: "Cette application utilise les composants open source ci-dessous. Les textes complets des licences sont disponibles auprès de leurs projets.",
     diagnostics: "Diagnostics",
     playerDiagnostics: "Diagnostics du lecteur",
     about: "À propos",
@@ -574,6 +579,7 @@ const fr: TranslationShape = {
   categoryVisibility: {
     title: "Catégories",
     searchPlaceholder: "Rechercher une catégorie",
+    empty: "Aucune catégorie dans cette section.",
   },
 };
 

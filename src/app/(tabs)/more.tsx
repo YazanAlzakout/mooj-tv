@@ -14,13 +14,14 @@ import {
   WatchLaterIcon,
 } from "@/components/MenuIcons";
 import { ScreenBackground } from "@/components/ScreenBackground";
+import { useTabBarSpace } from "@/components/MoojTabBar";
 import { ScreenHeader } from "@/components/ScreenHeader";
 import { useTapFeedback } from "@/core/feedback/useTapFeedback";
 import { useI18n } from "@/core/i18n/I18nContext";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
-import { getDownloadsSummary } from "@/db/repositories/downloadRepository";
+import { getAllDownloadTasks } from "@/db/repositories/downloadRepository";
 import { getLibraryCount } from "@/db/repositories/libraryRepository";
 import { downloadsSupported } from "@/domain/downloads/eligibility";
 
@@ -42,6 +43,8 @@ import { downloadsSupported } from "@/domain/downloads/eligibility";
 export default function MoreScreen() {
   useThemeRerender();
   const { t } = useI18n();
+  /* The bar floats over the screen, so the screen leaves room for it. */
+  const tabBarSpace = useTabBarSpace();
   /*
    * The same tick the tab bar answers a press with. A bar that clicks
    * above a list that does not is worse than neither clicking — the
@@ -58,18 +61,53 @@ export default function MoreScreen() {
     useCallback(() => {
       getLibraryCount("favorite").then(setFavoriteCount);
       getLibraryCount("watch_later").then(setWatchLaterCount);
-      if (downloadsSupported()) getDownloadsSummary().then((s) => setDownloadsCount(s.count));
+      /*
+       * Every task, not only the finished ones.
+       *
+       * 2026-11-17: this row was filled from getDownloadsSummary(), whose
+       * SQL ends "WHERE status = 'completed'". Start three downloads, open
+       * More, and the row read 0 — and because 0 is a number rather than
+       * null it printed a literal zero, so the row actively said "nothing
+       * here" — while the screen that row opens listed all three. A count a
+       * viewer reads in order to decide whether to open a screen has to be
+       * the count that screen will show, so it is now read the way
+       * downloads.tsx — the screen this row opens, and the only precedent
+       * that matters here — reads it: `getAllDownloadTasks()` with no filter,
+       * every row of download_tasks, queued, downloading, paused, failed and
+       * completed alike. "canceled" cannot show up in that total;
+       * cancelDownload and deleteDownload both go through
+       * deleteAndCleanupFile, which removes the row rather than marking it.
+       *
+       * 2026-11-18: home.tsx was cited here too and should not have been. It
+       * calls the same function and then filters to `status === "completed"`,
+       * which is right for what it builds — a shelf of cards you can press
+       * play on — and wrong for a count that promises what the next screen
+       * lists.
+       *
+       * getDownloadsSummary stays where it is actually wanted, in
+       * settings.tsx, which is after the completed bytes and not after a
+       * count at all.
+       */
+      if (downloadsSupported()) getAllDownloadTasks().then((ts) => setDownloadsCount(ts.length));
     }, [])
   );
 
   return (
     <ScreenBackground>
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-        <ScreenHeader title={t("tabs", "more")}
-        showBack={false} />
+        {/*
+          No back button: this is a tab, and there is nothing behind it.
+          ScreenHeader pairs that with an empty leading box so the title stays
+          on the window's centre line — see the note there for the 25dp it
+          would be off without it. On the television that also puts it level
+          with the titles the three browse tabs hang off their section
+          badges; on the phone those headers are `isTvBuild`-gated and this is
+          the only one in the group (corrected 2026-11-18).
+        */}
+        <ScreenHeader title={t("tabs", "more")} showBack={false} />
 
         <ScrollView
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: Spacing.xl + tabBarSpace }]}
           showsVerticalScrollIndicator={false}
         >
           <Row
@@ -194,6 +232,7 @@ function Row({
 const styles = themedStyles((C: ThemeColors) =>
   StyleSheet.create({
     safeArea: { flex: 1 },
+    /* paddingBottom is added inline from useTabBarSpace(), which needs the insets. */
     list: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl, gap: Spacing.sm },
     row: {
       flexDirection: "row",

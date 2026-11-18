@@ -12,6 +12,7 @@ import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BouncePressable } from "@/components/BouncePressable";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { MetaChip } from "@/components/MetaChip";
 import { ScreenBackground } from "@/components/ScreenBackground";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -25,6 +26,7 @@ import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
 import type { SeriesDetails, SeriesEpisode } from "@/domain/series/types";
 import { useDownloadState } from "@/domain/downloads/useDownloadState";
+import type { DownloadStatus } from "@/db/repositories/downloadRepository";
 import { getMostRecentIncompleteEpisodeForSeries } from "@/db/repositories/watchProgressRepository";
 import { getSeriesDetails } from "@/providers/xtream/seriesAdapter";
 import { getActiveSession } from "@/state/activeSessionStore";
@@ -67,6 +69,24 @@ export default function SeriesDetailsScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
+  /*
+   * ✕ on a finished episode deletes the file off the device, and it sits
+   * 8dp from the 48dp button the thumb was aiming at. It asks first now,
+   * exactly like the same action on the movie screen and the Delete row on
+   * the downloads screen — this was the one of the three that took a 1.5 GB
+   * episode away on a single tap, with nothing to undo it and no way back
+   * except re-downloading over the metered line the download existed to
+   * avoid. Found in the 2026-11-17 screen audit.
+   *
+   * The dialog lives up here and not inside EpisodeRow, for the reason the
+   * row's own header gives: some series on this provider run to 200+
+   * episodes and FlatList keeps a whole windowSize of rows alive at once,
+   * while ConfirmDialog carries a shared value and two animated styles. One
+   * dialog per screen holding the row that asked for it is what
+   * downloads.tsx already does with the identical action; the row hands up
+   * the title to name and the `remove` that owns its record.
+   */
+  const [pendingRemoval, setPendingRemoval] = useState<{ title: string; remove: () => void } | null>(null);
 
   const isOffline = useIsOffline();
   const noInternetMessage = isOffline && !details ? t("common", "noInternet") : null;
@@ -118,6 +138,12 @@ export default function SeriesDetailsScreen() {
     return null;
   }
 
+  /* One handler, two call sites — the full-screen failure and the banner
+     over a series that is already drawn both mean "ask the provider again". */
+  function retry() {
+    setReloadToken((n) => n + 1);
+  }
+
   function playEpisode(episode: SeriesEpisode) {
     router.push({
       pathname: "/series/player/[episodeId]",
@@ -151,10 +177,23 @@ export default function SeriesDetailsScreen() {
           <BackButton floating />
         </View>
 
-        {(noInternetMessage || errorMessage) && (
-          <View style={styles.centered}>
+        {/*
+          `!details`: this is the state for a screen with nothing else on
+          it, and only that. `errorState` is `flex: 1`, and it was being
+          rendered as a sibling of the FlatList — so a refresh refused over
+          a series that had already loaded put a flex-basis-0 box beside a
+          list that grows and shrinks on exactly the same terms. The list
+          kept the whole height, the message was laid out 0dp tall, and the
+          failure was therefore silent: the viewer pressed nothing, saw
+          nothing, and went on reading a page that was no longer being
+          refreshed. A loaded series says so in its body instead — see
+          `refreshErrorBanner` in SeriesHeader. Found in the 2026-11-18
+          verification pass over the day before's fixes.
+        */}
+        {!details && (noInternetMessage || errorMessage) && (
+          <View style={styles.errorState}>
             <Text style={styles.errorText}>{noInternetMessage ?? errorMessage}</Text>
-            <BouncePressable style={styles.retryButton} onPress={() => setReloadToken((n) => n + 1)}>
+            <BouncePressable style={styles.retryButton} onPress={retry}>
               <Text style={styles.retryButtonText}>{t("common", "retry")}</Text>
             </BouncePressable>
           </View>
@@ -187,6 +226,15 @@ export default function SeriesDetailsScreen() {
                 onPlay={playSeries}
                 favorite={favorite}
                 watchLater={watchLater}
+                /*
+                  `errorMessage` and not `noInternetMessage ?? errorMessage`:
+                  the offline line is `isOffline && !details`, so by
+                  definition it is null everywhere inside this branch. A
+                  provider that refused the refresh is the only thing that
+                  can speak here.
+                */
+                refreshError={errorMessage}
+                onRetry={retry}
               />
             }
             renderItem={({ item }) => (
@@ -196,6 +244,7 @@ export default function SeriesDetailsScreen() {
                 config={session.config}
                 providerId={session.provider.id}
                 onPress={() => playEpisode(item)}
+                onRequestRemove={(title, remove) => setPendingRemoval({ title, remove })}
               />
             )}
             contentContainerStyle={[styles.episodeList, { paddingBottom: Spacing.xxl + insets.bottom }]}
@@ -215,6 +264,28 @@ export default function SeriesDetailsScreen() {
           />
         )}
       </SafeAreaView>
+
+      {/*
+        Outside the SafeAreaView, exactly where the movie screen keeps its
+        own copy of this dialog: a Modal is portalled to the root window, so
+        the FlatList that asked for it never gets a chance to clip it.
+        The title named is the episode's own — the download record's title is
+        "<series> — <episode>", but what the viewer just pressed ✕ on is a
+        row showing the episode alone, and the sentence should name what they
+        are looking at.
+      */}
+      <ConfirmDialog
+        visible={pendingRemoval !== null}
+        title={t("downloads", "deleteConfirmTitle")}
+        message={t("downloads", "deleteConfirmBody", { title: pendingRemoval?.title ?? "" })}
+        confirmLabel={t("downloads", "delete")}
+        danger
+        onConfirm={() => {
+          pendingRemoval?.remove();
+          setPendingRemoval(null);
+        }}
+        onCancel={() => setPendingRemoval(null)}
+      />
     </ScreenBackground>
   );
 }
@@ -227,6 +298,8 @@ function SeriesHeader({
   onPlay,
   favorite,
   watchLater,
+  refreshError,
+  onRetry,
 }: {
   details: SeriesDetails;
   heroHeight: number;
@@ -235,6 +308,13 @@ function SeriesHeader({
   onPlay: () => void;
   favorite: UseLibraryToggleResult;
   watchLater: UseLibraryToggleResult;
+  /**
+   * A refresh the provider refused, while this series was already on
+   * screen. Null in the ordinary case; the screen's own full-screen
+   * `errorState` answers for a series that never arrived at all.
+   */
+  refreshError: string | null;
+  onRetry: () => void;
 }) {
   const { t } = useI18n();
   const [heroFailed, setHeroFailed] = useState(false);
@@ -276,6 +356,29 @@ function SeriesHeader({
       </ArcHero>
 
       <View style={styles.body}>
+        {/*
+          In the body, under the arc, and not at the top of the screen where
+          the full-screen error sits: the back button floats over the
+          artwork at top: Spacing.xl and is 38dp tall, so a strip at y=0
+          would land in its band — the very collision `errorState` was
+          given `flex: 1` to escape on 2026-11-17. Here it is the first line
+          of the page the viewer is already reading, it scrolls away once
+          read, and the artwork keeps the top of the screen.
+
+          No `entering` on it either. The animations below are an entrance,
+          played once when the series arrives; this appears later, on a
+          failure, and a thing that fades in 420ms after the fact reads as
+          decoration rather than as news.
+        */}
+        {refreshError && (
+          <View style={styles.refreshErrorBanner}>
+            <Text style={styles.errorText}>{refreshError}</Text>
+            <BouncePressable style={styles.retryButton} onPress={onRetry}>
+              <Text style={styles.retryButtonText}>{t("common", "retry")}</Text>
+            </BouncePressable>
+          </View>
+        )}
+
         <Animated.Text entering={FadeInDown.duration(420).delay(60)} style={styles.title}>
           {details.name}
         </Animated.Text>
@@ -394,6 +497,30 @@ function SeriesHeader({
 }
 
 /**
+ * One glyph per download status, as a map rather than a ternary chain.
+ *
+ * `DownloadStatus` carries six values and this row branched on three, so
+ * "failed" and "queued" both fell through to the idle "⬇" — a lit,
+ * focusable button whose only handler (`trigger`) refuses to act while a
+ * record exists, so it bounced on press and did nothing, forever. Keying the
+ * map by the union makes the compiler ask for all six, so the next status
+ * added cannot fall through in silence. Found in the 2026-11-17 screen
+ * audit.
+ *
+ * "canceled" is unreachable in practice — `cancelDownload` deletes the row
+ * rather than marking it — but the type carries it, so it carries the idle
+ * glyph and the inert treatment below.
+ */
+const EPISODE_DOWNLOAD_GLYPH: Record<DownloadStatus, string> = {
+  queued: "⋯",
+  downloading: "❙❙",
+  paused: "▶",
+  completed: "✓",
+  failed: "↻",
+  canceled: "⬇",
+};
+
+/**
  * No per-row `entering` animation and a plain `Pressable`: some series on
  * this provider run to 200+ episodes, and FlatList recycles rows during
  * scroll, so a per-row entrance would re-fire constantly. The header above
@@ -405,12 +532,19 @@ function EpisodeRow({
   config,
   providerId,
   onPress,
+  onRequestRemove,
 }: {
   episode: SeriesEpisode;
   seriesDetails: SeriesDetails;
   config: XtreamProviderConfig;
   providerId: string;
   onPress: () => void;
+  /**
+   * Hands a finished download up to the screen, which owns the one
+   * ConfirmDialog for all of these rows — see the note on `pendingRemoval`
+   * in SeriesDetailsScreen.
+   */
+  onRequestRemove: (title: string, remove: () => void) => void;
 }) {
   const [thumbFailed, setThumbFailed] = useState(false);
 
@@ -426,6 +560,19 @@ function EpisodeRow({
     seasonNumber: episode.seasonNumber,
     episodeNumber: episode.episodeNumber,
   });
+
+  /* Everything below this point keys off the record's status — read it once. */
+  const status = download.record?.status ?? null;
+  /*
+   * Nothing a tap can do with either of these. `trigger` refuses outright
+   * whenever a record already exists (useDownloadState: `if (!item ||
+   * !eligible || record) return`), and neither pause nor resume applies: a
+   * queued episode is waiting for the single download slot
+   * (MAX_ACTIVE_DOWNLOADS is 1, so starting a second episode queues it), and
+   * a canceled row only exists in the type. Until the 2026-11-17 audit a
+   * queued episode's button was lit, focusable and inert.
+   */
+  const downloadInert = status === "queued" || status === "canceled";
 
   const bytesDownloaded = download.progress?.bytesDownloaded ?? download.record?.bytesDownloaded ?? 0;
   const bytesTotal = download.progress?.bytesTotal ?? download.record?.bytesTotal ?? null;
@@ -471,35 +618,44 @@ function EpisodeRow({
         {download.eligible && (
           <Focusable
             onPress={
-              download.record?.status === "downloading"
+              status === "downloading"
                 ? download.pause
-                : download.record?.status === "paused"
+                : status === "paused" || status === "failed"
                   ? download.resume
                   : download.trigger
             }
             style={styles.episodeDownloadButton}
-            disabled={download.record?.status === "completed"}
+            /*
+             * "failed" resumes rather than falling through to `trigger`:
+             * `resumeDownload` restarts a row that has no resume data to
+             * work from, which is exactly what a failed row is, and it is
+             * what the downloads screen's Retry has always done.
+             * "completed" was already disabled; `downloadInert` covers the
+             * two left over, so every status either acts or says it cannot.
+             */
+            disabled={status === "completed" || downloadInert}
           >
             <Text
               style={[
                 styles.episodeDownloadText,
-                download.record?.status === "completed" && styles.episodeDownloadTextDone,
+                status === "completed" && styles.episodeDownloadTextDone,
+                downloadInert && styles.episodeDownloadTextWaiting,
               ]}
             >
-              {download.record?.status === "completed"
-                ? "✓"
-                : download.record?.status === "downloading"
-                  ? "❙❙"
-                  : download.record?.status === "paused"
-                    ? "▶"
-                    : "⬇"}
+              {status ? EPISODE_DOWNLOAD_GLYPH[status] : "⬇"}
             </Text>
           </Focusable>
         )}
 
+        {/*
+          A finished download asks first — see `pendingRemoval` on the
+          screen. An in-flight, queued or failed transfer still goes
+          straight through to `cancel`: what that throws away is a partial
+          file, not a watchable one, and a dialog over it would be noise.
+        */}
         {download.record && (
           <Focusable
-            onPress={download.record.status === "completed" ? download.remove : download.cancel}
+            onPress={status === "completed" ? () => onRequestRemove(episode.title, download.remove) : download.cancel}
             style={styles.episodeDownloadButton}
             hitSlop={4}
           >
@@ -508,7 +664,7 @@ function EpisodeRow({
         )}
       </View>
 
-      {(download.record?.status === "downloading" || download.record?.status === "paused") && (
+      {(status === "downloading" || status === "paused") && (
         <View style={styles.episodeProgressTrack}>
           <View style={[styles.episodeProgressFill, { width: `${fraction * 100}%` }]} />
         </View>
@@ -520,7 +676,50 @@ function EpisodeRow({
 const styles = themedStyles((C: ThemeColors) =>
   StyleSheet.create({
   safeArea: { flex: 1 },
+  /*
+   * Three jobs, so three styles. One `centered` did all of it until the
+   * 2026-11-17 audit, two until the 2026-11-18 pass — and the reason it
+   * keeps splitting is that `flex: 1` is wrong, then right, then wrong
+   * again in the opposite direction, in the three boxes they sit in, in
+   * the order below.
+   *
+   * `centered` — "no episodes available", inside the auto-height list
+   * header, where `flex: 1` would collapse it to nothing.
+   *
+   * `errorState` — the whole screen, when nothing has arrived to put on it.
+   * Without `flex: 1` it shrank to its own content at y=0, and because this
+   * screen deliberately takes no top safe-area inset
+   * (edges=["left","right"], so the artwork can reach the status bar) the
+   * message landed at y≈24 and Retry at y≈56 — the same band as the
+   * floating back button, which is 38dp tall at top: Spacing.xl, so the two
+   * overlapped. Offline on a series read as broken; the same markup on the
+   * movie screen, which had `flex: 1` here all along, read as finished.
+   *
+   * `refreshErrorBanner` — a refresh the provider refused over a series
+   * already drawn. `flex: 1` is wrong here the other way round: as a
+   * sibling of the FlatList its flex basis is 0 while the list grows and
+   * shrinks on the same terms, so the list took the full height and this
+   * was laid out 0dp tall. No flex at all, and inside the body rather than
+   * beside the list — it is a line of content, not a screen. `errorBlock`
+   * on the Movies tab answers the same two failures and this borrows its
+   * shape, plus a bottom margin: the body sets no row gap and the title
+   * carries no `marginTop`, so without one the series name would sit flush
+   * against the Retry button.
+   */
   centered: { alignItems: "center", justifyContent: "center", gap: Spacing.md, padding: Spacing.xl },
+  errorState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.md,
+    padding: Spacing.xl,
+  },
+  refreshErrorBanner: {
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.md,
+  },
   errorText: { color: C.error, fontSize: 14, fontFamily: FontFamily.medium, textAlign: "center" },
   emptyText: { color: C.textMuted, fontSize: 13, fontFamily: FontFamily.regular },
   retryButton: {
@@ -682,6 +881,18 @@ const styles = themedStyles((C: ThemeColors) =>
   },
   episodeDownloadText: { color: Brand.primaryLight, fontSize: 16 },
   episodeDownloadTextDone: { color: C.success },
-  episodeDownloadTextDanger: { color: Brand.primaryLight, fontSize: 14 },
+  /* A queued row is waiting for the single download slot and its button is
+     disabled, so its glyph is muted rather than action-coloured — a lit
+     control that does nothing is the thing being fixed here, and colour is
+     half of how a control says it is live. */
+  episodeDownloadTextWaiting: { color: C.textMuted },
+  /*
+   * C.error, not Brand.primaryLight. ✕ removes the file and ⬇/✓ brings it
+   * down, and until the 2026-11-17 audit both were drawn in the same blue,
+   * 8dp apart, on 48dp targets. The downloads screen already paints its
+   * destructive label with C.error (actionButtonTextDestructive); this is
+   * that colour on that action.
+   */
+  episodeDownloadTextDanger: { color: C.error, fontSize: 14 },
   })
 );
