@@ -12,6 +12,7 @@ Verified 2026-08-31 against the npm registry and https://docs.expo.dev/versions/
 | react-native | `npm:react-native-tvos@0.86-stable` (resolves to 0.86.2-0) | TV-capable RN fork. One patch behind Expo's bundled stock `react-native@0.86.3` — this is the documented/expected pairing, not a mismatch (see below). |
 | expo-router | ~57.0.17 | Navigation shell (file-based), required by the product spec. |
 | expo-video | ~57.0.3 | Native Android playback (Media3/ExoPlayer). Confirmed to expose `replaceAsync` for source replacement without recreating the player, and a `VideoView.onFirstFrameRender` callback used for latency measurement. |
+| @lunarr/vlc-player | ^2.1.1 (locked to 2.1.1) — added 2026-11-18, outside the 2026-08-31 verification above | libVLC-backed live playback on **Apple platforms only**; excluded from Android autolinking. AVFoundation refuses this provider's bare progressive MPEG-TS, so iOS needs a second engine. Never compiled — see below. |
 | expo-build-properties | ~57.0.15 | Sets `usesCleartextTraffic`, `minSdkVersion=26`, and a `pickFirst` rule for `libc++_shared.so` (multiple native modules can bundle their own copy). |
 | @react-native-tvos/config-tv | ^0.1.6 (dev) | Applies TV manifest changes (leanback launcher, banner) during prebuild when `EXPO_TV=1`. |
 | expo-dev-client | ~57.0.16 | Required by EAS's `developmentClient: true` build profile — added after the first EAS build attempt failed with a clear error demanding it. |
@@ -33,6 +34,51 @@ inspection, not assumed — see docs/CODEC_MATRIX.md). Requires `patches/expo-vi
 (regenerated for this project's expo-video version, not the old project's literal patch file) to
 actually wire the extension into expo-video's renderer construction. Full rationale and licensing
 in docs/DECISIONS.md and docs/THIRD_PARTY_LICENSES.md.
+
+## Apple-only native dependency: `@lunarr/vlc-player`
+
+Added 2026-11-18 as a second live-playback engine. `expo-video` (Media3/ExoPlayer on Android,
+AVPlayer on Apple) stays the only engine on Android and remains the VOD engine on both platforms;
+on iOS, live channels go through libVLC instead, because AVFoundation refuses this provider's
+bare progressive MPEG-TS. Measured on a real iPhone, not assumed: Safari — the same AVFoundation
+stack — showed a white page for a channel while playing an mp4 film from the same account, and
+the free VLC app played that same channel. Metro picks the engine by platform extension across
+`src/playback/engine/livePlaybackEngine.tsx` and `…ios.tsx`.
+
+**Which binary links where.** The package is Fabric (New Architecture) only. Its podspec declares
+`{ :ios => '15.1', :tvos => '15.1' }`, adds `MobileVLCKit ~> 3.7.3` on iOS and
+`TVVLCKit ~> 3.7.3` on tvOS, and sets `s.static_framework = true`. On Android it links nothing:
+`react-native.config.js` sets `platforms: { android: null }`, and that is what keeps the Google
+Play artifact unchanged — RN autolinking never pulls `org.videolan.android:libvlc-all` into
+Gradle, so libVLC's own `libc++_shared.so` never meets the FFmpeg decoder module's. Verified
+rather than assumed: a full `npx expo export --platform android` bundle contains zero libVLC
+strings, with working positive controls in the same check. The licensing side — LGPL 2.1+, the
+static link and the relinking obligation it raises, and the gnutls/libgcrypt stack MobileVLCKit
+bundles — is in docs/THIRD_PARTY_LICENSES.md, recorded there as open.
+
+**What this engine does not do.** The libVLC path has no picture-in-picture, no AirPlay and no
+Now Playing beyond what the library registers for itself. That gap is accepted for iOS v1 on the
+live path; the decision and its reasoning are in docs/DECISIONS.md, "Accepted: no
+picture-in-picture, AirPlay or Now Playing on the libVLC path". It is scoped to live and
+expressly not to VOD, which has no libVLC path at all yet.
+
+**Still open, and none of it is paperwork:**
+
+- **The pod has never compiled.** There is no `ios/` directory and no iOS build has ever been
+  made with this dependency, so everything above is read off `package.json`,
+  `react-native.config.js` and the podspec rather than off a link step.
+- `eas.json`'s only iOS profile is `ios-simulator`, and this project's own record says the
+  simulator cannot answer a playback question — network playback through AVPlayer fails there
+  while a bundled local video plays. The build that could test this does not exist yet.
+- libVLC has never been proven to play this provider's streams through *this app* — only through
+  the standalone VLC app on an iPhone.
+- **tvOS/Apple TV is undecided.** A tvOS build resolves platform `ios`, so it would take the same
+  engine file and link TVVLCKit. There is no tvOS profile in `eas.json` and no decision recorded
+  anywhere.
+- **No VOD adapter exists.** `src/app/movies/player/[movieId].tsx` and
+  `src/app/series/player/[episodeId].tsx` still use expo-video/AVPlayer. 13,018 of this account's
+  20,124 films are `.mp4` and play there; the remaining ~7,100 are the `.mkv`/x265 share
+  AVFoundation refuses.
 
 ## Why the react-native-tvos version looks "behind"
 

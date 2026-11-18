@@ -57,11 +57,28 @@ test track and left no trace in git. Git knows what was *built*, not what was
 Play needs an **AAB** (`bundleRelease`). An APK (`assembleRelease`) is for
 sideloading onto a test device.
 
-## Never EAS Build
+## Where builds run
 
-Builds are native and local. The EAS project id was removed deliberately.
+**Never EAS Build an Android artifact.** The Android app is built here, native
+and local, and the artifact that goes to Play is the one this machine produced:
 
     cd /d D:\Projects\mooj-tv && android\gradlew.bat -p android bundleRelease
+
+**Apple platforms have no local route.** There is no Mac on this project, so
+`pod install` and Xcode cannot run on this machine at all, and EAS is the only
+way to get an iOS binary of any kind. That is why `extra.eas.projectId` is in
+`app.config.js` and why `eas.json` carries an `ios-simulator` profile — both
+written by hand on 2026-11-18. Four simulator builds were made from Windows
+that day, about six minutes each.
+
+EAS build minutes cost money: build for Apple when a question needs an answer
+only a build can give, not to see whether an edit compiles. Keep straight what
+such a build proves. `ios-simulator` is the only iOS profile here; what those
+four builds showed is that the tree *as it stood that day* pod-installed and
+compiled, and `docs/IOS_READINESS.md` records that the simulator cannot answer
+a playback question. All four predate `@lunarr/vlc-player`, so nothing has yet
+proved that MobileVLCKit pod-installs at all, let alone that libVLC plays this
+provider's streams inside this app.
 
 ## The provider panel
 

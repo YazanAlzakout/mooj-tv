@@ -316,3 +316,246 @@ feature gap libVLC brings (no picture-in-picture, AirPlay or Now Playing on the
 VLC path), which is the reason the plan is hybrid rather than libVLC for
 everything.
 
+---
+
+# The engine is in the repository; nothing Apple-side has compiled it — 2026-11-18
+
+Everything above was written when the second player was still a plan. It is
+now code: `src/playback/engine/` holds `index.ts`, `types.ts`,
+`livePlaybackEngine.tsx`, `livePlaybackEngine.ios.tsx`,
+`enginePlaybackError.ts` and `vlc/VlcLivePlayer.ts`, `@lunarr/vlc-player@2.1.1`
+is in `package.json`, and `react-native.config.js` keeps it out of the Android
+link. Writing it falsified one of the load-bearing sentences above, turned one
+open question into a decision that two code comments already cite, and exposed
+a whole class of mistake that no amount of reading could have caught. It also
+left the single biggest claim above — that the project builds for Apple —
+describing a tree that no longer exists.
+
+## The `useEventListener` / SharedObject claim is false
+
+Line 263-265 above says all 17 event subscriptions go through
+`useEventListener` from `expo`, "which requires the player to be an Expo
+SharedObject," and concludes that a non-Expo native module means rewriting all
+17 across 7 files. That was asserted, not read, and it is the one sentence in
+this document most likely to make someone abandon the hybrid approach as
+impossible. It is wrong.
+
+`node_modules/expo/src/hooks/useEvent.ts:92-111` is the whole contract. The
+hook calls `eventEmitter.addListener(eventName, callback)`, keeps the returned
+value, and on cleanup calls `subscription.remove()`. Nothing else. No
+SharedObject, no native handle, no identity check, no `EventEmitter` subclass
+— the parameter is typed as an `EventEmitter`, and TypeScript structural
+typing is satisfied by anything carrying that one method.
+
+A plain Map of callbacks satisfies it, and that is what the adapter does:
+`VlcLivePlayer` keeps `private readonly listeners = new Map<string,
+Set<EngineListener>>()` (`src/playback/engine/vlc/VlcLivePlayer.ts:290`) and
+implements `addListener(name, listener): { remove: () => void }` at :344. All
+17 subscriptions in the live screen keep working against a pure-JavaScript
+object. The cost quoted above as a rewrite across 7 files was roughly fifteen
+lines in one file.
+
+The lesson is the one the player-library section above already learned from
+`XJ_Player`: read the code, not the README — and that applies to this
+document's own confident paragraphs, not only to other people's.
+
+## The feature gap on the libVLC path: answered, in the decision log
+
+Lines 313-317 above end this document on an open question — "whether to accept
+the feature gap libVLC brings (no picture-in-picture, AirPlay or Now Playing on
+the VLC path)". Two code comments
+(`src/playback/engine/livePlaybackEngine.ios.tsx:101` and
+`src/playback/engine/types.ts:64`) cite those lines as a *recorded decision*.
+They were citing a question — nothing in this document ever answered it.
+
+It is answered now, and not here. `docs/DECISIONS.md` carries the entry
+*"Accepted: no picture-in-picture, AirPlay or Now Playing on the libVLC path
+(2026-11-18)"*, which is where a decision of this project belongs and which
+states the trade in full: the gap is accepted for iOS v1 on the live path,
+because those three features belong to AVPlayer, the hybrid plan keeps AVPlayer
+for the films that play on it, and rebuilding them around a VLC media session
+is work counted in weeks and verifiable only on hardware this project does not
+have. Reversible, and scoped to live.
+
+Two consequences for this file. Section 5's question is no longer open, and the
+two code comments cite the wrong document — they should point at
+`docs/DECISIONS.md`; both files are owned elsewhere and were not touched from
+this pass. What is *not* decided is anything about the VOD path, because that
+path does not exist yet (below): if films ever move to libVLC too, the decision
+has to be made a second time, and with less comfort — losing PiP and AirPlay on
+a two-hour film is not the same trade as losing it on a channel.
+
+## The platform extension Metro never loaded
+
+The iOS engine was committed in a state where it could not run. The fallback
+was written as `livePlaybackEngine.ts` and the iOS implementation as
+`livePlaybackEngine.ios.tsx`, which looks correct and is not. Expo's
+`sourceExts` are `ts, tsx, mjs, js, jsx, json` in that order
+(`@expo/config`'s `getBareExtensions`, with TypeScript and React enabled), and
+`metro-resolver/src/resolve.js:511-540` loops over those extensions in the
+*outer* loop: for each extension it tries `.ios.<ext>`, then `.native.<ext>`,
+then `.<ext>`, and returns the first hit. So the resolver finished with `ts` —
+finding plain `livePlaybackEngine.ts` — before it ever considered `tsx`, where
+the `.ios` candidate lived. On iOS, `import "./livePlaybackEngine"` resolved
+to the `expo-video` file. The iOS engine was unreachable and every line of it
+dead.
+
+**A platform extension only wins when it shares the `sourceExt` of its
+fallback.** `foo.ios.tsx` loses to `foo.ts`; `foo.ios.tsx` beside `foo.tsx`
+wins. The fallback has been renamed to `livePlaybackEngine.tsx`, which puts
+both candidates at the same extension and gives the platform suffix its
+priority back.
+
+How it was caught matters more than the bug. Not by review — the file names
+read as correct to anyone who has used platform extensions for years, and the
+TypeScript compiler, the linter and the test suite are all equally blind to
+which of two files Metro picks. It was caught by building both bundles
+(`npx expo export`, once per platform) and grepping the Hermes string tables,
+with positive controls to prove the grep could find what it was looking for:
+the iOS bundle contained no libVLC strings at all. The same two-bundle check
+confirms the other half of the design — a full
+`npx expo export --platform android` contains zero libVLC strings, so the
+Android artifact that ships on Google Play today is untouched by any of this.
+
+The reusable rule: **a bundle is the only thing that proves which file
+loaded.** For any platform-split module, export both bundles and grep for a
+string that exists in exactly one branch. It costs two builds and it is the
+only evidence here that is not an assumption.
+
+The cheap half of that rule is now permanent: `src/playback/engine/index.ts`
+carries a `__DEV__` assertion comparing the engine's own name against
+`Platform.OS`, so a development build says out loud which file Metro picked. An
+assertion is not a branch — it adds no libVLC import to the Android graph.
+
+## "The project builds for Apple" predates the dependency
+
+Every Apple-side claim above — the six-minute EAS build `819a7469` against
+commit `827a972`, the three more builds that afternoon, the table row *"The
+project builds for Apple | four EAS builds from Windows, six minutes each"* —
+was measured **before `@lunarr/vlc-player` existed in this project.** Those
+builds are still true about what they tested, and they are no longer evidence
+about the tree as it stands today. Read every one of them as dated.
+
+**The pod has never been resolved and has never compiled.** There is no `ios/`
+directory in this repository, so no `Podfile` exists, so `pod install` has
+never seen this dependency, and no iOS binary has ever been produced that
+contains libVLC. What is known about the pod is only what its podspec says
+(`node_modules/@lunarr/vlc-player/react-native-vlc-player.podspec`): platforms
+`{ :ios => '15.1', :tvos => '15.1' }`, `s.static_framework = true`, and a
+dependency on `MobileVLCKit ~> 3.7.3` or `TVVLCKit ~> 3.7.3` chosen by
+regex-matching `platform :tvos` in the Podfile text — a deliberate trick, with
+its reasoning written in the podspec itself, because autolinkers pick one
+podspec per package with no platform awareness. Reading it is not compiling
+it. A static framework carrying libVLC, pulled into a Fabric-only pod with
+Swift/C++ interop settings, is the kind of thing that fails at link time
+rather than at install time.
+
+Nor can the next build answer the playback question. The only iOS profile in
+`eas.json` is `ios-simulator`, and this document's own section *"The simulator
+cannot answer a playback question"* settled that network playback through
+AVPlayer fails there while a bundled local video plays. For libVLC the
+simulator result is unknown in both directions, and an unknown-in-both-
+directions result is worth nothing. **libVLC has never been proven to play
+this provider's streams through *this app*** — only through the standalone VLC
+app on an iPhone, which is the right evidence about the engine and no evidence
+at all about the integration.
+
+So the honest state is: the Apple-side work is written, checked against the
+library's own source, and entirely unexecuted. The next real milestone is not
+a feature; it is the first `pod install` plus a link of MobileVLCKit, on a
+profile that can be installed on a physical iPhone — which needs the $99
+enrolment, because free provisioning needs Xcode and Xcode needs a Mac.
+
+## tvOS would link a second LGPL binary, and nobody has decided to
+
+tvOS is not mentioned anywhere above, and it should have been the moment this
+dependency landed. A tvOS build resolves React Native's platform as `ios`: it
+would take `livePlaybackEngine.ios.tsx` unchanged, and its Podfile would say
+`platform :tvos`, so the podspec's regex would select **TVVLCKit 3.7.3**.
+Apple TV therefore inherits the entire libVLC path by default, without anyone
+choosing it, the first time a tvOS prebuild is run.
+
+Two things follow. First, there is no tvOS profile in `eas.json` and no
+decision recorded anywhere about Apple TV — so this is a door left open, not a
+plan. Second, the licence question doubles. libVLC/VLCKit is **LGPL 2.1 or
+later**, and `MobileVLCKit` additionally bundles its own TLS and crypto stack
+(gnutls, libgcrypt) to serve `https` and `rtsps`. This project already ships
+one LGPL 2.1+ binary — the vendored FFmpeg MP2 decoder — and
+`docs/THIRD_PARTY_LICENSES.md` records, in its own words, that the LGPL
+relinking obligation there is configured intent rather than completed legal
+clearance, and still open. Adding MobileVLCKit on iOS makes that two, as a
+statically-linked framework; adding TVVLCKit on tvOS makes it three binaries
+across two Apple targets. The relinking question is the same one in all three
+cases and it has still not been answered by anyone. It needs answering before
+submission, not after, and `docs/THIRD_PARTY_LICENSES.md` is where the answer
+belongs.
+
+## The error that carries no reason, and what was assumed in its place
+
+One cost of libVLC is written into the code rather than into a plan, and it
+belongs in this record because it is a deliberate, reversible trade and not an
+oversight. The library's error event carries no HTTP status and no message —
+the payload is `type`, `currentTime`, `duration`. A 403 (all three connection
+slots in use) and a 404 (the panel's empty-bodied answer to a request burst,
+which is a rate block rather than a connection-count block) are therefore
+indistinguishable, and this app will not fire a second HTTP request on a
+failure path to find out.
+
+`OPAQUE_OPEN_FAILURE_CATEGORY` in `src/playback/engine/vlc/VlcLivePlayer.ts`
+resolves that by assuming `http_unauthorized` for any failure that happens
+before a single byte is demuxed: it keeps the URL shape and retries the timing
+— 6 attempts at 2.5s — instead of walking four candidate URL shapes in a
+burst, which on a three-connection line is how a rate block gets earned. The
+cost, stated plainly: a channel genuinely off the air waits 15 seconds and is
+then reported to the user as "busy" rather than "off the air", and a panel
+that serves a URL shape other than the first candidate would never play on
+iOS at all. That is safe for *this* provider and only for this provider,
+because `buildLiveStreamCandidates`
+(`src/providers/xtream/xtreamAdapter.ts:141`) puts `/live/user/pass/id.ts`
+first and this panel's `allowed_output_formats` is `["ts","rtmp"]`. A
+different panel invalidates the assumption, not the code.
+
+It is recorded as a decision of its own in `docs/DECISIONS.md`, with the
+one-line escape hatch and what a true 403/404 answer would cost. It is
+repeated here because it is the first thing on this path that a reader of a
+readiness document would otherwise mistake for a bug.
+
+## The VOD half of the hybrid plan does not exist
+
+The architecture above is hybrid for a measured reason — AVPlayer for the
+films it plays natively, libVLC for the channels and the `.mkv` share. Only
+the first half of that sentence is true in code, and only because it is the
+half that was already there.
+
+`src/app/movies/player/[movieId].tsx` and
+`src/app/series/player/[episodeId].tsx` both still
+`import { useVideoPlayer, VideoView } from "expo-video"` — unchanged, AVPlayer
+on iOS. There is no VOD engine, no VOD adapter, and no platform-split file for
+either screen. 13,018 of this account's 20,124 films are `.mp4`, the format
+AVFoundation handles best — measured where it could be measured, in Safari on a
+real iPhone, and never yet inside this app on real hardware. The other 7,106
+are the `.mkv`/x265 share AVFoundation refuses, and on iOS today they would
+fail exactly as they fail without any of this work. Nothing above should be
+read as saying otherwise.
+
+That is a defensible shape for a first submission — two thirds of the film
+catalogue, all of live TV — but it is a gap, not a completed plan, and the
+remaining third is a counted number rather than a vague risk.
+
+## What is unknown now
+
+The list above has shrunk and shifted; this is what is actually open.
+
+1. **Whether the pod links.** `pod install` plus a compile of MobileVLCKit
+   3.7.3 as a static framework inside a Fabric-only pod, against
+   react-native-tvos 0.86. Never attempted.
+2. **Whether libVLC plays these streams through this app**, as opposed to
+   through the VLC app. Needs a build on a physical iPhone, which needs the
+   $99 enrolment.
+3. **The LGPL relinking obligation**, for the FFmpeg decoder on Android and
+   for MobileVLCKit/TVVLCKit on Apple. Open in
+   `docs/THIRD_PARTY_LICENSES.md` since before any of this.
+4. **Apple TV: in or out.** It inherits the libVLC path by default and links a
+   second LGPL binary. No profile, no decision.
+5. **The VOD path for the 7,106 non-`.mp4` films.** No code, and the
+   feature-gap decision in `docs/DECISIONS.md` does not cover it.

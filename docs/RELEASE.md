@@ -44,9 +44,21 @@ compares property *names*, not which key signed the artifact.
 
 ## Building
 
-Builds are native and local. **Never EAS Build** — the EAS project id was
-removed deliberately. `eas.json` and the two `build:dev:*` scripts exist for
-development clients only and must never be used for a release.
+**The Android release is built here, native and local, and never on EAS.** The
+artifact that goes to Play is the one this machine produced. `eas.json`'s
+`development` and `development-tv` profiles and the two `build:dev:*` scripts
+exist for development clients only and must never be used for a release.
+
+Apple platforms are the exception, and it is not a preference. There is no Mac
+on this project, so `pod install` and Xcode cannot run here at all and EAS is
+the only route to an iOS binary of any kind — which is why
+`extra.eas.projectId` is back in `app.config.js` and `eas.json` carries an
+`ios-simulator` profile, both added by hand on 2026-11-18. That profile builds
+for the simulator only; nothing in this repository has ever produced a
+submittable iOS build, and `docs/IOS_READINESS.md` records both what the four
+Windows builds of that day did prove and what they cannot. AGENTS.md says the
+same thing under "Where builds run"; if these two ever disagree, AGENTS.md is
+the one agents read first and the one to fix.
 
 Play needs an **AAB** (`bundleRelease`). An APK (`assembleRelease`) is for
 sideloading onto a test device.

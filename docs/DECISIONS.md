@@ -71,6 +71,15 @@ half-migrated one — at the cost of re-entering their provider once.
 
 ## No VLC
 
+> **Still true of Android. No longer true of the project.** Media3/expo-video is the only
+> Android playback engine, and `react-native.config.js` now keeps it that way deliberately by
+> excluding the libVLC package from Android autolinking entirely — the Android build and the
+> Android artifact are untouched. But the project does carry a libVLC dependency as of
+> 2026-11-18: `@lunarr/vlc-player`, on Apple platforms only, because AVFoundation refuses this
+> provider's channels. The second sentence below is the one that stopped being true. Read "A
+> second live-playback engine on Apple platforms" at the end of this log before acting on it.
+> (Marked 2026-11-18.)
+
 Per explicit instruction and the master prompt's own rule: Media3/expo-video is the only Android
 playback engine. No libVLC dependency exists in this project.
 
@@ -1049,3 +1058,264 @@ neither `if` is entered. The exception is a test device that set a preference be
 there the old value is frozen, and no control anywhere in the app changes or clears it. That is a
 defect of the record more than of playback, which is why it is written down here rather than
 half-fixed from one side.
+
+## A second live-playback engine on Apple platforms (2026-11-18)
+
+Android is unchanged, and stays unchanged: `expo-video` → Media3 → the vendored FFmpeg MP2
+decoder, the exact combination the entries above got working on a real device, and what
+ships on Google Play today. Apple platforms get a second engine — libVLC, through
+`@lunarr/vlc-player@2.1.1`. This is the entry for why a project whose third section is headed
+"No VLC" now carries a libVLC dependency.
+
+**Measured, not argued.** `expo-video` on iOS is AVPlayer, and AVFoundation refuses the bare
+progressive MPEG-TS that every one of this account's 11,294 channels is served as. On a real
+iPhone, Safari — the same AVFoundation stack — showed a white page for a channel while playing
+an mp4 film from the same account, and the free VLC app played that same channel. Two
+observations, one device, one account: the stack that fails and the engine that succeeds, on the
+content that matters. Apple's documented path for `.ts` is as a segment inside an HLS playlist,
+never as a progressive stream, and this panel's `allowed_output_formats` is `["ts","rtmp"]`, so
+`buildLiveStreamCandidates` has no `.m3u8` to offer regardless of how the two container entries
+above were decided.
+
+**An adapter behind the existing screen, not a second screen.**
+`src/app/live/player/[channelId].tsx` is about 2,500 lines and nearly all of it is behaviour
+measured on hardware: channel switching that must not reconstruct the player, connection-slot
+behaviour on a three-connection line, audio-focus workarounds, bounded retries, a split layout
+that hands one player object to two render trees across rotation. There is no iPhone on this
+project. A second screen written against a second engine could not be verified against any of
+that, and would quietly fork it. So the libVLC engine presents the surface the screen already
+calls — `useLivePlayer`, `LiveVideoView`, `releaseLiveSource` — and the screen's own change is
+its import line plus the two differences it genuinely has to know about. The cost of that
+choice, paid deliberately: the engine interface is `expo-video`'s own `VideoPlayer` type rather
+than a neutral one, because four shared hooks (`useBackgroundPlayback`, `usePlayerMute`,
+`usePlayerGestures`, `usePlaybackTracks`) are typed against it and one of them is shared with
+the film and episode screens, which stay on AVPlayer. Widening four hooks to a union would
+ripple into screens that have nothing to do with iOS. The one cast that makes the adapter legal
+lives in `src/playback/engine/vlc/VlcLivePlayer.ts`, next to the list of members it actually
+implements.
+
+**Android is kept out of it twice, and the exclusion is not a tidiness measure.**
+`react-native.config.js` sets `platforms: { android: null }` for the package, so autolinking
+cannot pull `org.videolan.android:libvlc-all` into the Android build; and the engine is selected
+by Metro platform extension rather than a `Platform.OS` branch, so the libVLC import is not in
+the Android graph at all. The reason is `libc++_shared.so`. `app.config.js` already sets
+`packagingOptions.pickFirst` for it because the FFmpeg decoder module and the React Native
+runtime each ship one; libVLC ships a third, the VLC ecosystem's own guidance is that its copy
+must win, and `pickFirst` takes whichever it meets first rather than the one you meant. The
+failure mode is a runtime mismatch in the native audio path this project spent real effort
+getting right — silent MP2 channels, the kind of fault that surfaces in the field and not in a
+build log. Verified rather than assumed: a full `npx expo export --platform android` bundle
+contains zero libVLC strings, with working positive controls in the same grep, so the Android
+artifact is the shape it was. If Android ever does need libVLC, deleting that config file is not
+the fix — deciding which `libc++_shared.so` wins is, followed by re-testing MP2 audio on a real
+television.
+
+**A bug worth the space, because review did not catch it.** The platform split is three of the
+engine's six files: `livePlaybackEngine.tsx` (the `expo-video` pass-through, for every non-Apple
+platform), `livePlaybackEngine.ios.tsx` (libVLC), and `index.ts` to re-export. The fallback was first
+committed as `livePlaybackEngine.ts`, and that made the `.ios.tsx` file **unreachable on every
+platform**. Metro's `resolveSourceFile` (`metro-resolver/src/resolve.js:511-540`) loops over
+`sourceExts` in the *outer* loop and, for each extension, tries `.{platform}{ext}`, then
+`.native{ext}`, then `{ext}`. Expo's `sourceExts` put `ts` before `tsx`, so on iOS the `ts` pass
+reached `livePlaybackEngine.ts` and returned before `tsx` was ever considered. A platform
+extension only wins when it shares the `sourceExt` of its fallback. The symptom was silence:
+nothing read the engine's own name, so iOS used AVPlayer and failed exactly as it had before any
+of this work started, with nothing to distinguish "libVLC is not loaded" from "libVLC cannot
+play this either". It was found by building both bundles and grepping the Hermes string tables —
+not by review, which had already passed. Both files are now `.tsx` for that reason and no other
+(the Android one contains no JSX), and `index.ts` carries a `__DEV__` assertion comparing
+`LIVE_PLAYBACK_ENGINE` against `Platform.OS`. An assertion is not a branch: it adds no libVLC
+import to any graph, and it is the only thing in the project that can prove which engine
+actually loaded.
+
+**What this entry does not claim.** No iOS build of any kind has been made with this dependency.
+See "Still open on the Apple path" at the end of this log before reading any statement anywhere
+in this repository about iOS building.
+
+## `@lunarr/vlc-player` over the alternatives, and the rule that produced it (2026-11-18)
+
+Four candidates were read. Not read *about* — read. The rule this entry exists to record is that
+a player library's README is marketing and its source is the specification, and it is written
+down because taking a README at its word is what went wrong first.
+
+- **`XJ_Player` — rejected.** It advertises itself as an open-source IPTV player for iOS and
+  Android built with React Native and Expo, and on the strength of that description it was
+  recommended on this project before anyone opened it. Its player is 61 lines wrapping
+  `expo-av`, and its VLC dependency sits in `package.json` imported by nothing — checked across
+  every `.ts`/`.tsx` file in that repository. It is not an IPTV player; it is a description of
+  one.
+- **`expo-libvlc-player` — rejected on maintenance, not on code.** Real VLCKit code, a real
+  config plugin, a maintainer shipping almost daily: on code it passes. But its `57.x` line is
+  dead — `57.0.59` and `58.0.0` shipped the same day and nothing has come out on 57.x since,
+  against eighteen releases on 58.x — and it pins VLCKit `4.0.0a25`, fetched from a URL path
+  named `unstable`. Its open issue #24 is a black-screen-with-audio report on IPTV HTTP `.ts`,
+  which is the only content the iOS live path exists to play. A pre-release decoder with a
+  standing bug against our exact stream shape, on a version line its maintainer has moved off,
+  is a worse bet than a stable one whose gaps can be enumerated.
+- **BlueIPTV — not what it says it is.** Its "patched libVLC" is a `patch-package` patch of a JS
+  wrapper's Android Java: a released-player crash on background/PiP, and a missing audio-focus
+  request. No libVLC fork, no iOS path at all. Its value here is diagnostic — those two bugs are
+  what anyone putting libVLC behind React Native should expect to meet.
+- **`@lunarr/vlc-player@2.1.1` — chosen.** MobileVLCKit 3.7.3 for iOS and TVVLCKit 3.7.3 for
+  tvOS, both stable rather than pre-release, picked by its own podspec
+  (`react-native-vlc-player.podspec`) by regex-matching `platform :tvos` in the Podfile. 950
+  lines of Swift and 982 of Kotlin that genuinely construct `VLCMediaPlayer`/`LibVLC`. Its
+  example app depends on `react-native: npm:react-native-tvos@0.86.2-0` with `expo ~57.0.13`
+  and builds with `EXPO_TV=1` — this project's stack, not a near neighbour of it.
+
+**Its gaps were priced before it was chosen, not discovered afterwards.** No HTTP headers on the
+source, no synchronous readers, no reason of any kind on `onError`, Fabric/New-Architecture only,
+and `s.static_framework = true` in the podspec. The first two the adapter works around; the third
+is the whole of the next entry; the fourth is already true of this project; the fifth is a
+licensing question, left open below. Two more were found only by reading the Swift: libVLC's own
+`.esAdded` state falls into `default: break`, so `onTracks` never fires by itself on iOS despite
+the package's doc comment — the adapter polls the player's own track arrays instead, which costs
+no provider request; and the `AVAudioSession` `.playback` category is set only inside
+`setupNowPlayingControls`, so `showNowPlaying` has to stay true or the ring/silent switch would
+silence the channel and background playback would not work at all. Both are written down at the
+point in `vlc/VlcLivePlayer.ts` and `livePlaybackEngine.ios.tsx` where each one costs something,
+rather than collected as a list here.
+
+## `OPAQUE_OPEN_FAILURE_CATEGORY` — 403 is assumed, and what that costs (2026-11-18)
+
+This is the entry someone will come back to. It records a deliberately wrong answer, chosen
+because the right one costs more than it is worth on this provider's line.
+
+**Why an answer has to be invented at all.** `toPlaybackError` categorises a failure by
+substring-matching its message, which works on Android only because ExoPlayer writes the HTTP
+status into it ("Response code: 403"). libVLC's error event carries no status and no message at
+all: the payload is `{type, currentTime, duration}` and nothing else, and there is no log channel
+anywhere in the package to recover a status from. 403 and 404 also fail at exactly the same point
+in libVLC's state machine — `Opening` → `Error`, nothing demuxed. The two are genuinely
+indistinguishable without a second HTTP request, and this app will not make one on a failure
+path: this panel answers request **bursts** with empty-bodied 404s — a rate block, not a
+connection-count block — so a probe per failure adds requests precisely where the app is already
+retrying. Left uncategorised, every iOS failure would arrive as `unknown`, and that is not a
+wording problem but control flow: the live screen branches its whole retry machine on
+`category !== "http_unauthorized"`.
+
+**The choice.** `OPAQUE_OPEN_FAILURE_CATEGORY` in `src/playback/engine/vlc/VlcLivePlayer.ts` is
+`http_unauthorized`. A failure before any byte is demuxed is therefore reported as a busy
+connection slot: the app keeps the URL shape and retries the *timing*, six attempts at 2.5s. On a
+three-connection line that is the right-shaped guess, because a busy slot frees itself when the
+previous stream lets go, and the viewer is told the stream is busy for a moment and to wait or
+try another channel — the one actionable sentence in the set. The alternative,
+`stream_unavailable`, sends the screen back through all four candidate URL shapes on every
+failure, which is exactly the regression the two longest comments in that screen (measured
+2026-09-16, found again by audit 2026-11-14) say must never return: twelve stream opens in a few
+seconds against an edge that answers bursts with empty 404s.
+
+**What it costs, stated plainly.** A channel that is genuinely off the air spends 15 seconds
+being patient and is then described as "busy" rather than "off the air". And the candidate-shape
+walk no longer runs for an immediate failure, so a panel that served a URL shape other than the
+first candidate would never play on iOS at all. That is safe for *this* provider and not in
+general: `buildLiveStreamCandidates` (`src/providers/xtream/xtreamAdapter.ts:141`) puts
+`/live/user/pass/id.ts` first, and this panel's `allowed_output_formats` is `["ts","rtmp"]`. It
+is a named constant for that reason — a different panel, or an operator who would rather pay one
+extra request per failure for a true 403/404 answer, changes one line and gets the shape walk
+back at the price of the busy handling. Having both needs a status probe fired *after* `onError`,
+when the native player is already released so the connection slot is free, routed outside
+`core/network/requestQueue.ts` so that a 404 cannot call `noteProviderRefusal` and open the
+catalogue backoff window. Nobody has asked for that yet.
+
+The 15 seconds is itself a decision in the same file. libVLC has no open timeout of its own that
+reaches JS, and without one a channel that never answers leaves the screen spinning for ever
+with no message and no retry — worse than any wrong message. ExoPlayer's own connect and read
+timeouts are 8s apiece, so 15s sits comfortably past a slow but working open on a `.ts` stream
+while staying inside a viewer's patience. A watchdog expiry reports `network_timeout`, which is
+the one remaining route by which the candidate-shape walk still runs on iOS.
+
+## Accepted: no picture-in-picture, AirPlay or Now Playing on the libVLC path (2026-11-18)
+
+**Decided here, and here first.** iOS live television ships without picture-in-picture, without
+AirPlay, and with no lock-screen Now Playing integration beyond whatever `@lunarr/vlc-player`
+registers for itself. `allowsPictureInPicture` is accepted and ignored by the libVLC surface,
+because there is no counterpart to wire it to.
+
+The trade is the one the entries above establish: without libVLC there is no live television on
+iOS at all, because AVFoundation will not open these streams. Rebuilding three AVPlayer
+conveniences on top of libVLC is real native work, on a project with no iPhone to verify it
+against, for a feature set no viewer of this app has ever had. The film and episode screens keep
+all three, because they stay on `expo-video`/AVPlayer — 13,018 of this account's 20,124 films are
+`.mp4` and play there natively. So the gap is scoped to live, which is the surface where a viewer
+is least likely to reach for AirPlay mid-zap, and it is a v1 gap rather than a permanent one.
+
+**Why this is worded as a decision rather than a reference.** Two code comments
+(`src/playback/engine/types.ts:64` and `livePlaybackEngine.ios.tsx:101`) call this "the recorded
+feature gap" and cite `docs/IOS_READINESS.md:315-316`. That document does not record it. It
+*asks* it: section 5, "Do you accept a second player on iOS?", is a question put to the owner,
+and the closing paragraph of section 6 lists the gap among the things still to be decided. No
+answer existed anywhere until this entry. Whoever next edits those two files should point them
+here instead — they are owned elsewhere and were not touched from this pass.
+
+## Downloads are off on iOS, for guideline 5.2.3 (2026-11-18)
+
+`downloadsSupported()` in `src/domain/downloads/eligibility.ts` returns false on iOS, so no
+download affordance appears anywhere in an iOS build and `isDownloadEligible` short-circuits
+ahead of its container check. App Store Review Guideline 5.2.3 is the reason, and in the
+judgement recorded in `docs/IOS_READINESS.md` it is a larger threat to this submission than any
+codec question. Dropping the feature materially lowers the chance of a rejection and removes a
+whole category of work: the native download task, its persisted `DownloadPauseState`, and the
+boot-time recovery path all stay Android-only rather than being ported and then defended in
+review notes.
+
+Decided before the iOS port began, deliberately, so that nothing downstream was ever written
+assuming the feature was there. Android is untouched — the gate sits beside the existing
+`isTvBuild` one in the same function. The feature can come back in a v2 if review experience
+turns out to allow it.
+
+## Keychain accessibility: `AFTER_FIRST_UNLOCK`, and not the device-only variant (2026-11-18)
+
+`src/core/storage/secureCredentials.ts` passes `SecureStore.AFTER_FIRST_UNLOCK` rather than
+taking the iOS default. The default is `WHEN_UNLOCKED`, which refuses to decrypt the entry while
+the screen is locked — the right default for a banking app and the wrong one here, because this
+app plays audio in the background and the moment a stream needs re-authenticating (a token
+expiring, a reconnect after a dropped connection) is very often the moment the phone is in a
+pocket with the screen off. The read would fail, and the viewer would hear playback stop for no
+reason they could see. `AFTER_FIRST_UNLOCK` keeps the entry encrypted at rest and unreadable
+until the phone has been unlocked at least once since boot, which is the standard setting for a
+credential a background task needs. Deliberately not the `_THIS_DEVICE_ONLY` variant: these are
+the viewer's own provider logins, and restoring them onto a new phone from a backup is a feature,
+not a leak. Ignored on Android, which has no equivalent concept.
+
+## Still open on the Apple path (2026-11-18)
+
+Its own entry, because several of the decisions above read like finished work and are not, and
+because this repository contains earlier statements that iOS builds — all of them true before
+the dependency existed and none of them about it.
+
+- **The pod has never compiled.** There is no `ios/` directory, and no iOS build of any kind has
+  been made since `@lunarr/vlc-player` entered `package.json`. Every "the iOS project builds",
+  "`pod install` runs, and it passes" and "four EAS builds, six minutes each" statement in
+  `docs/IOS_READINESS.md` predates it. The package sets `s.static_framework = true` and declares
+  platforms `{ :ios => '15.1', :tvos => '15.1' }`; whether MobileVLCKit resolves and links
+  alongside the react-native-tvos fork, Reanimated, Worklets and the Expo module set is unknown,
+  and it is the first thing to find out. Nothing downstream of it should be believed until it
+  has been.
+- **The only iOS profile in `eas.json` is `ios-simulator`, and it cannot answer a playback
+  question.** This project's own record is explicit about why: a film that demonstrably plays in
+  Safari on real hardware fails in the simulator, while a bundled local video plays there —
+  local decode works, network playback through AVPlayer does not. A green simulator build would
+  prove the pod compiles. It would prove nothing about libVLC and these streams, in either
+  direction.
+- **libVLC has never been proven to play this provider's streams through *this app*.** It was
+  proven through the standalone VLC app on an iPhone, which embeds the same libVLC. That is
+  strong evidence about the engine and none at all about the adapter, the source dictionary it
+  hands over, the surface's re-mount-per-source behaviour, or the watchdog.
+- **tvOS is unexamined.** A tvOS build resolves platform `ios`, so it would take
+  `livePlaybackEngine.ios.tsx` and link TVVLCKit. Whether that is wanted has never been decided,
+  there is no tvOS profile in `eas.json`, and libVLC on tvOS is less proven than on iOS.
+- **VOD on iOS is unaddressed.** `src/app/movies/player/[movieId].tsx` and
+  `src/app/series/player/[episodeId].tsx` are still `expo-video`/AVPlayer, which is right for the
+  13,018 `.mp4` titles among this account's 20,124 films — and leaves the remaining ~7,100, the
+  `.mkv`/x265 share AVFoundation refuses, with no path at all. No VOD adapter exists. The engine
+  built in this pass is live-only by construction.
+- **The licence question is recorded but not answered.** libVLC/VLCKit is LGPL 2.1 or later, and
+  MobileVLCKit brings its own TLS and crypto stack (gnutls, libgcrypt) for `https` and `rtsps`,
+  each a separate upstream project with its own terms. `docs/THIRD_PARTY_LICENSES.md` has the
+  inventory as of this pass and states the hard part plainly: the podspec sets
+  `s.static_framework = true`, so MobileVLCKit/TVVLCKit would link *statically* into the app
+  binary, and the standard argument for shipping VLCKit in a proprietary app — the one
+  `docs/IOS_READINESS.md` reasons from — is about *dynamic* linking. What a static link obliges
+  us to publish has not been answered by anyone. It is a blocker on distributing an iOS binary,
+  not on writing more code, and it is not a question to answer from this file.

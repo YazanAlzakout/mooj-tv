@@ -22,6 +22,15 @@ import { AndroidTextFix, FontFamily, Radii, Spacing } from "@/core/theme/tokens"
  * they were not told anywhere: there was no licences screen, no NOTICE asset,
  * and nothing in the listing.
  *
+ * 2026-11-18. There is now a second component under the same licence. Live
+ * playback on Apple platforms goes through libVLC — MobileVLCKit on iOS,
+ * TVVLCKit on tvOS — because AVFoundation refuses this provider's bare
+ * MPEG-TS, and libVLC is **LGPL 2.1+** as well, statically linked, with its
+ * own TLS stack inside it. Same obligation, so it is disclosed here the same
+ * way. Nothing has been built for Apple platforms yet — there is no `ios/`
+ * directory and the pod has never compiled — so for once the notice is written
+ * at the same time as the dependency rather than long after it.
+ *
  * ## What this screen is not
  *
  * It is a notice, not a clearance. docs/THIRD_PARTY_LICENSES.md still records
@@ -30,12 +39,31 @@ import { AndroidTextFix, FontFamily, Radii, Spacing } from "@/core/theme/tokens"
  * the library through JNI. Shipping this screen does not close that; it closes
  * the separate and simpler failure of not telling anyone at all.
  *
+ * libVLC arrives with the same open question and no answer recorded anywhere:
+ * `@lunarr/vlc-player`'s podspec sets `static_framework = true`, and
+ * docs/IOS_READINESS.md asks whether VLCKit's LGPL terms are comfortable for
+ * App Store distribution without ever answering it. This entry says what is
+ * linked and under which licence. It does not decide that question either.
+ *
  * ## Why the body is in English
  *
  * The component names, the licence names and the project URLs are proper
  * nouns, and a licence identifier that has been translated is no longer the
  * identifier. The title and the opening line follow the viewer's language; the
  * notices themselves are quoted as they are published.
+ *
+ * ## Why each entry names its own platforms instead of the list filtering
+ *
+ * The list is flat and platform-blind: every entry renders on both platforms,
+ * in the same order, and nothing here looks at `Platform.OS`. That cost
+ * nothing while everything in it shipped everywhere. It is wrong now that two
+ * entries are Android-only native code and two are Apple-only, so those four
+ * open their note with the platforms they apply to, in the prose the notes
+ * already carry. Filtering the list by platform instead would hide from an
+ * Android viewer that the Apple build carries libVLC and from an iPhone viewer
+ * that the Android build carries FFmpeg, which is the opposite of what a
+ * notice is for, and it would make what this screen says depend on where it is
+ * read.
  *
  * ## Why each card is focusable on the television
  *
@@ -44,7 +72,7 @@ import { AndroidTextFix, FontFamily, Radii, Spacing } from "@/core/theme/tokens"
  * it. A `ScrollView` scrolls from a D-pad only as a side effect of focus
  * moving into something inside it (Android scrolls a newly focused view into
  * view, and React Native's `ScrollView` has no key handling of its own), so
- * every arrow press found nothing and the page never moved. Ten entries,
+ * every arrow press found nothing and the page never moved. Twelve entries,
  * several with multi-line notes, run well past one screenful of a 720dp
  * television minus its overscan: everything from roughly the fourth entry
  * down was unreachable. The FFmpeg notice this screen exists to deliver is
@@ -71,6 +99,7 @@ const ENTRIES: Entry[] = [
     name: "FFmpeg (libavcodec, libavutil, libswresample)",
     licence: "LGPL 2.1 or later",
     note:
+      "Android only. " +
       "Statically linked into libffmpegJNI.so and loaded dynamically through JNI. " +
       "Built from FFmpeg release/6.0 with only the mp2 decoder enabled, without " +
       "--enable-gpl, and without libavformat or libavfilter.",
@@ -80,9 +109,30 @@ const ENTRIES: Entry[] = [
     name: "AndroidX Media3 (decoder_ffmpeg wrapper)",
     licence: "Apache License 2.0",
     note:
-      "FfmpegAudioRenderer, FfmpegAudioDecoder, FfmpegLibrary and " +
+      "Android only. FfmpegAudioRenderer, FfmpegAudioDecoder, FfmpegLibrary and " +
       "FfmpegDecoderException, vendored from androidx/media at tag 1.8.0.",
     url: "https://github.com/androidx/media",
+  },
+  {
+    name: "libVLC (MobileVLCKit on iOS, TVVLCKit on tvOS)",
+    licence: "LGPL 2.1 or later",
+    note:
+      "Apple platforms only, and statically linked: MobileVLCKit on iOS and " +
+      "TVVLCKit on tvOS, from VideoLAN's VLCKit, at version 3.7.3 or the nearest " +
+      "compatible release. It is the live playback engine " +
+      "on those platforms, where AVFoundation refuses these streams. The binary also " +
+      "carries libVLC's own TLS and crypto stack, gnutls and libgcrypt, which is what " +
+      "serves https and rtsps. The Android build excludes the package and contains no " +
+      "libVLC.",
+    url: "https://code.videolan.org/videolan/VLCKit",
+  },
+  {
+    name: "React Native VLC Player (@lunarr/vlc-player)",
+    licence: "MIT License",
+    note:
+      "Apple platforms only. The React Native binding this app reaches libVLC through; " +
+      "its podspec is what adds MobileVLCKit or TVVLCKit to the build.",
+    url: "https://github.com/lunarr-app/vlc-player",
   },
   {
     name: "React Native",
