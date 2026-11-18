@@ -277,7 +277,7 @@ argument for hybrid.
 above assumes it. The test needs no Apple account, no Mac and no money: install
 the free VLC app on any iPhone and open
 
-    http://albasera-tv.net/live/733007/733007/283572.ts
+    http://albasera-tv.net/live/<user>/<pass>/283572.ts
 
 VLC for iOS is the same libVLC we would embed. If it plays, the plan holds. If
 it does not, there is no live TV on iOS and we have learned it for nothing.
@@ -289,7 +289,7 @@ Developer Program — free provisioning needs Xcode, which needs a Mac.
 
 **libVLC plays this provider's channels on real Apple hardware.** The owner
 installed the free VLC app on an iPhone and opened
-`http://albasera-tv.net/live/733007/733007/283572.ts` — a bare progressive
+`http://albasera-tv.net/live/<user>/<pass>/283572.ts` — a bare progressive
 MPEG-TS stream, the same shape as all 11,294 channels on this account, and the
 same one Safari had refused with a white page an hour earlier. It played.
 
