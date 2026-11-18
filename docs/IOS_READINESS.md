@@ -284,3 +284,35 @@ it does not, there is no live TV on iOS and we have learned it for nothing.
 
 Installing *this app* on a physical iPhone still requires the $99 Apple
 Developer Program — free provisioning needs Xcode, which needs a Mac.
+
+## Answered, the same evening
+
+**libVLC plays this provider's channels on real Apple hardware.** The owner
+installed the free VLC app on an iPhone and opened
+`http://albasera-tv.net/live/733007/733007/283572.ts` — a bare progressive
+MPEG-TS stream, the same shape as all 11,294 channels on this account, and the
+same one Safari had refused with a white page an hour earlier. It played.
+
+VLC for iOS embeds the same libVLC that `@lunarr/vlc-player` and
+`expo-libvlc-player` wrap, so this is not an analogy: it is the engine we would
+ship, decoding the content we would ship it for, on the hardware it would ship
+to.
+
+With that, every technical assumption behind the iOS port has been tested
+rather than argued:
+
+| Claim | How it was settled |
+|---|---|
+| The project builds for Apple | four EAS builds from Windows, six minutes each |
+| Plain-HTTP panels work under ATS | 37,000-item catalogue downloaded in-app |
+| mp4 films play on AVFoundation | Safari, real iPhone, same URL |
+| bare `.ts` does not | Safari, real iPhone, white page |
+| **libVLC plays the `.ts`** | **VLC for iOS, real iPhone** |
+| A second player costs 14 files | counted in `src/`, 11 mechanical |
+
+Nothing technical is left open. What remains is money and ownership — the $99
+enrolment, whose Apple account the app lives on, and whether to accept the
+feature gap libVLC brings (no picture-in-picture, AirPlay or Now Playing on the
+VLC path), which is the reason the plan is hybrid rather than libVLC for
+everything.
+
