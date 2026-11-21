@@ -503,6 +503,18 @@ module.exports = {
       "./plugins/withGradleMemory",
       "./plugins/withAbiFilters",
       /*
+       * Declares android.hardware.wifi as not required. Play rejected the
+       * 2026-11-20 submission because expo-network's ACCESS_WIFI_STATE makes
+       * Android infer the Wi-Fi radio as a *required* feature, which blocks
+       * installation on Ethernet-only TV boxes — this product's second
+       * audience. The plugin header carries the full reasoning, including why
+       * touchscreen is deliberately not declared alongside it: doing so would
+       * un-separate the phone and TV device sets and get the phone build
+       * rejected as shadowed, for the reason written beside `androidTVRequired`
+       * further down this file.
+       */
+      "./plugins/withUsesFeature",
+      /*
        * `enforceContrast: false` is load-bearing, not a preference.
        *
        * Android's default under edge-to-edge is to paint a translucent
