@@ -68,7 +68,7 @@ const ANDROID_PACKAGE = isDevId ? BRAND.packageId + ".dev" : BRAND.packageId;
  * refused the upload — a build had reached a test track and left no trace
  * in git.
  */
-const VERSION_CODE_BASE = 3;
+const VERSION_CODE_BASE = 5;
 
 /*
  * Phone and TV are one app on Play — same listing, same package id, with
