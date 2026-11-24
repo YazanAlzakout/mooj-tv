@@ -74,10 +74,13 @@ workflows:
         # on a runner that only builds iOS, so that single check is expected to
         # fail here and is the only failure tolerated. Anything else failing
         # (a drifted fallback, another brand's name, the wrong identifier)
-        # stops the build before minutes are spent on it.
+        # stops the build before minutes are spent on it. The grep matches only
+        # the per-check "  FAIL  <reason>" lines: on 2026-11-24 a bare `grep FAIL`
+        # also matched the "1 FAILED" summary line, so the one tolerated failure
+        # still stopped the build.
         script: |
           node tools/verify-brand.js | tee /tmp/verify-brand.txt || true
-          if grep FAIL /tmp/verify-brand.txt | grep -v "merged manifest was readable"; then
+          if grep -E '^ +FAIL ' /tmp/verify-brand.txt | grep -v "merged manifest was readable"; then
             echo "verify-brand found a real problem"
             exit 1
           fi
