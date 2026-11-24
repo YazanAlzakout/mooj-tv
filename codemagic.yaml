@@ -27,11 +27,11 @@ workflows:
 
     integrations:
       # The name of an App Store Connect key under Codemagic -> Team
-      # integrations -> Developer Portal. Any key belonging to the same Apple
-      # developer account works for any app on that account, so the key that
-      # already signs another app can sign this one. Change this string to
+      # integrations -> Developer Portal. Since 2026-11-24 this is a key made
+      # for this app alone (App Manager), so it can be revoked without touching
+      # the other apps on the same Apple account. Change this string to
       # whatever the key is called in the integration list.
-      app_store_connect: "mjabid app"
+      app_store_connect: "mooj_tv"
 
     environment:
       # Same Node line as the Android release machine. Expo 57 with React
