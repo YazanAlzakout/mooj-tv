@@ -180,7 +180,7 @@ export function LiveVideoView({ player, style, contentFit }: LiveVideoViewProps)
       source={surface.source}
       paused={surface.paused}
       volume={surface.volume}
-      rate={1}
+      rate={surface.rate}
       repeat={false}
       resizeMode={RESIZE_MODES[contentFit ?? "contain"]}
       continueAudioInBackground={surface.continueAudioInBackground}

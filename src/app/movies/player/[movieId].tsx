@@ -1,7 +1,7 @@
 import { useEventListener } from "expo";
 import { useKeepAwake } from "expo-keep-awake";
 import { router, useLocalSearchParams } from "expo-router";
-import { useVideoPlayer, VideoView } from "expo-video";
+import { useVideoPlayer, VideoView, type VideoPlayer } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import { AppState, Image, Platform, Pressable, StyleSheet, Text, View, type AppStateStatus } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,6 +26,7 @@ import { VodPlayerControls } from "@/playback/VodPlayerControls";
 import { getActiveSession } from "@/state/activeSessionStore";
 import { getVodMovies } from "@/state/vodStore";
 import { unplayableOnIos } from "@/playback/iosContainers";
+import { useVlcVodPlayer, VlcVodVideoView } from "@/playback/engine/vodVlcEngine";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 
 /**
@@ -92,11 +93,14 @@ export default function MoviePlayerScreen() {
    * JSON calls use, since the panel sits behind a WAF that rejects the
    * default player user agent.
    */
-  /* iPhone: a container AVPlayer cannot open — see iosContainers.ts. */
-  const unsupportedHere = !localUri && unplayableOnIos(movie?.containerExtension);
+  /*
+    iPhone: a container AVPlayer cannot open (mkv, avi…) plays through
+    libVLC instead — see iosContainers.ts and vodVlcEngine.ios.tsx.
+  */
+  const vlcVod = !localUri && unplayableOnIos(movie?.containerExtension);
   const source = localUri
     ? { uri: localUri }
-    : !unsupportedHere && session && movie
+    : session && movie
       ? {
           uri: movieStreamUrl(session.config, movieId, movie.containerExtension),
           headers: { ...PROVIDER_REQUEST_HEADERS },
@@ -104,9 +108,19 @@ export default function MoviePlayerScreen() {
       : null;
   const noInternetMessage = !localUri && isOffline ? t("common", "noInternet") : null;
 
-  const player = useVideoPlayer(source, (p) => {
+  const avPlayer = useVideoPlayer(vlcVod ? null : source, (p) => {
     p.play();
   });
+  const vlcPlayer = useVlcVodPlayer(vlcVod ? source : null);
+  /*
+    One player for the rest of the screen. The libVLC adapter implements the
+    part of expo-video's VideoPlayer that the controls and the playback hooks
+    use — play, pause, currentTime, duration, playbackRate, tracks and the
+    same events — so nothing below needs to know which engine is playing.
+  */
+  const player = vlcVod && vlcPlayer ? (vlcPlayer as unknown as VideoPlayer) : avPlayer;
+  /* Unplayable only where no libVLC path exists for films. */
+  const unsupportedHere = vlcVod && !vlcPlayer;
 
   const backgroundPlaybackEnabled = useBackgroundPlayback(player);
 
@@ -160,7 +174,9 @@ export default function MoviePlayerScreen() {
       } else if (next === "active" && sourceRef.current) {
         void player.replaceAsync(sourceRef.current).then(
           () => {
+            /* libVLC starts a freshly opened media by itself, so a paused title is paused explicitly. */
             if (resumeAfterReturn) player.play();
+            else player.pause();
           },
           () => {
             // A failure here surfaces through the player's own status
@@ -307,8 +323,12 @@ export default function MoviePlayerScreen() {
     */
     <SafeAreaView style={styles.safeArea} edges={[]}>
       <View style={styles.playerArea}>
-        <VideoView style={styles.video} player={player} nativeControls={false}
-          allowsPictureInPicture contentFit="contain" />
+        {vlcVod && vlcPlayer ? (
+          <VlcVodVideoView player={vlcPlayer} style={styles.video} />
+        ) : (
+          <VideoView style={styles.video} player={avPlayer} nativeControls={false}
+            allowsPictureInPicture contentFit="contain" />
+        )}
 
         <VodPlayerControls
           player={player}

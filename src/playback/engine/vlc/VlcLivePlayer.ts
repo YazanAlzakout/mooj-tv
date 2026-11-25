@@ -155,6 +155,8 @@ export interface VlcSurfaceSnapshot {
   readonly paused: boolean;
   /** libVLC's own 0..200 scale, with mute already folded in as a zero. */
   readonly volume: number;
+  /** Playback speed. Always 1 for a channel; films set it (`"vod"` mode). */
+  readonly rate: number;
   readonly continueAudioInBackground: boolean;
 }
 
@@ -362,6 +364,7 @@ export class VlcLivePlayer {
     sourceKey: 0,
     paused: false,
     volume: 100,
+    rate: 1,
     continueAudioInBackground: true,
   };
   /**
@@ -373,6 +376,25 @@ export class VlcLivePlayer {
   private watchdogTimer: ReturnType<typeof setTimeout> | null = null;
   private trackPollTimer: ReturnType<typeof setTimeout> | null = null;
   private trackPollsLeft = 0;
+
+  /**
+   * `"live"` for channels (the default, unchanged); `"vod"` for films and
+   * episodes on iPhone in containers AVPlayer cannot open — see
+   * `vodVlcEngine.ios.tsx`. A film has a position, a length, a speed and an
+   * end, and none of those means what it means on a channel.
+   */
+  private readonly mode: "live" | "vod";
+  /* "vod" mode only: position, length, speed, and the progress cadence. */
+  private currentTimeValue = 0;
+  private durationValue = 0;
+  private rateValue = 1;
+  private timeUpdateIntervalS = 0;
+  private lastTimeUpdateAt = 0;
+  private pendingSeek: number | null = null;
+
+  constructor(mode: "live" | "vod" = "live") {
+    this.mode = mode;
+  }
 
   // ---------------------------------------------------------------- events
 
@@ -658,6 +680,63 @@ export class VlcLivePlayer {
   pause(): void {
     this.surfaceRef?.current?.pause();
     if (!this.snapshot.paused) this.update({ paused: true });
+  }
+
+  /* ---- The VideoPlayer surface a film needs ("vod" mode) ---------------- */
+
+  /** expo-video's `playing`, which the VOD controls read directly. */
+  get playing(): boolean {
+    return this.playingValue;
+  }
+
+  /** Position in seconds, from libVLC's progress events. */
+  get currentTime(): number {
+    return this.currentTimeValue;
+  }
+
+  /**
+   * Seek, in seconds. libVLC ignores a time set on a media it has not opened,
+   * so a target set before the first frame waits for `handlePlaying` — which
+   * is exactly when useWatchProgress's resume-from-history seek arrives.
+   */
+  set currentTime(seconds: number) {
+    if (!Number.isFinite(seconds)) return;
+    const max = this.durationValue > 0 ? this.durationValue : Number.POSITIVE_INFINITY;
+    const target = Math.min(Math.max(seconds, 0), max);
+    this.currentTimeValue = target;
+    /* A seek is not a stall: restart the no-progress clock from here. */
+    this.lastPosition = target;
+    this.lastAdvanceAt = Date.now();
+    const surface = this.surfaceRef?.current;
+    if (this.sawPlaying && surface) {
+      surface.seek(target);
+      this.pendingSeek = null;
+    } else {
+      this.pendingSeek = target;
+    }
+  }
+
+  get duration(): number {
+    return this.durationValue;
+  }
+
+  get playbackRate(): number {
+    return this.rateValue;
+  }
+
+  set playbackRate(next: number) {
+    if (!Number.isFinite(next) || next <= 0) return;
+    this.rateValue = next;
+    this.update({ rate: next });
+  }
+
+  /** Seconds between `timeUpdate` events; 0 sends none — expo-video's contract. */
+  get timeUpdateEventInterval(): number {
+    return this.timeUpdateIntervalS;
+  }
+
+  set timeUpdateEventInterval(seconds: number) {
+    this.timeUpdateIntervalS = Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
   }
 
   // ------------------------------------------------------------ properties
@@ -975,6 +1054,11 @@ export class VlcLivePlayer {
     this.clearWatchdog();
     this.sawPlaying = true;
     this.lastAdvanceAt = Date.now();
+    if (this.mode === "vod" && this.pendingSeek !== null) {
+      const target = this.pendingSeek;
+      this.pendingSeek = null;
+      this.surfaceRef?.current?.seek(target);
+    }
     this.setStatus("readyToPlay");
     this.setPlaying(true);
     this.reassertVolume();
@@ -1007,6 +1091,26 @@ export class VlcLivePlayer {
     if (!Number.isFinite(position)) return;
 
     const now = Date.now();
+
+    if (this.mode === "vod") {
+      this.currentTimeValue = position;
+      if (Number.isFinite(event.duration) && event.duration > 0) this.durationValue = event.duration;
+      if (this.timeUpdateIntervalS > 0 && now - this.lastTimeUpdateAt >= this.timeUpdateIntervalS * 1000 - 50) {
+        this.lastTimeUpdateAt = now;
+        this.emit("timeUpdate", { currentTime: position, bufferedPosition: -1 });
+      }
+      /*
+        For a film any change of position is progress. A seek backwards
+        lowers it, and the channel rule below — only a higher position
+        counts — would read every rewind as a stall twenty seconds later.
+      */
+      if (position !== this.lastPosition) {
+        this.lastPosition = position;
+        this.lastAdvanceAt = now;
+        this.positionAdvanced = true;
+        return;
+      }
+    }
 
     if (position > this.lastPosition) {
       this.lastPosition = position;
@@ -1050,6 +1154,13 @@ export class VlcLivePlayer {
    * budget entirely and opening a connection the screen does not know it has.
    */
   readonly handleEnded = (): void => {
+    /* A film that reaches its end has finished, not dropped: the screen moves on. */
+    if (this.mode === "vod" && this.sawPlaying) {
+      this.clearWatchdog();
+      this.setPlaying(false);
+      this.emit("playToEnd", {});
+      return;
+    }
     if (this.sawPlaying) {
       this.fail("network_timeout", "libVLC reported end of stream on a live channel");
       return;
@@ -1187,6 +1298,10 @@ export class VlcLivePlayer {
     this.lastAdvanceAt = 0;
     this.positionAdvanced = false;
     this.cancelTrackPoll();
+    this.currentTimeValue = 0;
+    this.durationValue = 0;
+    this.pendingSeek = null;
+    this.lastTimeUpdateAt = 0;
 
     if (this.audioTracksValue.length > 0) {
       this.audioTracksValue = [];

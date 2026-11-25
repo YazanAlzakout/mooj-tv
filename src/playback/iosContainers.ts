@@ -21,7 +21,8 @@ const AVPLAYER_CONTAINERS = new Set(["mp4", "m4v", "mov", "m3u8"]);
  *
  * An unknown or empty extension is not blocked: the panel sometimes leaves
  * the field empty, and refusing those would refuse files that play. The real
- * fix is a libVLC path for films and episodes on iOS.
+ * fix is a libVLC path for films and episodes on iOS — on branch
+ * `ios-vod-vlc` such titles play through it (vodVlcEngine.ios.tsx) instead.
  */
 export function unplayableOnIos(containerExtension: string | null | undefined): boolean {
   if (Platform.OS !== "ios") return false;
