@@ -123,8 +123,8 @@ const ORIENTATION_RELEASE_MS = 1500;
 const SOURCE_RELEASE_MS = 250;
 
 /**
- * iPhone: always let go of the old channel, and wait this long, before
- * opening the next one — whatever the line's connection count.
+ * iPhone, inside a rapid run of switches only (IOS_RAPID_SWITCH_MS): let go
+ * of the old channel and wait this long before opening the next one.
  *
  * On a line with more than one connection the app opens the next channel
  * without releasing first, which is right on Android: ExoPlayer closes the
@@ -134,10 +134,14 @@ const SOURCE_RELEASE_MS = 250;
  * briefly holds two of the account's connections. On the second iPhone
  * build (2026-11-26) three quick switches used up all three, and channels
  * then spun for 10-25 s or said "busy" for half a minute. 700 ms is enough
- * for the stop to reach the socket; it costs that much extra black between
- * channels on iPhone only.
+ * for the stop to reach the socket. An ordinary switch pays nothing: with
+ * three connections the old stream closing a moment late is harmless — it
+ * is only a fast run of switches that piles them up.
  */
 const IOS_SOURCE_RELEASE_MS = 700;
+
+/** A switch this soon after the previous open counts as part of a rapid run (iPhone). */
+const IOS_RAPID_SWITCH_MS = 5000;
 
 /**
  * ## Why this is a fixed wait and not a measured one
@@ -185,11 +189,17 @@ const IOS_SOURCE_RELEASE_MS = 700;
  * `xtreamAdapter.authenticate`), never assumed: the operator raised their
  * own line from one to three on 2026-09-16, and a number written in here
  * would have kept charging them for a constraint they had just paid to
- * remove. A panel that reports nothing is treated as the strict case —
- * being slow is recoverable, being refused is not.
+ * remove.
+ *
+ * Owner's rule, 2026-11-26: every account has three connections, never
+ * fewer ("كل مستخدم عندو 3 اتصالات وليس اقل"), and switching must be as fast
+ * as possible — no black screens, no waiting. So the count is floored at
+ * MIN_CONNECTIONS: a panel that reports nothing, or less, gets the fast path.
+ * The strict path is kept only so that rule stays one constant to change.
  */
+const MIN_CONNECTIONS = 3;
 function needsReleaseWait(maxConnections: number | null | undefined): boolean {
-  return (maxConnections ?? 1) <= 1;
+  return Math.max(MIN_CONNECTIONS, maxConnections ?? MIN_CONNECTIONS) <= 1;
 }
 
 /**
@@ -535,6 +545,26 @@ export default function LivePlayerScreen() {
 
   const [pendingZapIndex, setPendingZapIndex] = useState<number | null>(null);
   const zapCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** When the last channel open began — for the iPhone rapid-run test (IOS_RAPID_SWITCH_MS). */
+  const lastOpenAtMsRef = useRef(0);
+  /** iPhone, modern channel view: true while the viewer has expanded the picture to landscape. */
+  const expandedLockRef = useRef(false);
+
+  /*
+    Leaving the player while expanded (a swipe back, a crash-free exit from
+    anywhere) must not leave the whole app locked sideways.
+  */
+  useEffect(() => {
+    return () => {
+      if (!expandedLockRef.current) return;
+      expandedLockRef.current = false;
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
+        .catch(() => {})
+        .finally(() => {
+          ScreenOrientation.unlockAsync().catch(() => {});
+        });
+    };
+  }, []);
   /** When the last zap press happened, for the run test. */
   const lastZapAtMsRef = useRef(0);
   /**
@@ -897,7 +927,17 @@ export default function LivePlayerScreen() {
       cost. The beat applies only in the other branch, where iOS pays it on
       top of a release it would have performed anyway.
     */
-    const releaseFirst = Platform.OS === "ios" || needsReleaseWait(session?.accountInfo?.maxConnections);
+    /*
+      iPhone: an ordinary switch opens the next channel at once. Only a switch
+      inside IOS_RAPID_SWITCH_MS of the previous open releases first and waits,
+      because that is when the streams libVLC is still closing in the
+      background pile up past the account's three connections.
+    */
+    const openedAtMs = Date.now();
+    const rapidSwitch = openedAtMs - lastOpenAtMsRef.current < IOS_RAPID_SWITCH_MS;
+    lastOpenAtMsRef.current = openedAtMs;
+    const releaseFirst =
+      (Platform.OS === "ios" && rapidSwitch) || needsReleaseWait(session?.accountInfo?.maxConnections);
 
     const opened = releaseFirst
       ? releaseLiveSource(player)
@@ -1763,6 +1803,18 @@ export default function LivePlayerScreen() {
    * sensor.
    */
   function expandToLandscape() {
+    /*
+      iPhone: hold landscape until the viewer comes back with Back. Releasing
+      to the sensor (below) does not work there for anyone with Portrait
+      Orientation Lock on — common on iPhone, and on the tester's phone —
+      because the sensor never reports landscape, so the picture fell back to
+      the list a second and a half after every expand (2026-11-26).
+    */
+    if (Platform.OS === "ios") {
+      expandedLockRef.current = true;
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+      return;
+    }
     ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE)
       .catch(() => {})
       .finally(() => {
@@ -1770,6 +1822,30 @@ export default function LivePlayerScreen() {
           ScreenOrientation.unlockAsync().catch(() => {});
         }, ORIENTATION_RELEASE_MS);
       });
+  }
+
+  /** iPhone: back from an expanded picture to the list, upright, without leaving the player. */
+  function collapseToPortrait() {
+    expandedLockRef.current = false;
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP)
+      .catch(() => {})
+      .finally(() => {
+        setTimeout(() => {
+          ScreenOrientation.unlockAsync().catch(() => {});
+        }, ORIENTATION_RELEASE_MS);
+      });
+  }
+
+  /**
+   * Back from the fullscreen bars. After an expand (iPhone) it returns to the
+   * list; otherwise it leaves the player, as before.
+   */
+  function handleBack() {
+    if (expandedLockRef.current) {
+      collapseToPortrait();
+      return;
+    }
+    router.back();
   }
 
   /*
@@ -2107,7 +2183,7 @@ export default function LivePlayerScreen() {
         */}
         {!controlsVisible && Platform.OS === "ios" && (
           <View style={[styles.topBar, layerPadding(Spacing.md)]} pointerEvents="box-none">
-            <Focusable onPress={() => router.back()} style={styles.iconButton} hitSlop={12}>
+            <Focusable onPress={handleBack} style={styles.iconButton} hitSlop={12}>
               <BackChevron color={Colors.text} size={12} />
             </Focusable>
           </View>
@@ -2146,7 +2222,7 @@ export default function LivePlayerScreen() {
               reaching the video surface and toggling the controls.
             */}
             <View style={[styles.topBar, layerPadding(Spacing.md)]} pointerEvents="box-none">
-              <Focusable onPress={() => router.back()} style={styles.iconButton} hitSlop={12}>
+              <Focusable onPress={handleBack} style={styles.iconButton} hitSlop={12}>
                 {/*
                   Drawn, like every other back control (BackButton). The typed "‹"
                   was a thin punctuation mark that vanished over dark video: on the
