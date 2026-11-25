@@ -123,6 +123,23 @@ const ORIENTATION_RELEASE_MS = 1500;
 const SOURCE_RELEASE_MS = 250;
 
 /**
+ * iPhone: always let go of the old channel, and wait this long, before
+ * opening the next one — whatever the line's connection count.
+ *
+ * On a line with more than one connection the app opens the next channel
+ * without releasing first, which is right on Android: ExoPlayer closes the
+ * old HTTP connection the moment its source is replaced. libVLC does not.
+ * MobileVLCKit 3 runs `stop` on its own background queue, so the outgoing
+ * stream is still connected while the incoming one opens, and every switch
+ * briefly holds two of the account's connections. On the second iPhone
+ * build (2026-11-26) three quick switches used up all three, and channels
+ * then spun for 10-25 s or said "busy" for half a minute. 700 ms is enough
+ * for the stop to reach the socket; it costs that much extra black between
+ * channels on iPhone only.
+ */
+const IOS_SOURCE_RELEASE_MS = 700;
+
+/**
  * ## Why this is a fixed wait and not a measured one
  *
  * Investigated 2026-09-16, three angles in parallel. Two ideas that look
@@ -880,14 +897,14 @@ export default function LivePlayerScreen() {
       cost. The beat applies only in the other branch, where iOS pays it on
       top of a release it would have performed anyway.
     */
-    const releaseFirst = needsReleaseWait(session?.accountInfo?.maxConnections);
+    const releaseFirst = Platform.OS === "ios" || needsReleaseWait(session?.accountInfo?.maxConnections);
 
     const opened = releaseFirst
       ? releaseLiveSource(player)
           .then(
             () =>
               new Promise((resolve) => {
-                setTimeout(resolve, SOURCE_RELEASE_MS);
+                setTimeout(resolve, Platform.OS === "ios" ? IOS_SOURCE_RELEASE_MS : SOURCE_RELEASE_MS);
               })
           )
           .then(() => {
