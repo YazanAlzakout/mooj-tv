@@ -68,7 +68,7 @@ const ANDROID_PACKAGE = isDevId ? BRAND.packageId + ".dev" : BRAND.packageId;
  * refused the upload — a build had reached a test track and left no trace
  * in git.
  */
-const VERSION_CODE_BASE = 7;
+const VERSION_CODE_BASE = 9;
 
 /*
  * Phone and TV are one app on Play — same listing, same package id, with
@@ -210,6 +210,14 @@ module.exports = {
      */
     ios: {
       bundleIdentifier: isDevId ? BRAND.bundleIdentifier + ".dev" : BRAND.bundleIdentifier,
+
+      /*
+       * The colour behind every React view on iOS. Without it the root view
+       * is white, and the first iPhone build (2026-11-24) flashed a white
+       * rectangle behind each rotation into and out of a player. Same value
+       * as the Android window background.
+       */
+      backgroundColor: "#0A0A0F",
 
       /*
        * Apple's counterpart to Android's versionCode. A string on purpose —

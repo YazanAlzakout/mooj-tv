@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -41,6 +42,7 @@ import { useGridColumns } from "@/core/layout/useGridColumns";
 import { getActiveSession } from "@/state/activeSessionStore";
 import { loadSeriesCategories } from "@/state/categoryQueries";
 import { getSeriesList, loadSeriesList } from "@/state/seriesStore";
+import { BackButton } from "@/components/BackButton";
 
 const ALL_CATEGORY_ID = "all";
 
@@ -615,6 +617,14 @@ export default function SeriesCategoriesScreen() {
           */}
 
           <View style={styles.searchRow}>
+            {/*
+              iPhone only: a way back to Home. Home's three section cards push
+              this tab, and on Android the system Back walks the tab history
+              home — iOS has no such button, so on the first iPhone build this
+              screen read as a dead end ("كبسة الرجوع مش شغالة", 2026-11-24).
+              Android and TV are unchanged.
+            */}
+            {Platform.OS === "ios" && <BackButton onPress={() => router.navigate("/home")} />}
           <TextInput
             style={styles.search}
             placeholder={t("seriesGrid", "searchPlaceholder")}

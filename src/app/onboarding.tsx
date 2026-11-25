@@ -31,6 +31,7 @@ import { brandLogoSource } from "@/components/BrandLogo";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
 import { setOnboardingSeen } from "@/db/repositories/appStateRepository";
+import { MODAL_ORIENTATIONS } from "@/core/platform/modalOrientations";
 
 interface Slide {
   title: string;
@@ -222,6 +223,7 @@ export default function OnboardingScreen() {
           transparent
           animationType="fade"
           onRequestClose={() => setLanguagePickerOpen(false)}
+          supportedOrientations={MODAL_ORIENTATIONS}
         >
           {/* Tap-catchers, never focus targets — see ConfirmDialog.tsx. */}
           <Pressable

@@ -12,6 +12,7 @@ import { isTvBuild } from "@/core/platform/isTvBuild";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { AndroidTextFix, Brand, Colors, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { LiveChannel } from "@/domain/provider/types";
+import { MODAL_ORIENTATIONS } from "@/core/platform/modalOrientations";
 
 
 /**
@@ -153,7 +154,13 @@ export function ChannelGuideOverlay({
   }, [visible]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      supportedOrientations={MODAL_ORIENTATIONS}
+    >
       <Pressable style={styles.backdrop} focusable={false} onPress={onClose}>
         <Pressable
           style={[styles.panel, { paddingTop: insets.top + Spacing.lg, paddingBottom: insets.bottom }]}

@@ -27,6 +27,7 @@ import {
   CHANNEL_ROW_SPACING,
   ChannelListRow,
 } from "@/playback/ChannelListRow";
+import { BackChevron } from "@/components/BackButton";
 
 /**
  * The "modern" live layout: the video pinned as a 16:9 box at the top of a
@@ -158,7 +159,7 @@ export function SplitChannelView({
         )}
 
         <Focusable onPress={onBack} style={[styles.iconButton, styles.backButton]} hitSlop={10}>
-          <Text style={styles.iconButtonText}>‹</Text>
+          <BackChevron color={Colors.text} size={12} />
         </Focusable>
 
         <Focusable onPress={onExpand} style={[styles.iconButton, styles.expandButton]} hitSlop={10}>
@@ -176,7 +177,7 @@ export function SplitChannelView({
           style={({ pressed }) => [styles.playButton, pressed && styles.playButtonPressed]}
           hitSlop={10}
         >
-          <Text style={styles.playButtonText}>{isPlaying ? "❙❙" : "▶"}</Text>
+          <Text style={styles.playButtonText}>{isPlaying ? "❙❙" : "▶︎"}</Text>
         </Pressable>
       </View>
 

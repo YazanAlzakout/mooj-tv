@@ -1,5 +1,7 @@
 import * as ScreenOrientation from "expo-screen-orientation";
+import { useNavigation } from "expo-router";
 import { useEffect } from "react";
+import { Platform } from "react-native";
 
 import { isTvBuild } from "@/core/platform/isTvBuild";
 
@@ -59,6 +61,8 @@ function cancelPendingRelease(): void {
  * altogether still frees the orientation a moment later.
  */
 export function useFullscreenOrientation(enabled = true): void {
+  const navigation = useNavigation();
+
   useEffect(() => {
     if (isTvBuild) return;
 
@@ -79,4 +83,36 @@ export function useFullscreenOrientation(enabled = true): void {
       }, RELEASE_GRACE_MS);
     };
   }, [enabled]);
+
+  /**
+   * iPhone: turn the window upright the moment the viewer leaves.
+   *
+   * The release above lands 400 ms after the player has unmounted, and on
+   * iOS `unlockAsync` does not rotate anything back — it only lets the
+   * sensor decide again. So the page underneath was revealed while the
+   * window was still landscape, and on the first iPhone build (2026-11-24)
+   * the details page showed sideways for most of a second every time a
+   * player was closed.
+   *
+   * `beforeRemove` fires for the back button and for the swipe. A
+   * `REPLACE` (the next episode taking this player's place) is left alone:
+   * the incoming screen claims landscape itself, and turning upright here
+   * would bring back the portrait flash `RELEASE_GRACE_MS` exists to stop.
+   * The deferred unlock still follows, so rotation is free again afterwards.
+   * Android keeps its existing behaviour.
+   */
+  useEffect(() => {
+    if (isTvBuild || !enabled || Platform.OS !== "ios") return;
+    return navigation.addListener("beforeRemove", (event) => {
+      /*
+        Only a player-to-player replace hands the lock on. Leaving for good
+        can also be a replace - a lost session sends the viewer to
+        /providers with router.replace - and that one must turn upright too.
+      */
+      const target = JSON.stringify(event.data.action.payload ?? {});
+      if (event.data.action.type === "REPLACE" && target.includes("/player/")) return;
+      cancelPendingRelease();
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    });
+  }, [navigation, enabled]);
 }

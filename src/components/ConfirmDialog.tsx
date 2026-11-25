@@ -6,6 +6,7 @@ import { useI18n } from "@/core/i18n/I18nContext";
 import { Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, themeColors } from "@/core/theme/themedStyles";
+import { MODAL_ORIENTATIONS } from "@/core/platform/modalOrientations";
 
 import { BouncePressable } from "./BouncePressable";
 
@@ -70,7 +71,14 @@ export function ConfirmDialog({
   }));
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onCancel} statusBarTranslucent>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      onRequestClose={onCancel}
+      statusBarTranslucent
+      supportedOrientations={MODAL_ORIENTATIONS}
+    >
       <Animated.View style={[styles.backdrop, backdropStyle]}>
         {/* See the note in this file's header: never focusable. */}
         <Pressable style={StyleSheet.absoluteFill} focusable={false} onPress={onCancel} />

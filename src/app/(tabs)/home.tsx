@@ -29,7 +29,7 @@ import { useI18n } from "@/core/i18n/I18nContext";
 import { AndroidTextFix, Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import { brandLogoSource } from "@/components/BrandLogo";
 import type { ThemeColors } from "@/core/theme/palettes";
-import { themedStyles, useThemeRerender } from "@/core/theme/themedStyles";
+import { themedStyles, themeColors, useThemeRerender } from "@/core/theme/themedStyles";
 import {
   clearAllWatchProgress,
   getRecentWatchProgress,
@@ -50,6 +50,7 @@ import { artworkIsKnownBad } from "@/core/media/deadImageHosts";
 import { getLibraryItems, type LibraryItem } from "@/db/repositories/libraryRepository";
 import { getAllDownloadTasks, type DownloadTask } from "@/db/repositories/downloadRepository";
 import { downloadsSupported } from "@/domain/downloads/eligibility";
+import { SearchIcon } from "@/components/MenuIcons";
 
 /**
  * The name block under every poster card, to the pixel.
@@ -423,10 +424,27 @@ export default function HomeScreen() {
                 onPress={() => router.push("/search")}
                 accessibilityLabel={t("home", "search")}
               >
-                <Text style={styles.headerIconText}>⌕</Text>
+                {/*
+                  Drawn, not typed. "⌕" (U+2315) is not in Noto Kufi Arabic, so
+                  iOS substituted a fallback glyph about 9pt across inside a
+                  barely visible disc — the tester's "the search button is far
+                  too small" (2026-11-24).
+                */}
+                <SearchIcon color={themeColors().text} size={20} />
               </BouncePressable>
+              {/*
+                Not on iPhone. An unlabeled "X" in the top corner reads as
+                "close" on iOS, and pressing it offered to disconnect the
+                account (tester, 2026-11-24). Disconnect stays in Settings.
+              */}
+              {Platform.OS !== "ios" && (
               <BouncePressable
                 style={styles.disconnectButton}
+                /*
+                  Kept visually small on purpose (it ends the session), but its
+                  touch area is 44pt like everything else: 34 + 5 + 5.
+                */
+                hitSlop={5}
                 onPress={() => setConfirmDisconnect(true)}
                 accessibilityLabel={t("settings", "disconnect")}
               >
@@ -438,6 +456,7 @@ export default function HomeScreen() {
                 */}
                 <Text style={styles.disconnectButtonText}>✕</Text>
               </BouncePressable>
+              )}
             </View>
           </Animated.View>
 
@@ -1051,7 +1070,7 @@ function ContinueWatchingCard({ entry, onPress }: { entry: WatchProgressEntry; o
           )}
           <View style={styles.playOverlay}>
             <View style={styles.playCircle}>
-              <Text style={styles.playCircleText}>▶</Text>
+              <Text style={styles.playCircleText}>▶︎</Text>
             </View>
           </View>
           <View style={styles.continueProgressTrack}>
@@ -1276,15 +1295,21 @@ const styles = themedStyles((C: ThemeColors) =>
     ...AndroidTextFix,
   },
   headerActions: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
+  /*
+   * 44 x 44: Apple's minimum touch target, which 40 missed. The hairline
+   * ring is the BackButton's: a 6% fill alone was about four grey levels off
+   * the page, so the control had no visible edge at all.
+   */
   headerIconButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: Radii.pill,
     backgroundColor: C.fillSubtle,
+    borderWidth: 1,
+    borderColor: C.border,
     alignItems: "center",
     justifyContent: "center",
   },
-  headerIconText: { color: C.textSecondary, fontSize: 18, fontFamily: FontFamily.medium },
   /**
    * Its own tinted style rather than the neutral icon button: this ends the
    * session, and looking identical to Search made it easy to hit without

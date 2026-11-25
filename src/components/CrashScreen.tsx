@@ -6,6 +6,7 @@ import type { ErrorBoundaryProps } from "expo-router";
 import { Focusable } from "@/components/Focusable";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { TVSafeArea } from "@/core/theme/tokens";
+import { redactUrls } from "@/core/errors/redactDiagnosticText";
 
 /**
  * What the viewer sees when a render throws.
@@ -96,7 +97,8 @@ export function CrashScreen({ error, retry }: ErrorBoundaryProps) {
         detail: isTvBuild ? "Technical details — arrow keys to read" : "Technical details — long-press to copy",
       };
 
-  const detail = [error?.name, error?.message, error?.stack].filter(Boolean).join("\n");
+  // Links removed: a stream URL in an error message carries the password.
+  const detail = redactUrls([error?.name, error?.message, error?.stack].filter(Boolean).join("\n"));
 
   return (
     <View style={[styles.root, isTvBuild && styles.tvSafe]}>

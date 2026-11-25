@@ -6,6 +6,7 @@ import { isTvBuild } from "@/core/platform/isTvBuild";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { Brand, Colors, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { UsePlaybackTracksResult } from "@/playback/usePlaybackTracks";
+import { MODAL_ORIENTATIONS } from "@/core/platform/modalOrientations";
 
 /**
  * Shared audio/subtitle track picker (master prompt §24.4/§24.5).
@@ -78,7 +79,13 @@ export function TrackSelectorModal({
   const Row = isTvBuild ? Focusable : Pressable;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      supportedOrientations={MODAL_ORIENTATIONS}
+    >
       <Pressable style={styles.backdrop} focusable={false} onPress={onClose}>
         <Pressable style={styles.sheet} focusable={false} onPress={(e) => e.stopPropagation()}>
           <ScrollView>

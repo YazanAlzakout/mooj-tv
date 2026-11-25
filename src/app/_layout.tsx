@@ -17,6 +17,26 @@ import { FontFamily } from "@/core/theme/tokens";
 import { recoverDownloadsOnBoot, registerDownloadBackgroundHandling } from "@/domain/downloads/downloadManager";
 import { downloadsSupported } from "@/domain/downloads/eligibility";
 
+/**
+ * The three player screens keep the iPhone's edge swipe back but not the
+ * full-screen one.
+ *
+ * On iOS 26 react-native-screens treats an unset `fullScreenGestureEnabled`
+ * as on (`RNSScreen.mm`, `isFullScreenSwipeEffectivelyEnabled`), so a
+ * rightward drag *anywhere* on a player was read as "go back". Dragging the
+ * seek bar forward is a rightward drag: in the owner's recording of the
+ * first iPhone build (2026-11-24) the scrub stopped following the finger,
+ * the player slid sideways over the details page, and once (26.8 s) it was
+ * dismissed outright and the film started again from 0:00. That is the
+ * tester's "seeking forward and back is broken" and part of "the back button
+ * does not work".
+ *
+ * Turning off only the full-screen gesture leaves the left-edge swipe, which
+ * the seek track never reaches (VodPlayerControls insets it past the edge).
+ * Android ignores the option.
+ */
+const PLAYER_SCREEN_OPTIONS = { fullScreenGestureEnabled: false } as const;
+
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
@@ -166,11 +186,11 @@ function ThemedRoot() {
             thrown away.
           */}
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="live/player/[channelId]" />
+          <Stack.Screen name="live/player/[channelId]" options={PLAYER_SCREEN_OPTIONS} />
           <Stack.Screen name="movies/details/[movieId]" />
-          <Stack.Screen name="movies/player/[movieId]" />
+          <Stack.Screen name="movies/player/[movieId]" options={PLAYER_SCREEN_OPTIONS} />
           <Stack.Screen name="series/details/[seriesId]" />
-          <Stack.Screen name="series/player/[episodeId]" />
+          <Stack.Screen name="series/player/[episodeId]" options={PLAYER_SCREEN_OPTIONS} />
           <Stack.Screen name="search" />
           <Stack.Screen name="library/[listType]" />
           <Stack.Screen name="history" />

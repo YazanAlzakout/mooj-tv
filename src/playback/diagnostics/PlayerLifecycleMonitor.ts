@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { redactUrls } from "@/core/errors/redactDiagnosticText";
 
 export interface PlayerLifecycleSnapshot {
   playerConstructions: number;
@@ -101,7 +102,7 @@ class PlayerLifecycleMonitorImpl {
   }
 
   errorOccurred(message: string): void {
-    this.patch({ errors: this.snapshot.errors + 1, lastErrorMessage: message });
+    this.patch({ errors: this.snapshot.errors + 1, lastErrorMessage: redactUrls(message) });
   }
 
   private patch(partial: Partial<PlayerLifecycleSnapshot>): void {

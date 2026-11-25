@@ -8,6 +8,7 @@ import {
   AppState,
   BackHandler,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -70,6 +71,7 @@ import { usePlayerMute } from "@/playback/usePlayerMute";
 import { getActiveSession } from "@/state/activeSessionStore";
 import { loadLiveCategories } from "@/state/categoryQueries";
 import { useEpgNowNext, useNowTick } from "@/state/epgCache";
+import { BackChevron } from "@/components/BackButton";
 
 function formatTimeOfDay(ms: number): string {
   const d = new Date(ms);
@@ -2080,6 +2082,20 @@ export default function LivePlayerScreen() {
           </View>
         )}
 
+        {/*
+          iPhone: the way out stays on screen when the controls hide. iOS has
+          no system Back, and on the first iPhone build the only exit vanished
+          with the rest of the controls after four seconds (2026-11-24). Same
+          bar, same place, so nothing moves when the controls come back.
+        */}
+        {!controlsVisible && Platform.OS === "ios" && (
+          <View style={[styles.topBar, layerPadding(Spacing.md)]} pointerEvents="box-none">
+            <Focusable onPress={() => router.back()} style={styles.iconButton} hitSlop={12}>
+              <BackChevron color={Colors.text} size={12} />
+            </Focusable>
+          </View>
+        )}
+
         {controlsVisible && (
           <>
 {/*
@@ -2114,7 +2130,12 @@ export default function LivePlayerScreen() {
             */}
             <View style={[styles.topBar, layerPadding(Spacing.md)]} pointerEvents="box-none">
               <Focusable onPress={() => router.back()} style={styles.iconButton} hitSlop={12}>
-                <Text style={styles.iconButtonText}>‹</Text>
+                {/*
+                  Drawn, like every other back control (BackButton). The typed "‹"
+                  was a thin punctuation mark that vanished over dark video: on the
+                  first iPhone build (2026-11-24) the tester could not find a way out.
+                */}
+                <BackChevron color={Colors.text} size={12} />
               </Focusable>
               <Text style={styles.channelName} numberOfLines={1}>
                 {currentChannel?.name ?? ""}
@@ -2187,7 +2208,7 @@ export default function LivePlayerScreen() {
             {!isTvBuild && (
               <View style={[styles.centerControls, layerPadding(0)]} pointerEvents="box-none">
                   <Focusable style={styles.zapButton} onPress={() => selectByOffset(-1)} hitSlop={8}>
-                    <Text style={styles.zapGlyph}>|◀</Text>
+                    <Text style={styles.zapGlyph}>|◀︎</Text>
                   </Focusable>
                   {/*
                     No `hasTVPreferredFocus` here any more, and none is
@@ -2198,10 +2219,10 @@ export default function LivePlayerScreen() {
                     whose meaning matches what OK does everywhere else.
                   */}
                   <Focusable style={styles.playButton} onPress={togglePlay} hitSlop={8}>
-                    <Text style={styles.playGlyph}>{isPlaying ? "❙❙" : "▶"}</Text>
+                    <Text style={styles.playGlyph}>{isPlaying ? "❙❙" : "▶︎"}</Text>
                   </Focusable>
                   <Focusable style={styles.zapButton} onPress={() => selectByOffset(1)} hitSlop={8}>
-                    <Text style={styles.zapGlyph}>▶|</Text>
+                    <Text style={styles.zapGlyph}>▶︎|</Text>
                   </Focusable>
               </View>
             )}
@@ -2528,8 +2549,8 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     /*
      * Pinned left-to-right, the same as the VOD control bar. Time runs one
-     * way whatever the interface language is: mirrored, "previous" (|◀)
-     * lands on the right and "next" (▶|) on the left, and since ▶ and ◀ are
+     * way whatever the interface language is: mirrored, "previous" (|◀︎)
+     * lands on the right and "next" (▶︎|) on the left, and since ▶︎ and ◀︎ are
      * not bidi-mirrored both arrows end up pointing inward at the play
      * button. YouTube and Netflix keep these LTR in Arabic for the same
      * reason.

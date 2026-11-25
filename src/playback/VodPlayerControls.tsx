@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Focusable } from "@/components/Focusable";
 import { isTvBuild } from "@/core/platform/isTvBuild";
 import { Brand, Colors, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
+import { BackChevron } from "@/components/BackButton";
 
 import { GestureHud } from "./GestureHud";
 import { usePlaybackSeek } from "./usePlaybackSeek";
@@ -23,6 +24,19 @@ import { useTVRemote } from "./useTVRemote";
 import { usePlayerGestures } from "./usePlayerGestures";
 
 const AUTO_HIDE_MS = 4000;
+
+/**
+ * How long the bar holds a seek target before trusting the player again:
+ * ten timeUpdate ticks (0.5 s each), and "landed" means within 1.5 s.
+ *
+ * On iPhone AVPlayer keeps reporting the old position for 0.25-2.25 s after
+ * a seek, and the bar followed it — every drag and every tap snapped back to
+ * where it started before jumping forward, so each seek looked like it had
+ * failed (first iPhone build, 2026-11-24). The hold shows where the viewer
+ * asked to go until the player gets there.
+ */
+const SEEK_HOLD_TICKS = 10;
+const SEEK_LANDED_S = 1.5;
 const DOUBLE_TAP_MS = 280;
 const SKIP_SECONDS = 10;
 
@@ -118,11 +132,26 @@ export function VodPlayerControls({
   const [isPlaying, setIsPlaying] = useState(player.playing);
   const [currentTime, setCurrentTime] = useState(player.currentTime);
   const [duration, setDuration] = useState(player.duration);
+  const pendingSeekRef = useRef<{ target: number; ticks: number } | null>(null);
+
+  /** Show `target` now and keep showing it until the player arrives — see SEEK_HOLD_TICKS. */
+  function holdAt(target: number) {
+    pendingSeekRef.current = { target, ticks: SEEK_HOLD_TICKS };
+    setCurrentTime(target);
+  }
 
   useEventListener(player, "playingChange", ({ isPlaying: playing }) => setIsPlaying(playing));
   useEventListener(player, "timeUpdate", ({ currentTime: time }) => {
-    setCurrentTime(time);
     if (player.duration > 0) setDuration(player.duration);
+    const pending = pendingSeekRef.current;
+    if (pending) {
+      if (Math.abs(time - pending.target) > SEEK_LANDED_S && pending.ticks > 0) {
+        pending.ticks -= 1;
+        return;
+      }
+      pendingSeekRef.current = null;
+    }
+    setCurrentTime(time);
   });
 
   const [controlsVisible, setControlsVisible] = useState(true);
@@ -198,15 +227,16 @@ export function VodPlayerControls({
 
   function skip(deltaSeconds: number) {
     showControlsTemporarily();
-    seek.skipBy(deltaSeconds);
-    // Mirror the jump locally instead of waiting for the next `timeUpdate`:
-    // the player is authoritative and will correct this on its next tick,
-    // but the bar has to move under the finger that pressed the button.
-    setCurrentTime((previous) => {
-      const next = previous + deltaSeconds;
-      const max = duration > 0 ? duration : next;
-      return Math.min(Math.max(next, 0), max);
-    });
+    /*
+      From the seek still in flight, if there is one. player.currentTime is
+      the old position until AVPlayer finishes seeking, so three quick taps
+      of +10 used to land 10 s ahead instead of 30.
+    */
+    const base = pendingSeekRef.current?.target ?? player.currentTime;
+    const max = duration > 0 ? duration : Number.POSITIVE_INFINITY;
+    const target = Math.min(Math.max(base + deltaSeconds, 0), max);
+    seek.seekTo(target);
+    holdAt(target);
   }
 
   /**
@@ -295,8 +325,18 @@ export function VodPlayerControls({
   function onTrackRelease() {
     const target = dragValueRef.current;
     setDragging(false);
-    setCurrentTime(target);
     seek.seekTo(target);
+    holdAt(target);
+    showControlsTemporarily();
+  }
+
+  /**
+   * The touch was taken away — a system gesture, a call, Control Center —
+   * rather than released. Nobody chose that position, so do not seek to it:
+   * this used to commit the half-finished drag (outside review, 2026-11-25).
+   */
+  function onTrackCancel() {
+    setDragging(false);
     showControlsTemporarily();
   }
 
@@ -415,7 +455,12 @@ export function VodPlayerControls({
 
       <View style={[styles.topBar, layerPadding(Spacing.md)]} pointerEvents="box-none">
         <Focusable onPress={onBack} style={styles.iconButton} hitSlop={10}>
-          <Text style={styles.iconButtonText}>‹</Text>
+          {/*
+            Drawn, like every other back control (BackButton). The typed "‹"
+            was a thin punctuation mark that vanished over dark video: on the
+            first iPhone build (2026-11-24) the tester could not find a way out.
+          */}
+          <BackChevron color={Colors.text} size={12} />
         </Focusable>
         <Text
           style={[styles.title, !controlsVisible && styles.hidden]}
@@ -452,7 +497,7 @@ export function VodPlayerControls({
                 disabled={!onPreviousEpisode}
                 hitSlop={8}
               >
-                <Text style={styles.episodeGlyph}>|◀</Text>
+                <Text style={styles.episodeGlyph}>|◀︎</Text>
               </Focusable>
             )}
             <Focusable onPress={() => skip(-SKIP_SECONDS)} style={styles.skipButton} hitSlop={10}>
@@ -466,7 +511,7 @@ export function VodPlayerControls({
               hitSlop={10}
               hasTVPreferredFocus={isTvBuild}
             >
-              <Text style={styles.playButtonText}>{isPlaying ? "❙❙" : "▶"}</Text>
+              <Text style={styles.playButtonText}>{isPlaying ? "❙❙" : "▶︎"}</Text>
             </Focusable>
             <Focusable onPress={() => skip(SKIP_SECONDS)} style={styles.skipButton} hitSlop={10}>
               <Text style={styles.skipButtonText}>{SKIP_SECONDS} ››</Text>
@@ -478,7 +523,7 @@ export function VodPlayerControls({
                 disabled={!onNextEpisode}
                 hitSlop={8}
               >
-                <Text style={styles.episodeGlyph}>▶|</Text>
+                <Text style={styles.episodeGlyph}>▶︎|</Text>
               </Focusable>
             )}
           </View>
@@ -510,7 +555,7 @@ export function VodPlayerControls({
               onResponderMove={onTrackMove}
               onResponderRelease={onTrackRelease}
               /* If the gesture is torn down anyway, honour the scrub rather than dropping it. */
-              onResponderTerminate={onTrackRelease}
+              onResponderTerminate={onTrackCancel}
             >
               {/*
                 pointerEvents="none" on all three: they are absolutely

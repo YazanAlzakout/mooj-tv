@@ -82,7 +82,7 @@ export function ChannelListRow({
           {channel.name}
         </Text>
       </View>
-      {active && <Text style={styles.activeMark}>▶</Text>}
+      {active && <Text style={styles.activeMark}>▶︎</Text>}
     </Focusable>
   );
 }

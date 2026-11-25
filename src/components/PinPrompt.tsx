@@ -7,6 +7,7 @@ import { useI18n } from "@/core/i18n/I18nContext";
 import { Brand, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import type { ThemeColors } from "@/core/theme/palettes";
 import { themedStyles, themeColors } from "@/core/theme/themedStyles";
+import { MODAL_ORIENTATIONS } from "@/core/platform/modalOrientations";
 
 export const PIN_LENGTH = 4;
 
@@ -56,7 +57,13 @@ export function PinPrompt({
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onCancel}
+      supportedOrientations={MODAL_ORIENTATIONS}
+    >
       <Pressable style={styles.backdrop} focusable={false} onPress={onCancel}>
         <Pressable style={styles.card} focusable={false} onPress={(event) => event.stopPropagation()}>
           <Text style={styles.title}>{title}</Text>

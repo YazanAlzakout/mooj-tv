@@ -173,7 +173,14 @@ export default function SeriesDetailsScreen() {
           so it keeps a dark ground and a white mark. A hairline ring on an
           unknown photograph is not legible.
         */}
-        <View style={styles.backButton}>
+        {/*
+          Below the status bar, not in it. The SafeAreaView here pads only
+          left and right, so `top: Spacing.xl` put the button beside the
+          clock and under the Dynamic Island on the first iPhone build
+          (2026-11-24). `Math.max` keeps the television, which has no inset,
+          exactly where it was.
+        */}
+        <View style={[styles.backButton, { top: Math.max(Spacing.xl, insets.top + Spacing.sm) }]}>
           <BackButton floating />
         </View>
 
@@ -403,7 +410,7 @@ function SeriesHeader({
 
         <Animated.View entering={FadeInDown.duration(420).delay(220)} style={styles.primaryActionRow}>
           <BouncePressable style={styles.playButton} onPress={onPlay}>
-            <Text style={styles.playButtonText}>▶  {t("seriesDetails", "play")}</Text>
+            <Text style={styles.playButtonText}>▶︎  {t("seriesDetails", "play")}</Text>
           </BouncePressable>
         </Animated.View>
 
@@ -514,7 +521,7 @@ function SeriesHeader({
 const EPISODE_DOWNLOAD_GLYPH: Record<DownloadStatus, string> = {
   queued: "⋯",
   downloading: "❙❙",
-  paused: "▶",
+  paused: "▶︎",
   completed: "✓",
   failed: "↻",
   canceled: "⬇",
@@ -598,7 +605,7 @@ function EpisodeRow({
               <View style={styles.episodeThumbFallback} />
             )}
             <View style={styles.episodePlayOverlay}>
-              <Text style={styles.episodePlayGlyph}>▶</Text>
+              <Text style={styles.episodePlayGlyph}>▶︎</Text>
             </View>
           </View>
 

@@ -140,7 +140,14 @@ export default function MovieDetailsScreen() {
           so it keeps a dark ground and a white mark. A hairline ring on an
           unknown photograph is not legible.
         */}
-        <View style={styles.backButton}>
+        {/*
+          Below the status bar, not in it. The SafeAreaView here pads only
+          left and right, so `top: Spacing.xl` put the button beside the
+          clock and under the Dynamic Island on the first iPhone build
+          (2026-11-24). `Math.max` keeps the television, which has no inset,
+          exactly where it was.
+        */}
+        <View style={[styles.backButton, { top: Math.max(Spacing.xl, insets.top + Spacing.sm) }]}>
           <BackButton floating />
         </View>
 
@@ -266,7 +273,7 @@ export default function MovieDetailsScreen() {
 
               <Animated.View entering={FadeInDown.duration(420).delay(220)} style={styles.primaryActionRow}>
                 <BouncePressable style={styles.playButton} onPress={play}>
-                  <Text style={styles.playButtonText}>▶  {t("movieDetails", "play")}</Text>
+                  <Text style={styles.playButtonText}>▶︎  {t("movieDetails", "play")}</Text>
                 </BouncePressable>
               </Animated.View>
 

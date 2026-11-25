@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -41,6 +42,7 @@ import { getActiveSession } from "@/state/activeSessionStore";
 import { loadLiveCategories } from "@/state/categoryQueries";
 import { refreshActiveSessionChannels } from "@/state/sessionRestore";
 import { getLibraryItems, toggleLibraryItem } from "@/db/repositories/libraryRepository";
+import { BackButton } from "@/components/BackButton";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 const ALL_CATEGORY_ID = "all";
@@ -892,6 +894,14 @@ export default function LiveCategoriesScreen() {
         <>
 
           <View style={styles.searchRow}>
+            {/*
+              iPhone only: a way back to Home. Home's three section cards push
+              this tab, and on Android the system Back walks the tab history
+              home — iOS has no such button, so on the first iPhone build this
+              screen read as a dead end ("كبسة الرجوع مش شغالة", 2026-11-24).
+              Android and TV are unchanged.
+            */}
+            {Platform.OS === "ios" && <BackButton onPress={() => router.navigate("/home")} />}
           <TextInput
             style={styles.search}
             placeholder={t("liveChannelList", "searchPlaceholder")}

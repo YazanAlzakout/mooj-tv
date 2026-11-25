@@ -40,6 +40,7 @@ import { downloadsSupported } from "@/domain/downloads/eligibility";
 import { disconnectProvider, getActiveSession, setActiveSession } from "@/state/activeSessionStore";
 import { authenticate, type XtreamAccountInfo } from "@/providers/xtream/xtreamAdapter";
 import { MASKED_VALUE } from "@/core/storage/maskedValue";
+import { MODAL_ORIENTATIONS } from "@/core/platform/modalOrientations";
 
 const THEME_OPTIONS: ThemePreference[] = ["dark", "light", "system"];
 const THEME_LABEL_KEYS = {
@@ -833,7 +834,13 @@ export default function SettingsScreen() {
         }}
       />
 
-      <Modal visible={pinEditorOpen} transparent animationType="fade" onRequestClose={() => setPinEditorOpen(false)}>
+      <Modal
+        visible={pinEditorOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPinEditorOpen(false)}
+        supportedOrientations={MODAL_ORIENTATIONS}
+      >
         <Pressable style={styles.pinBackdrop} focusable={false} onPress={() => setPinEditorOpen(false)}>
           <Pressable style={styles.pinCard} focusable={false} onPress={(event) => event.stopPropagation()}>
             <Text style={styles.pinTitle}>{t("parental", "setPin")}</Text>
@@ -961,7 +968,13 @@ function OptionSheet<T extends string>({
   onClose: () => void;
 }) {
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      supportedOrientations={MODAL_ORIENTATIONS}
+    >
       <Pressable style={styles.modalBackdrop} focusable={false} onPress={onClose}>
         <Pressable style={styles.modalSheet} focusable={false} onPress={(e) => e.stopPropagation()}>
           {/*

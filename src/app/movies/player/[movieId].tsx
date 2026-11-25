@@ -3,7 +3,7 @@ import { useKeepAwake } from "expo-keep-awake";
 import { router, useLocalSearchParams } from "expo-router";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useEffect, useRef, useState } from "react";
-import { AppState, Image, Pressable, StyleSheet, Text, View, type AppStateStatus } from "react-native";
+import { AppState, Image, Platform, Pressable, StyleSheet, Text, View, type AppStateStatus } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { brandLogoOnDark } from "@/components/BrandLogo";
@@ -12,7 +12,7 @@ import { vodReasonKey } from "@/core/errors/playbackReason";
 import { useI18n } from "@/core/i18n/I18nContext";
 import { PROVIDER_REQUEST_HEADERS } from "@/core/network/providerHeaders";
 import { useIsOffline } from "@/core/network/useIsOffline";
-import { Colors, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
+import { Brand, Colors, FontFamily, Radii, Spacing } from "@/core/theme/tokens";
 import { getAppState } from "@/db/repositories/appStateRepository";
 import { getWatchProgress } from "@/db/repositories/watchProgressRepository";
 import { movieStreamUrl } from "@/providers/xtream/vodAdapter";
@@ -25,6 +25,8 @@ import { useWatchProgress } from "@/playback/useWatchProgress";
 import { VodPlayerControls } from "@/playback/VodPlayerControls";
 import { getActiveSession } from "@/state/activeSessionStore";
 import { getVodMovies } from "@/state/vodStore";
+import { unplayableOnIos } from "@/playback/iosContainers";
+import { isTvBuild } from "@/core/platform/isTvBuild";
 
 /**
  * How close two failures must be, in seconds of playback position, to
@@ -90,9 +92,11 @@ export default function MoviePlayerScreen() {
    * JSON calls use, since the panel sits behind a WAF that rejects the
    * default player user agent.
    */
+  /* iPhone: a container AVPlayer cannot open — see iosContainers.ts. */
+  const unsupportedHere = !localUri && unplayableOnIos(movie?.containerExtension);
   const source = localUri
     ? { uri: localUri }
-    : session && movie
+    : !unsupportedHere && session && movie
       ? {
           uri: movieStreamUrl(session.config, movieId, movie.containerExtension),
           headers: { ...PROVIDER_REQUEST_HEADERS },
@@ -126,7 +130,16 @@ export default function MoviePlayerScreen() {
 
   useEffect(() => {
     if (backgroundPlaybackEnabled !== false) return;
+    /*
+      Whether to start playing again on return. iOS passes through
+      "inactive" before "background", while the player is still exactly as
+      the viewer left it — so a title they had paused now stays paused,
+      instead of starting by itself when they come back (outside review,
+      2026-11-25). Android has no "inactive" and keeps its behaviour.
+    */
+    let resumeAfterReturn = true;
     const subscription = AppState.addEventListener("change", (next: AppStateStatus) => {
+      if (next === "inactive" && Platform.OS === "ios") resumeAfterReturn = player.playing;
       if (next === "background") {
         /*
           `useWatchProgress` registers its own `change` listener after this
@@ -146,7 +159,9 @@ export default function MoviePlayerScreen() {
         }, 0);
       } else if (next === "active" && sourceRef.current) {
         void player.replaceAsync(sourceRef.current).then(
-          () => player.play(),
+          () => {
+            if (resumeAfterReturn) player.play();
+          },
           () => {
             // A failure here surfaces through the player's own status
             // listener, the same as any other source that will not open.
@@ -169,6 +184,7 @@ export default function MoviePlayerScreen() {
   const [status, setStatus] = useState<"idle" | "loading" | "readyToPlay" | "error">("idle");
   /** A reason key, not the provider's words — see core/errors/playbackReason.ts. */
   const [errorReasonKey, setErrorReasonKey] = useState<string | null>(null);
+  const shownReasonKey = unsupportedHere ? "vodUnsupported" : errorReasonKey;
   /** VOD retry policy (master prompt §25): one quiet transient retry, then a real error card. */
   const hasRetriedRef = useRef(false);
   /** Where the last failure happened, so the same one is not retried for ever. */
@@ -220,6 +236,26 @@ export default function MoviePlayerScreen() {
       hasRetriedRef.current = false;
     }
   });
+
+  /**
+   * The Retry button on the error screen: a fresh attempt with a clean slate
+   * (the automatic one-retry budget and the same-point loop guard both reset,
+   * because the viewer asked for it).
+   */
+  function retryPlayback() {
+    if (!source) return;
+    setErrorReasonKey(null);
+    hasRetriedRef.current = false;
+    lastErrorAtRef.current = Number.NEGATIVE_INFINITY;
+    player.replaceAsync(source).then(
+      () => {
+        if (!unmountedRef.current) player.play();
+      },
+      (retryError) => {
+        if (!unmountedRef.current) setErrorReasonKey(vodReasonKey(toPlaybackError(retryError).category));
+      }
+    );
+  }
 
   const playbackSpeed = usePlaybackSpeed(player);
   const [preferredTracks, setPreferredTracks] = useState<{ audio: string | null; subtitle: string | null }>({
@@ -303,15 +339,25 @@ export default function MoviePlayerScreen() {
           string is swapped out — it reads "HTTP 403 from http://…/movie/…"
           and is long, English, and carries a credentialed path.
 
-          `pointerEvents="none"` and no button inside, so a tap goes
+          `pointerEvents="box-none"`: a tap anywhere but the Retry button goes
           straight through and raises the player's controls as usual.
         */}
-        {(noInternetMessage || errorReasonKey) && (
-          <View style={styles.overlayCenter} pointerEvents="none">
+        {(noInternetMessage || shownReasonKey) && (
+          <View style={styles.overlayCenter} pointerEvents="box-none">
             <Image source={brandLogoOnDark()} style={styles.errorLogo} resizeMode="contain" />
             <Text style={styles.errorText}>
-              {noInternetMessage ?? t("livePlayer", (errorReasonKey ?? "vodUnknown") as "streamPaused")}
+              {noInternetMessage ?? t("livePlayer", (shownReasonKey ?? "vodUnknown") as "streamPaused")}
             </Text>
+            {/*
+              "Try again in a moment" with nothing to press was a dead end on
+              the first iPhone build (2026-11-24). Not shown for a file this
+              device cannot play or with no internet: retrying changes nothing.
+            */}
+            {errorReasonKey && !unsupportedHere && !noInternetMessage && source && (
+              <Pressable style={styles.retryButton} onPress={retryPlayback} hitSlop={8}>
+                <Text style={styles.retryText}>{t("common", "retry")}</Text>
+              </Pressable>
+            )}
           </View>
         )}
       </View>
@@ -354,7 +400,18 @@ const styles = StyleSheet.create({
     220x124 the mark read as a small badge adrift in a lot of black
     (2026-09-17: "يجب تكبير اللوغو * 2").
   */
-  errorLogo: { width: 440, height: 248, marginBottom: Spacing.lg },
+  /* 440 x 248 is a television size: on a phone it covered the player's buttons (2026-11-24). */
+  errorLogo: { width: isTvBuild ? 440 : 200, height: isTvBuild ? 248 : 112, marginBottom: Spacing.lg },
+  retryButton: {
+    marginTop: Spacing.lg,
+    minHeight: 44,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: Radii.pill,
+    backgroundColor: Brand.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  retryText: { color: "#FFFFFF", fontSize: 15, fontFamily: FontFamily.bold },
   /*
     White and literal, not `Colors.error`.
 

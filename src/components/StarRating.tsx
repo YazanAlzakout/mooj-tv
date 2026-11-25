@@ -19,9 +19,25 @@ export function StarRating({ rating, showNumber = true }: { rating: number; show
       {Array.from({ length: 5 }).map((_, i) => {
         const filled = i + 1 <= Math.floor(outOfFive);
         const half = !filled && i < outOfFive;
+        if (half) {
+          /*
+            Built from ★ and ☆ rather than typed. "⯨" (U+2BE8) is in no font
+            iOS carries, so the first iPhone build drew it as a "?" box
+            (2026-11-24). A full star clipped to half its width over an
+            outline is the same picture in every font.
+          */
+          return (
+            <View key={i}>
+              <Text style={[styles.star, styles.starActive]}>☆</Text>
+              <View style={styles.halfClip}>
+                <Text style={[styles.star, styles.starActive]}>★</Text>
+              </View>
+            </View>
+          );
+        }
         return (
-          <Text key={i} style={[styles.star, (filled || half) && styles.starActive]}>
-            {filled ? "★" : half ? "⯨" : "☆"}
+          <Text key={i} style={[styles.star, filled && styles.starActive]}>
+            {filled ? "★" : "☆"}
           </Text>
         );
       })}
@@ -35,6 +51,7 @@ const styles = themedStyles((C: ThemeColors) =>
   row: { flexDirection: "row", alignItems: "center", gap: 3 },
   star: { color: C.fillStrong, fontSize: 14 },
   starActive: { color: "#F59E0B" },
+  halfClip: { position: "absolute", top: 0, bottom: 0, start: 0, width: "50%", overflow: "hidden" },
   number: { color: C.textSecondary, fontSize: 12, fontFamily: FontFamily.bold, marginStart: Spacing.xs },
   })
 );
